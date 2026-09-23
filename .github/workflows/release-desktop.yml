@@ -41,8 +41,10 @@ jobs:
 
       - name: Build kernel (CLI single binary)
         run: bun run build
+        working-directory: .   # 根 package.json 的 scripts.build（bun build --compile）；defaults 是 shell/
 
       - name: Verify kernel has daemon command
+        working-directory: .
         run: |
           ./dist/moonlybox --help 2>/dev/null | grep -q daemon || (echo "FATAL: kernel binary lacks daemon command (stale dist)" && exit 1)
 
