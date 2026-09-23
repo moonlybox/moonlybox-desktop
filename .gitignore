@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+coverage/
+*.tsbuildinfo
+# 本地凭据/状态库（永不入仓）
+*.key
+*.pem
+secrets/
+.moonlybox/

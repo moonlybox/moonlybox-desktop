@@ -1,0 +1,10 @@
+moonlybox-desktop
+Copyright (c) 2026 MoonlyBox
+
+This product's desktop architecture, update channel design and engineering
+conventions reference Hermes Agent (https://github.com/NousResearch/hermes-agent),
+licensed under the MIT License. Copyright (c) Nous Research.
+
+This product includes software/components developed by third parties:
+- Electron (MIT) — planned for M4 desktop shell
+- Bun (MIT) — CLI runtime
