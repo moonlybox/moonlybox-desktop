@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "bun run src/cli.ts",
     "typecheck": "tsc --noEmit",
-    "build": "bun build src/cli.ts --compile --outfile dist/moonlybox",
+    "build": "bun run scripts/build.ts",
     "test": "bun test"
   },
   "devDependencies": {
