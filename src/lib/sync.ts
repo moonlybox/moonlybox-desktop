@@ -1,11 +1,12 @@
 /**
- * vault 同步引擎（WBS 任务 5，§5.10 设计落地）。
+ * vault 同步引擎（WBS 任务 5，§5.10 设计落地；#230 M2② 增量下行）。
  *
  * 不变量（§5.10.4）：镜像区永远等于云端；一切分歧只存在于收集箱里。
  * 方向由子目录定（§5.10.1）：文档/ 知识页/ = 下行镜像区；收集箱/ = 唯一上行口；.moonlybox/ = 元数据。
  *
- * M1 范围（D10：对账为权威，监听/决策卡归壳阶段）：
- *   - 下行全量：GET /library → 镜像区写盘（frontmatter 带 moonlybox:{id,version}）
+ * 下行两模式（D6 增量 API 落地）：
+ *   - 增量（有 cursor）：GET /library/changes?since=<cursor> → 只落变更文档（文档增量+目录全量）
+ *   - 全量（无 cursor/服务端无接口回落）：GET /library → 镜像区写盘（frontmatter 带 moonlybox:{id,version}）
  *   - 对账：manifest sha256 比对 → 镜像区分歧列清单（v1 CLI 不自动合并，决策卡 M4）
  *   - 收集箱上行：新 .md → POST /library → 成功后本地归位 文档/
  *   - manifest + 同步日志（JSONL，原则⑥完全可查）
@@ -110,8 +111,110 @@ function docDir(doc: any, directories: any[], base: string): string {
   return path.join(base, safeName(dir.name))
 }
 
-/** 下行：云端全量 → 镜像区。镜像区文件以云端为权威；本地多出的 tracked 文件=外部修改→conflicts */
+function cursorPath(root: string): string {
+  return path.join(root, META, 'sync-cursor.json')
+}
+
+function loadCursor(root: string): string | null {
+  try {
+    return (JSON.parse(fs.readFileSync(cursorPath(root), 'utf8')) as { cursor?: string }).cursor ?? null
+  } catch {
+    return null
+  }
+}
+
+function saveCursor(root: string, cursor: string | null): void {
+  if (cursor) fs.writeFileSync(cursorPath(root), JSON.stringify({ cursor }, null, 2))
+}
+
+/** 单文档下行落盘（增量与全量共用）：版本对账 + 外部修改检测，返回 true=已处理 */
+function applyDownDoc(root: string, doc: any, directories: any[], manifest: VaultManifest, report: SyncReport, d: ReturnType<typeof vaultDirs>): boolean {
+  const base = doc.kind === 'wiki' ? d.kb : d.docs
+  const dir = docDir(doc, directories, base)
+  fs.mkdirSync(dir, { recursive: true })
+  const file = path.join(dir, `${safeName(doc.title)}.md`)
+  const rel = path.relative(root, file)
+  const content = withFrontmatter(doc.content ?? '', doc.id, doc.version, {
+    title: doc.title,
+    kind: doc.kind,
+    summary: doc.summary ?? undefined,
+  })
+  const prev = manifest[doc.id]
+  if (prev && fs.existsSync(prev.path ? path.join(root, prev.path) : file)) {
+    const localPath = prev.path ? path.join(root, prev.path) : file
+    const localHash = sha256(fs.readFileSync(localPath))
+    const baseline = sha256(withFrontmatter(doc.content ?? '', doc.id, prev.version, {
+      title: doc.title, kind: doc.kind,
+    }))
+    if (localHash !== baseline && prev.version === doc.version) {
+      // 本地内容 ≠ 云端基线且云端版本没动 → 外部修改（分歧，不覆盖，列清单）
+      report.conflicts.push({ path: rel, reason: '镜像区文件被外部修改（云端版本未变）' })
+      return true
+    }
+    if (localHash === baseline && prev.version === doc.version && fs.existsSync(file) && sha256(fs.readFileSync(file)) === localHash) {
+      // 内容未变：只更新 path（目录可能改名）不重写文件
+      if (prev.path !== rel.split(path.sep).join('/')) {
+        manifest[doc.id] = { ...prev, path: rel.split(path.sep).join('/') }
+      }
+      return true
+    }
+  }
+  // 新文档 / 云端版本前进 → 写盘（自写排除窗：登记 hash）
+  fs.writeFileSync(file, content)
+  manifest[doc.id] = { path: rel.split(path.sep).join('/'), sha256: sha256(content), version: doc.version, updatedAt: doc.updatedAt }
+  if (prev) report.updated.push(rel); else report.downloaded.push(rel)
+  log(root, { op: prev ? 'update-down' : 'download', doc: doc.id, version: doc.version, path: rel })
+  return true
+}
+
+/** 下行（自动选模式）：有 cursor 走增量 /library/changes，否则全量 /library；失败回落全量 */
 export async function syncDown(root: string, report: SyncReport): Promise<void> {
+  const creds = loadCredentials()
+  if (!creds?.accessToken) throw new Error('未登录：先运行 `moonlybox login`')
+  const d = vaultDirs(root)
+  const manifest = loadManifest(root)
+  const since = loadCursor(root)
+
+  if (since) {
+    try {
+      let cursor = since
+      let hasMore = true
+      while (hasMore) {
+        const res = await apiGet<any>(`/library/changes?since=${encodeURIComponent(cursor)}&limit=200`)
+        const documents: any[] = res.data?.changed ?? []
+        const directories: any[] = res.data?.directories ?? []
+        const deleted: any[] = res.data?.deleted ?? []
+        for (const doc of documents) {
+          if (doc.status !== 'active' || doc.isArchived) continue
+          applyDownDoc(root, doc, directories, manifest, report, d)
+        }
+        // 增量删除：云端回收站 → 本地移除（镜像区=云端权威）
+        for (const del of deleted) {
+          const entry = manifest[del.id]
+          if (entry && fs.existsSync(path.join(root, entry.path))) {
+            fs.unlinkSync(path.join(root, entry.path))
+            report.skipped.push(`removed ${entry.path} (云端已删除)`)
+            log(root, { op: 'remove-down', doc: del.id, path: entry.path })
+          }
+          delete manifest[del.id]
+        }
+        hasMore = Boolean(res.data?.hasMore)
+        if (res.data?.cursor) cursor = res.data.cursor
+      }
+      saveCursor(root, cursor)
+      saveManifest(root, manifest)
+      return
+    } catch (e: any) {
+      // 增量失败（服务端无接口/404 等）回落全量——镜像区一致性优先于流量优化
+      log(root, { op: 'down-fallback-full', reason: String(e?.message ?? e) })
+    }
+  }
+
+  await syncDownFull(root, report)
+}
+
+/** 下行全量（兜底 + 首次同步）：云端全量 → 镜像区。镜像区文件以云端为权威；本地多出的 tracked 文件=外部修改→conflicts */
+export async function syncDownFull(root: string, report: SyncReport): Promise<void> {
   const creds = loadCredentials()
   if (!creds?.accessToken) throw new Error('未登录：先运行 `moonlybox login`')
   const d = vaultDirs(root)
@@ -173,6 +276,13 @@ export async function syncDown(root: string, report: SyncReport): Promise<void> 
     delete manifest[id]
   }
   saveManifest(root, manifest)
+  // 全量成功 → cursor 重置为全量集最大 updatedAt（下轮走增量）
+  const maxUpdated = documents
+    .filter((x) => x.status === 'active' && !x.isArchived)
+    .map((x) => x.updatedAt as string)
+    .sort()
+    .pop()
+  saveCursor(root, maxUpdated ?? new Date().toISOString())
 }
 
 /** 收集箱上行：新 .md → POST /library → 归位 文档/（§5.10.2 流水线 2-5 步；归类/聪明步骤云端侧完成） */
