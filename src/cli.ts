@@ -20,6 +20,7 @@ import { cmdCompile } from './commands/compile'
 import { cmdXiaoyue } from './commands/xiaoyue'
 import { cmdTools } from './commands/tools'
 import { cmdWhoami } from './commands/whoami'
+import { cmdSearch } from './commands/search'
 
 const cli = defineCommand({
   name: 'moonlybox',
@@ -33,6 +34,13 @@ const cli = defineCommand({
     whoami: {
       description: 'Show current account and quota status',
       run: cmdWhoami,
+    },
+    search: {
+      description: 'Local hybrid search (FTS5 + sqlite-vec, offline)',
+      options: {
+        dir: { type: 'string', description: 'Vault root directory (default: config or ./MyMoonVault)' },
+      },
+      run: cmdSearch,
     },
     sync: {
       description: 'Two-way sync between local vault and cloud',
