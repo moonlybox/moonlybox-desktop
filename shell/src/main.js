@@ -234,6 +234,25 @@ app.whenReady().then(() => {
   ipcMain.handle('shell:protocolState', () => ({
     isDefault: app.isDefaultProtocolClient('moonlybox'),
   }))
+  // 版本双轨（§5.15.3：壳版本/内核版本，关于页双版本可见）
+  ipcMain.handle('shell:versions', async () => {
+    // dev 态 app.getVersion() 返回 electron 版本——显式读 package.json（打包态两者一致）
+    const shellVersion = (require(path.join(__dirname, '..', 'package.json')) || {}).version || app.getVersion()
+    let kernelVersion = 'unknown'
+    try {
+      const { cmd, base } = kernelCmd()
+      const out = await new Promise((resolve) => {
+        const p = spawn(cmd, [...base, '--help'], { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
+        let o = ''
+        p.stdout.on('data', (d) => { o += d })
+        p.on('close', () => resolve(o))
+        setTimeout(() => resolve(o), 5000)
+      })
+      const m = out.match(/moonlybox v([0-9.]+)/)
+      if (m) kernelVersion = m[1]
+    } catch { /* daemon 未起也允许查 */ }
+    return { shellVersion, kernelVersion }
+  })
 
   initUpdater(() => win)
 

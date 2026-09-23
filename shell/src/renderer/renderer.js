@@ -46,6 +46,21 @@ window.moonlybox.protocolState().then((st) => {
   if (st.isDefault) log('[moonlybox://] 协议已接管')
 })
 
+// 关于：版本双轨 + 更新
+async function loadAbout() {
+  const v = await window.moonlybox.versions()
+  $('about').textContent = `壳 v${v.shellVersion} · 内核 v${v.kernelVersion}`
+}
+loadAbout()
+
+$('btn-check-update').onclick = async () => {
+  $('update-state').textContent = '检查中…'
+  const st = await window.moonlybox.updateCheck()
+  if (st.available) $('update-state').textContent = `新版本 v${st.version}（下载中/已就绪，重启生效）`
+  else if (st.error) $('update-state').textContent = `检查失败（离线或网络受限）`
+  else $('update-state').textContent = '已是最新版本'
+}
+
 // 同步
 $('btn-sync').onclick = async () => {
   log('\n[sync] 运行中…')
