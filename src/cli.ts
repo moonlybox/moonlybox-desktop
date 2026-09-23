@@ -21,6 +21,7 @@ import { cmdXiaoyue } from './commands/xiaoyue'
 import { cmdTools } from './commands/tools'
 import { cmdWhoami } from './commands/whoami'
 import { cmdSearch } from './commands/search'
+import { cmdMemory } from './commands/memory'
 
 const cli = defineCommand({
   name: 'moonlybox',
@@ -41,6 +42,13 @@ const cli = defineCommand({
         dir: { type: 'string', description: 'Vault root directory (default: config or ./MyMoonVault)' },
       },
       run: cmdSearch,
+    },
+    memory: {
+      description: 'Memory panel via remote MCP (search/add/list)',
+      options: {
+        baseUrl: { type: 'string', description: 'API base URL override' },
+      },
+      run: cmdMemory,
     },
     sync: {
       description: 'Two-way sync between local vault and cloud',

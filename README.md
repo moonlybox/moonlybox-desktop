@@ -10,7 +10,7 @@
 
 ## 定位
 
-- **CLI（M1）**：`moonlybox` 单二进制（Bun + TypeScript）——`login`（OAuth Device Flow）/ `sync`（vault 双向同步，增量下行）/ `inbox`（收集箱监听）/ `tools`（MoonLink 远程工具）/ `xiaoyue`（对话）；`compile --local`（本地 LLM 整理，M2，参数位已留）；
+- **CLI（M1-M3）**：`moonlybox` 单二进制（Bun + TypeScript）——`login`（OAuth Device Flow）/ `sync`（vault 双向同步，增量下行）/ `inbox`（收集箱监听）/ `tools`（MoonLink 远程工具）/ `search`（本地混合检索，M2.5）/ `xiaoyue`（小月问答 M3：本地轨优先——命中书房直接答，BYOK key 只存本机钥匙串直连 LLM；未命中升级云端轨；对话按日落盘 `.moonlybox/dialogs/`）/ `memory`（记忆面板：走 moonlink MCP 同轨配额）；`compile --local`（本地 LLM 整理，参数位已留）；
 - **本地混合检索（M2.5）**：`moonlybox search <问题>`——FTS5 关键词 + sqlite-vec 语义向量 RRF 融合；embedding 用本地 CPU 小模型（bge-small-zh，q8 量化 33MB，首跑自动下载后全离线）；索引落 `.moonlybox/index.db`，**数据不出本机、零流量离线可用**；
 - **Desktop（M4）**：Electron 壳（倾向定案，五硬指标终裁门见规划 §5.11）——单窗口三区 + 小月右栏 + 托盘。
 
