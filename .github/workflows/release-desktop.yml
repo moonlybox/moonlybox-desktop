@@ -1,0 +1,86 @@
+name: release-desktop
+
+# M4 T5：桌面壳三平台打包。tag 触发（v*），产物上传到 workflow artifacts +
+# GitHub Release（draft）；正式发布/更新源上传由人工确认后执行（凭证与官网源分离）。
+on:
+  push:
+    tags: ['desktop-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+            args: --linux deb tar.gz AppImage
+          - os: windows-latest
+            target: win
+            args: --win nsis
+          - os: macos-latest
+            target: mac
+            args: --mac dmg
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: shell
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # 内核单文件：先编 CLI（§5.15 双层：内核轻通道），再打壳
+      - name: Install (root)
+        run: bun install --frozen-lockfile
+
+      - name: Build kernel (CLI single binary)
+        run: bun run build
+
+      - name: Verify kernel has daemon command
+        run: |
+          ./dist/moonlybox --help 2>/dev/null | grep -q daemon || (echo "FATAL: kernel binary lacks daemon command (stale dist)" && exit 1)
+
+      - name: Install shell deps
+        run: npm install --no-audit --no-fund
+        working-directory: shell
+
+      # electron 二进制按平台自动下载（CI 网络可达 github）
+      - name: Build desktop package
+        env:
+          # 未签名阶段：更新通道照常，安装警告如实告知（§5.15.2）
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder ${{ matrix.args }} --publish never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonlybox-${{ matrix.target }}
+          path: |
+            dist-shell/*.deb
+            dist-shell/*.tar.gz
+            dist-shell/*.AppImage
+            dist-shell/*.exe
+            dist-shell/*.dmg
+            dist-shell/latest*.yml
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release (draft)
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist-shell/*.deb
+            dist-shell/*.tar.gz
+            dist-shell/*.AppImage
+            dist-shell/*.exe
+            dist-shell/*.dmg
+            dist-shell/latest*.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
