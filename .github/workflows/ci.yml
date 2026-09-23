@@ -25,11 +25,11 @@ jobs:
       - name: Type check
         run: bun run typecheck
 
-      # 带模型下载/平台 dylib 的 E2E 本地跑（macos runner 下载 flaky）——CI 只做编译冒烟
-      - name: Smoke (CLI binary runs)
-        run: ./dist/moonlybox --help | grep -q "moonlybox v" 
-
       - name: Build (CLI single binary)
         run: bun run build
+
+      # 带模型下载/平台 dylib 的 E2E 本地跑（macos runner 下载 flaky）——CI 只做编译冒烟
+      - name: Smoke (CLI binary runs)
+        run: ./dist/moonlybox --help | grep -q "moonlybox v"
 
       # 签名/公证/发布仅打 tag 时由 release 工作流处理（ secrets 隔离，见 §5.13/§5.15 ）

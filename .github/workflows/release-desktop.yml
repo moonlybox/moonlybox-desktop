@@ -38,6 +38,7 @@ jobs:
       # 内核单文件：先编 CLI（§5.15 双层：内核轻通道），再打壳
       - name: Install (root)
         run: bun install --frozen-lockfile
+        working-directory: .
 
       - name: Build kernel (CLI single binary)
         run: bun run build
