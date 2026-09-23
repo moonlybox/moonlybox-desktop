@@ -12,8 +12,7 @@
   },
   "devDependencies": {
     "electron": "^33.4.11",
-    "electron-builder": "^25.1.8",
-    "electron-updater": "^6.3.9"
+    "electron-builder": "^25.1.8"
   },
   "scripts": {
     "dev": "electron src/main.js",
@@ -61,5 +60,8 @@
         "dmg"
       ]
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   }
 }
