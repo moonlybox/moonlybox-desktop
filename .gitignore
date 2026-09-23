@@ -19,3 +19,6 @@ secrets/
 # 桌面壳产物
 shell/node_modules/
 dist-shell/
+
+# 开发纪律（仅本地）
+AGENTS.md

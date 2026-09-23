@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/moonlybox/moonlybox-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/moonlybox/moonlybox-desktop/actions/workflows/ci.yml)
 
-魔力宝盒（MoonlyBox）桌面客户端仓库——CLI 先行，桌面壳随后。
+魔力宝盒（MoonlyBox）桌面客户端仓库。
 
 > 镜像仓库：[Gitee（国内）](https://gitee.com/moonlybox/moonlybox-desktop)
 
@@ -12,7 +12,7 @@
 
 - **vault 同步**：`sync` 把云端书房镜像到本地文件夹（双向：收集箱上行 + 镜像区下行对账），`inbox` 监听收集箱自动上传；
 - **本地混合检索**：`search` 关键词（FTS5）+ 语义向量（sqlite-vec）RRF 融合；embedding 用本地 CPU 小模型（bge-small-zh，q8 量化 33MB，首跑自动下载后全离线）；索引落 `.moonlybox/index.db`，**数据不出本机、零流量离线可用**；
-- **小月问答**：`xiaoyue` 本地轨优先——命中书房直接答（BYOB key 只存本机钥匙串直连 LLM）；未命中升级云端轨；对话按日落盘 `.moonlybox/dialogs/`；
+- **Moonie 问答**（中文名「小月」，命令 `xiaoyue`）：本地轨优先——命中书房直接答（BYOK key 只存本机钥匙串直连 LLM）；未命中升级云端轨；对话按日落盘 `.moonlybox/dialogs/`；
 - **记忆面板**：`memory` 搜索/追加你的记忆（走 moonlink MCP 同轨配额）；
 - **远程工具**：`tools` 列出并调用 MoonLink 全部远程工具。
 
@@ -34,7 +34,7 @@ bun run src/cli.ts sync
 # 5. 本地混合检索（离线可用）
 bun run src/cli.ts search "血小板输注有什么讲究"
 
-# 6. 问小月
+# 6. 问 Moonie（小月）
 bun run src/cli.ts xiaoyue "我的书房里有什么"
 bun run src/cli.ts xiaoyue        # REPL 模式
 
@@ -93,8 +93,6 @@ bun tests/keyring.e2e.ts         # 系统钥匙串
 - `main` 为主干；版本 semver；
 - 发布渠道：GitHub Releases（主）+ Gitee（国内兜底）+ 官网自建更新源。
 
-## 纪律
+## License
 
-- 密钥/签名证书/更新凭证**永不入仓**（CI secrets 隔离）；
-- MoonLink 工具单源权威在服务端——CLI 经远程 MCP（tools/list + tools/call）消费，**不 fork 工具定义**；
-- MIT LICENSE；NOTICE 保留对 Hermes Desktop（MIT）的参考声明。
+MIT；NOTICE 保留对 Hermes Desktop（MIT）的参考声明。
