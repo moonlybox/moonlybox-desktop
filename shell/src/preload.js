@@ -9,4 +9,8 @@ contextBridge.exposeInMainWorld('moonlybox', {
   onKernelEvent: (cb) => ipcRenderer.on('kernel:event', (_e, msg) => cb(msg)),
   // 外链（内置 webview T3 接管前的兜底）
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  // T3：剪贴板监听开关 / 手动采集 / 协议注册状态
+  setClipboardWatch: (on) => ipcRenderer.invoke('shell:clipboardWatch', on),
+  capture: (text) => ipcRenderer.invoke('shell:capture', text),
+  protocolState: () => ipcRenderer.invoke('shell:protocolState'),
 })

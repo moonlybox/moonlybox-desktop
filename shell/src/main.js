@@ -7,7 +7,7 @@
  * - IPC 安全（Hermes Desktop 范式）：contextIsolation=true + nodeIntegration=false + preload 白名单桥；
  * - D12 内存形态：托盘常驻≠窗口常驻，关窗即销毁 renderer。
  */
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut, clipboard, Notification } = require('electron')
 const path = require('path')
 const { spawn } = require('child_process')
 const fs = require('fs')
@@ -98,6 +98,100 @@ function createWindow() {
   win.once('ready-to-show', () => win.show())
 }
 
+// ---------- T3a：快速采集——剪贴板文本 → 收集箱 .md（上行走 daemon sync） ----------
+function inboxPath() {
+  return process.env.MOONLYBOX_VAULT
+    ? path.join(process.env.MOONLYBOX_VAULT, '收集箱')
+    : path.join(process.env.HOME, 'MyMoonVault', '收集箱')
+}
+
+function quickCapture(text, source = 'clipboard') {
+  const dir = inboxPath()
+  if (!fs.existsSync(dir)) return { ok: false, message: '收集箱不存在（先 sync init）' }
+  const stamp = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  const name = `快速记录 ${stamp.getFullYear()}-${pad(stamp.getMonth() + 1)}-${pad(stamp.getDate())} ${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}.md`
+  const body = [
+    '---',
+    `moonlybox_capture: {source: '${source}', at: '${stamp.toISOString()}'}`,
+    '---',
+    '',
+    text.trim(),
+    '',
+  ].join('\n')
+  fs.writeFileSync(path.join(dir, name), body, { encoding: 'utf8' })
+  return { ok: true, file: name }
+}
+
+let lastClipboard = ''
+let clipTimer = null
+function startClipboardWatch(intervalMs = 3000) {
+  if (clipTimer) return
+  lastClipboard = clipboard.readText()
+  clipTimer = setInterval(() => {
+    try {
+      const cur = clipboard.readText()
+      if (cur && cur !== lastClipboard && cur.trim().length > 1) {
+        lastClipboard = cur
+        const r = quickCapture(cur, 'clipboard-watch')
+        if (r.ok) {
+          new Notification({ title: '魔力宝盒', body: `已采集到收集箱：${r.file}` }).show()
+          eventHooks.forEach((h) => h(0, 'capture', r.file))
+        }
+      }
+    } catch { /* 剪贴板读失败忽略本轮 */ }
+  }, intervalMs)
+}
+function stopClipboardWatch() {
+  if (clipTimer) { clearInterval(clipTimer); clipTimer = null }
+}
+let clipboardWatchOn = false
+
+// ---------- T3b：全局热键 ----------
+function registerShortcuts() {
+  // Alt+Shift+M：呼出/隐藏主窗口
+  globalShortcut.register('Alt+Shift+M', () => {
+    if (win && win.isVisible() && win.isFocused()) win.hide()
+    else createWindow()
+  })
+  // Alt+Shift+C：剪贴板快速采集（手动触发，不受监听开关限制）
+  globalShortcut.register('Alt+Shift+C', () => {
+    const text = clipboard.readText()
+    if (!text || !text.trim()) return
+    const r = quickCapture(text, 'hotkey')
+    if (r.ok) {
+      new Notification({ title: '魔力宝盒', body: `已采集：${r.file}` }).show()
+      eventHooks.forEach((h) => h(0, 'capture', r.file))
+    }
+  })
+}
+
+// ---------- T3c：moonlybox:// 协议 + 单实例 ----------
+const gotSingleLock = app.requestSingleInstanceLock()
+if (!gotSingleLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_e, argv) => {
+    createWindow()
+    // 二次启动带 moonlybox:// 链接 → 处理
+    const url = argv.find((a) => a.startsWith('moonlybox://'))
+    if (url) handleMoonlinkUrl(url)
+  })
+}
+
+function handleMoonlinkUrl(url) {
+  // moonlybox://open | moonlybox://capture?text=... | moonlybox://search?q=...
+  try {
+    const u = new URL(url)
+    const action = u.host  // moonlybox://capture?text=... → host='capture'
+    if (action === 'capture') {
+      const text = u.searchParams.get('text') || ''
+      if (text.trim()) quickCapture(decodeURIComponent(text), 'protocol')
+    }
+    createWindow()
+  } catch { createWindow() }
+}
+
 const ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAFklEQVR4nGNgGFqg/2VAHdSNKmAIAQDiAQNy9vqrAAAAAElFTkSuQmCC'
 
 app.whenReady().then(() => {
@@ -128,8 +222,33 @@ app.whenReady().then(() => {
   ipcMain.handle('shell:openExternal', (_e, url) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url)
   })
+  // 剪贴板监听开关（默认关，隐私敏感）
+  ipcMain.handle('shell:clipboardWatch', (_e, on) => {
+    clipboardWatchOn = !!on
+    if (on) startClipboardWatch()
+    else stopClipboardWatch()
+    return clipboardWatchOn
+  })
+  ipcMain.handle('shell:capture', (_e, text) => quickCapture(String(text ?? ''), 'renderer'))
+  ipcMain.handle('shell:protocolState', () => ({
+    isDefault: app.isDefaultProtocolClient('moonlybox'),
+  }))
+
+  registerShortcuts()
+  if (!app.isDefaultProtocolClient('moonlybox')) {
+    // 开发态也注册（失败不影响启动）
+    try { app.setAsDefaultProtocolClient('moonlybox') } catch { /* 权限不足时静默 */ }
+  }
+  // 命令行/首次启动带 moonlybox:// 链接
+  const launchUrl = process.argv.find((a) => a.startsWith('moonlybox://'))
+  if (launchUrl) handleMoonlinkUrl(launchUrl)
 
   createWindow()
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
+  stopClipboardWatch()
 })
 
 app.on('window-all-closed', () => { /* 托盘常驻 */ })

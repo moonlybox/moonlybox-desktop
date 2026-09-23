@@ -32,6 +32,20 @@ async function ask() {
 $('btn-ask').onclick = ask
 $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') ask() })
 
+// 剪贴板监听开关（持久化到 localStorage）
+$('cb-watch').checked = localStorage.getItem('clipWatch') === '1'
+$('cb-watch').onchange = async (e) => {
+  const on = await window.moonlybox.setClipboardWatch(e.target.checked)
+  localStorage.setItem('clipWatch', on ? '1' : '0')
+  log(on ? '[剪贴板监听] 已开启（新内容自动入收集箱）' : '[剪贴板监听] 已关闭')
+}
+if ($('cb-watch').checked) window.moonlybox.setClipboardWatch(true)
+
+// 协议状态显示
+window.moonlybox.protocolState().then((st) => {
+  if (st.isDefault) log('[moonlybox://] 协议已接管')
+})
+
 // 同步
 $('btn-sync').onclick = async () => {
   log('\n[sync] 运行中…')
