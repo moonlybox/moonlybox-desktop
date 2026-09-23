@@ -14,42 +14,68 @@ const fs = require('fs')
 
 let tray = null
 let win = null
-let kernel = null
 
-// ---------- 内核定位：开发=shell/kernel-dev 指向仓根 Bun 源；打包=resources/kernel/moonlybox ----------
-function kernelPath() {
+// ---------- 内核定位：开发=仓根 bun 源；打包=resources/kernel/moonlybox 单文件 ----------
+function kernelCmd() {
   const packaged = process.resourcesPath
     ? path.join(process.resourcesPath, 'kernel', 'moonlybox')
     : null
-  if (packaged && fs.existsSync(packaged)) return packaged
-  // 开发态：直接跑 Bun 源（bun run src/cli.ts），环境无 bun 时报明确错误
-  return 'bun'
+  if (packaged && fs.existsSync(packaged)) return { cmd: packaged, base: [] }
+  return { cmd: 'bun', base: ['run', 'src/cli.ts'] } // 开发态（cwd=REPO_ROOT）
 }
 
-function kernelArgs() {
-  if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'kernel', 'moonlybox'))) {
-    return [] // 打包单文件
-  }
-  return ['run', 'src/cli.ts'] // 开发态
-}
-
-// 开发态内核 cwd=仓根（bun run src/cli.ts 相对路径）；打包态=单文件无 cwd 依赖
 const REPO_ROOT = path.join(__dirname, '..', '..')
 
-// ---------- 内核进程：一次常驻，stdio JSONL（M4 T2 细化协议，T1 先保活+ping） ----------
-function startKernel() {
-  if (kernel) return kernel
-  const cmd = kernelPath()
-  const args = [...kernelArgs(), '--help'] // T1 探针：--help 零依赖不联网
-  kernel = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd: REPO_ROOT })
-  kernel.stdout.on('data', (d) => {
-    if (win && !win.isDestroyed()) win.webContents.send('kernel:stdout', d.toString())
+// ---------- daemon 常驻通道（stdio JSONL，协议见 src/commands/daemon.ts） ----------
+let daemon = null
+const pending = new Map() // id → {resolve}
+let nextId = 1
+const eventHooks = [] // (id, event, payload) → void（renderer 订阅）
+
+function ensureDaemon() {
+  if (daemon && daemon.exitCode === null) return daemon
+  const { cmd, base } = kernelCmd()
+  daemon = spawn(cmd, [...base, 'daemon'], {
+    cwd: REPO_ROOT,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, MOONLYBOX_VAULT: process.env.MOONLYBOX_VAULT || `${process.env.HOME}/MyMoonVault` },
   })
-  kernel.stderr.on('data', (d) => {
-    if (win && !win.isDestroyed()) win.webContents.send('kernel:stderr', d.toString())
+  let buf = ''
+  daemon.stdout.on('data', (d) => {
+    buf += d.toString()
+    let idx
+    while ((idx = buf.indexOf('\n')) >= 0) {
+      const lineStr = buf.slice(0, idx).trim()
+      buf = buf.slice(idx + 1)
+      if (!lineStr) continue
+      let msg
+      try { msg = JSON.parse(lineStr) } catch { continue }
+      if (msg.event === 'log') {
+        eventHooks.forEach((h) => h(msg.id, 'log', msg.text))
+      } else if (msg.event === 'done' || msg.event === 'error') {
+        const p = pending.get(msg.id)
+        if (p) { pending.delete(msg.id); p(msg) }
+        eventHooks.forEach((h) => h(msg.id, msg.event, msg))
+      }
+    }
   })
-  kernel.on('exit', () => { kernel = null })
-  return kernel
+  daemon.stderr.on('data', (d) => eventHooks.forEach((h) => h(0, 'stderr', d.toString())))
+  daemon.on('exit', () => { daemon = null; pending.forEach((p) => p({ event: 'error', message: 'daemon exited' })); pending.clear() })
+  return daemon
+}
+
+/** RPC：返回 Promise<done/error 消息>；过程行经 onKernelEvent 订阅。 */
+function kernelRpc(cmd, args = {}, timeoutMs = 120_000) {
+  ensureDaemon()
+  const id = nextId++
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      pending.delete(id)
+      resolve({ event: 'error', message: `timeout after ${timeoutMs}ms` })
+    }, timeoutMs)
+    pending.set(id, (msg) => { clearTimeout(timer); resolve(msg) })
+    daemon.stdin.write(JSON.stringify({ id, cmd, args }) + '\n')
+  })
 }
 
 function createWindow() {
@@ -81,19 +107,24 @@ app.whenReady().then(() => {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '打开主窗口', click: createWindow },
     { type: 'separator' },
-    { label: '启动内核（tools list）', click: () => startKernel() },
+    { label: '启动内核', click: () => ensureDaemon() },
     { label: '退出', click: () => { app.isQuiting = true; app.quit() } },
   ]))
   tray.on('click', createWindow)
 
   // IPC 白名单（preload 对应）
-  ipcMain.handle('kernel:run', (_e, { args }) => new Promise((resolve) => {
-    const p = spawn(kernelPath(), [...kernelArgs(), ...(args || [])], { stdio: ['ignore', 'pipe', 'pipe'], cwd: REPO_ROOT })
-    let out = '', err = ''
-    p.stdout.on('data', (d) => { out += d })
-    p.stderr.on('data', (d) => { err += d })
-    p.on('close', (code) => resolve({ code, out, err }))
-  }))
+  // daemon RPC：{cmd:'xiaoyue', args:{q}} → 过程行推 renderer，done 返回全文
+  ipcMain.handle('kernel:rpc', (_e, { cmd, args, timeoutMs }) => kernelRpc(cmd, args, timeoutMs))
+  ipcMain.on('kernel:subscribe', (e) => {
+    const hook = (id, event, payload) => {
+      if (!e.sender.isDestroyed()) e.sender.send('kernel:event', { id, event, payload })
+    }
+    eventHooks.push(hook)
+    e.sender.once('destroyed', () => {
+      const i = eventHooks.indexOf(hook)
+      if (i >= 0) eventHooks.splice(i, 1)
+    })
+  })
   ipcMain.handle('shell:openExternal', (_e, url) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url)
   })

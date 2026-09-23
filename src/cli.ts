@@ -22,6 +22,7 @@ import { cmdTools } from './commands/tools'
 import { cmdWhoami } from './commands/whoami'
 import { cmdSearch } from './commands/search'
 import { cmdMemory } from './commands/memory'
+import { runDaemon } from './commands/daemon'
 
 const cli = defineCommand({
   name: 'moonlybox',
@@ -79,6 +80,10 @@ const cli = defineCommand({
     tools: {
       description: 'List/call MoonLink MCP tools (remote execution)',
       run: cmdTools,
+    },
+    daemon: {
+      description: 'JSONL RPC daemon for the desktop shell (stdio)',
+      run: () => runDaemon(),
     },
   },
   run: () => {
