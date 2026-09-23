@@ -13,6 +13,7 @@
  */
 import { defineCommand, runCli } from './lib/runner'
 import { loadConfig, configPath } from './lib/config'
+import { loadCredentials } from './lib/auth'
 import { cmdLogin } from './commands/login'
 import { cmdSync } from './commands/sync'
 import { cmdInbox } from './commands/inbox'
@@ -88,9 +89,10 @@ const cli = defineCommand({
   },
   run: () => {
     const cfg = loadConfig()
+    const creds = loadCredentials()
     console.log(`moonlybox v0.1.0`)
     console.log(`  config: ${configPath()}`)
-    console.log(`  account: ${cfg.auth?.accountEmail ?? '(not logged in — run `moonlybox login`)'}`)
+    console.log(`  account: ${creds?.accountEmail ?? '(not logged in — run `moonlybox login`)'}`)
     console.log('')
     console.log('Use --help to see commands.')
   },
