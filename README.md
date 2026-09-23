@@ -1,6 +1,10 @@
 # moonlybox-desktop
 
+[![CI](https://github.com/moonlybox/moonlybox-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/moonlybox/moonlybox-desktop/actions/workflows/ci.yml)
+
 魔力宝盒（MoonlyBox）桌面客户端仓库——CLI 先行（M1），桌面壳随后（M4）。
+
+> 镜像仓库：[Gitee（国内）](https://gitee.com/moonlybox/moonlybox-desktop) · 推送同步四端（origin/server/github/gitee）。
 
 > 战略底稿：《记忆产品化与客户端战略规划》（服务端仓 docs/，单一来源）——本仓只放代码与自身文档。
 
