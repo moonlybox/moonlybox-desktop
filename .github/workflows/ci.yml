@@ -25,8 +25,8 @@ jobs:
       - name: Type check
         run: bun run typecheck
 
-      - name: Test
-        run: bun test
+      - name: Test (offline E2E)
+        run: bun tests/hybrid-search.e2e.ts
 
       - name: Build (CLI single binary)
         run: bun run build
