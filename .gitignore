@@ -15,3 +15,7 @@ coverage/
 *.pem
 secrets/
 .moonlybox/
+
+# 桌面壳产物
+shell/node_modules/
+dist-shell/

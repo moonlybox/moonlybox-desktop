@@ -1,0 +1,21 @@
+{
+  "name": "moonlybox-shell",
+  "productName": "MoonlyBox",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/main.js",
+  "description": "MoonlyBox Desktop Shell",
+  "homepage": "https://moonlybox.cn",
+  "author": {
+    "name": "MoonlyBox",
+    "email": "open@moonlybox.cn"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "scripts": {
+    "dev": "electron src/main.js",
+    "build": "electron-builder"
+  }
+}

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>魔力宝盒</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; margin: 0; }
+    body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; height: 100vh; display: flex; }
+    aside { width: 280px; border-right: 1px solid #e2e8f0; padding: 16px; overflow-y: auto; }
+    main { flex: 1; display: flex; flex-direction: column; }
+    header { padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+    h1 { font-size: 15px; }
+    #log { flex: 1; overflow-y: auto; padding: 16px 20px; font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; }
+    .card { background: #f8fafc; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .btn { display: inline-block; border: 0; background: #4f46e5; color: #fff; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+    .btn:disabled { opacity: .5; }
+    input { border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 10px; font-size: 13px; width: 100%; }
+    .row { display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid #e2e8f0; }
+    .row input { flex: 1; }
+    @media (prefers-color-scheme: dark) {
+      aside { border-color: #334155; } .card { background: #1e293b; }
+      header, .row { border-color: #334155; } body { background: #0f172a; color: #e2e8f0; }
+    }
+  </style>
+</head>
+<body>
+  <aside>
+    <div class="card"><strong>vault</strong><div id="vault" style="font-size:12px;opacity:.7;margin-top:4px">~/MyMoonVault</div></div>
+    <div class="card"><strong>内核</strong><div id="kernel" style="font-size:12px;opacity:.7;margin-top:4px">未启动</div></div>
+    <button class="btn" id="btn-sync">立即同步（sync）</button>
+  </aside>
+  <main>
+    <header><h1>小月</h1><span style="font-size:12px;opacity:.6" id="ver"></span></header>
+    <div id="log"></div>
+    <div class="row">
+      <input id="q" placeholder="问小月（本地检索+直连回答）…" />
+      <button class="btn" id="btn-ask">发送</button>
+    </div>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>
