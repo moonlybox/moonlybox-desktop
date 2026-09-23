@@ -46,8 +46,11 @@ jobs:
 
       - name: Verify kernel has daemon command
         working-directory: .
+        shell: bash
         run: |
-          ./dist/moonlybox --help 2>/dev/null | grep -q daemon || (echo "FATAL: kernel binary lacks daemon command (stale dist)" && exit 1)
+          BIN="./dist/moonlybox"
+          [ -f "./dist/moonlybox.exe" ] && BIN="./dist/moonlybox.exe"
+          "$BIN" --help 2>/dev/null | grep -q daemon || (echo "FATAL: kernel binary lacks daemon command (stale dist)" && exit 1)
 
       - name: Install shell deps
         run: npm install --no-audit --no-fund
