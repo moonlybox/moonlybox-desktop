@@ -27,6 +27,10 @@ export async function cmdSearch(args: string[], options: CommandOptions): Promis
     }
   } catch (e) {
     console.error(`索引失败: ${String(e)}`)
+    try {
+      const { ortRuntimeVersion } = await import('../lib/embedding')
+      console.error(`诊断: onnxruntime 实际加载版本 = ${await ortRuntimeVersion()}（期望 1.21；若不符，删除 exe 旁/项目里的旧 node_modules 后重新 bun install + bun run build）`)
+    } catch { /* 诊断失败不影响原报错 */ }
     process.exitCode = 1
     return
   }

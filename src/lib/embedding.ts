@@ -39,6 +39,17 @@ async function getExtractor(): Promise<FeatureExtractionPipeline> {
   return extractorPromise
 }
 
+/** 诊断：onnxruntime-node 原生层实际解析到的版本（单文件编译不内嵌原生模块，运行时按 exe 旁 node_modules 解析） */
+export async function ortRuntimeVersion(): Promise<string> {
+  try {
+    const ort: unknown = await import('onnxruntime-node')
+    const versions = (ort as { env?: { versions?: { node?: string; common?: string } } }).env?.versions
+    return versions?.node ?? versions?.common ?? 'unknown'
+  } catch (e) {
+    return `load-failed: ${String(e).slice(0, 120)}`
+  }
+}
+
 /** 单文本 → 512 维归一化向量 */
 export async function embed(text: string): Promise<Float32Array> {
   const extractor = await getExtractor()
