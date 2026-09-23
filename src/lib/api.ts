@@ -41,3 +41,20 @@ export async function apiCall<T = any>(
     clearTimeout(timer)
   }
 }
+
+/** 便捷封装：自动注入登录 token；非 2xx 抛错（sync 引擎用） */
+export async function apiGet<T = any>(path: string, opts?: { baseUrl?: string }): Promise<T> {
+  const { loadCredentials } = await import('./auth')
+  const creds = loadCredentials()
+  const res = await apiCall<T>('GET', `/api${path}`, undefined, { ...opts, token: creds?.accessToken })
+  if (!res.ok) throw new Error(`GET ${path} → ${res.status}`)
+  return res.data as T
+}
+
+export async function apiPost<T = any>(path: string, body?: unknown, opts?: { baseUrl?: string }): Promise<T> {
+  const { loadCredentials } = await import('./auth')
+  const creds = loadCredentials()
+  const res = await apiCall<T>('POST', `/api${path}`, body, { ...opts, token: creds?.accessToken })
+  if (!res.ok) throw new Error(`POST ${path} → ${res.status}`)
+  return res.data as T
+}
