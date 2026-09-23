@@ -18,6 +18,7 @@ import { cmdSync } from './commands/sync'
 import { cmdInbox } from './commands/inbox'
 import { cmdCompile } from './commands/compile'
 import { cmdXiaoyue } from './commands/xiaoyue'
+import { cmdTools } from './commands/tools'
 import { cmdWhoami } from './commands/whoami'
 
 const cli = defineCommand({
@@ -58,6 +59,10 @@ const cli = defineCommand({
     xiaoyue: {
       description: 'Chat with Xiaoyue (minimal terminal chat)',
       run: cmdXiaoyue,
+    },
+    tools: {
+      description: 'List/call MoonLink MCP tools (remote execution)',
+      run: cmdTools,
     },
   },
   run: () => {
