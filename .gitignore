@@ -5,6 +5,8 @@ build/
 .env
 .env.*
 !.env.example
+credentials.json
+*.credentials.json
 .DS_Store
 coverage/
 *.tsbuildinfo
