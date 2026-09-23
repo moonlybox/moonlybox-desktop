@@ -1,0 +1,73 @@
+#!/usr/bin/env bun
+/**
+ * moonlybox — MoonlyBox desktop CLI（M1 骨架）
+ *
+ * 命令规划（§5.16.3 WBS）：
+ *   login        OAuth Device Flow 授权（任务 3）
+ *   sync         vault 双向同步引擎（任务 5，M1 最大块）
+ *   inbox watch  收集箱监听（任务 5 一部分）
+ *   compile      本地 LLM 整理（M2，--local 预留）
+ *   xiaoyue      对话（任务 6 最小版）
+ *
+ * 本文件只做命令路由；各命令实现在 src/commands/*，骨架阶段输出「未实现」。
+ */
+import { defineCommand, runCli } from './lib/runner'
+import { loadConfig, configPath } from './lib/config'
+import { cmdLogin } from './commands/login'
+import { cmdSync } from './commands/sync'
+import { cmdInbox } from './commands/inbox'
+import { cmdCompile } from './commands/compile'
+import { cmdXiaoyue } from './commands/xiaoyue'
+import { cmdWhoami } from './commands/whoami'
+
+const cli = defineCommand({
+  name: 'moonlybox',
+  version: '0.1.0',
+  description: 'MoonlyBox desktop client (M1 CLI)',
+  subcommands: {
+    login: {
+      description: 'Authorize this device via OAuth Device Flow',
+      run: cmdLogin,
+    },
+    whoami: {
+      description: 'Show current account and quota status',
+      run: cmdWhoami,
+    },
+    sync: {
+      description: 'Two-way sync between local vault and cloud',
+      options: {
+        dir: { type: 'string', description: 'Vault root directory (default: config or ./MyMoonVault)' },
+        once: { type: 'boolean', description: 'Run one reconcile pass and exit' },
+      },
+      run: cmdSync,
+    },
+    inbox: {
+      description: 'Collect-box pipeline (watch for new files)',
+      subcommands: {
+        watch: { description: 'Watch inbox directory and upload new files', run: cmdInbox },
+      },
+      run: cmdInbox,
+    },
+    compile: {
+      description: 'Organize documents into knowledge pages',
+      options: {
+        local: { type: 'boolean', description: 'Use local LLM endpoint (M2)' },
+      },
+      run: cmdCompile,
+    },
+    xiaoyue: {
+      description: 'Chat with Xiaoyue (minimal terminal chat)',
+      run: cmdXiaoyue,
+    },
+  },
+  run: () => {
+    const cfg = loadConfig()
+    console.log(`moonlybox v0.1.0`)
+    console.log(`  config: ${configPath()}`)
+    console.log(`  account: ${cfg.auth?.accountEmail ?? '(not logged in — run `moonlybox login`)'}`)
+    console.log('')
+    console.log('Use --help to see commands.')
+  },
+})
+
+runCli(cli)
