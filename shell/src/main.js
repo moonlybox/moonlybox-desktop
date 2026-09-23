@@ -8,6 +8,7 @@
  * - D12 内存形态：托盘常驻≠窗口常驻，关窗即销毁 renderer。
  */
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut, clipboard, Notification } = require('electron')
+const { initUpdater } = require('./updater')
 const path = require('path')
 const { spawn } = require('child_process')
 const fs = require('fs')
@@ -233,6 +234,8 @@ app.whenReady().then(() => {
   ipcMain.handle('shell:protocolState', () => ({
     isDefault: app.isDefaultProtocolClient('moonlybox'),
   }))
+
+  initUpdater(() => win)
 
   registerShortcuts()
   if (!app.isDefaultProtocolClient('moonlybox')) {

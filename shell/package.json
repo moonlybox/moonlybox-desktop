@@ -12,10 +12,54 @@
   },
   "devDependencies": {
     "electron": "^33.4.11",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "electron-updater": "^6.3.9"
   },
   "scripts": {
     "dev": "electron src/main.js",
     "build": "electron-builder"
+  },
+  "build": {
+    "appId": "cn.moonlybox.desktop",
+    "productName": "MoonlyBox",
+    "directories": {
+      "output": "../dist-shell",
+      "buildResources": "build"
+    },
+    "files": [
+      "package.json",
+      "src/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist/moonlybox",
+        "to": "kernel/moonlybox"
+      }
+    ],
+    "compression": "maximum",
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://moonlybox.cn/updates/desktop/"
+      }
+    ],
+    "linux": {
+      "target": [
+        "deb",
+        "tar.gz",
+        "AppImage"
+      ],
+      "category": "Utility"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    }
   }
 }
