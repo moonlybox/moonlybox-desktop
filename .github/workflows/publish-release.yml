@@ -1,0 +1,21 @@
+name: publish-release
+# 发布最新草稿 Release（正式发版管道：CI 打包→draft→本 workflow publish→官网更新源人工/脚本上传）
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-release.yml']  # 仅本文件变更时触发，避免每次 push 都跑
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish draft release (latest desktop-v tag)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG=$(git ls-remote --tags origin 'desktop-v*' | tail -1 | sed 's|.*refs/tags/||')
+          echo "Publishing $TAG"
+          gh release edit "$TAG" --draft=false --latest --repo $GITHUB_REPOSITORY
