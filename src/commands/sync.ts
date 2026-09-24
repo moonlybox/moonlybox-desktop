@@ -55,6 +55,17 @@ export async function cmdSync(args: string[], options: CommandOptions): Promise<
   if (!report.uploaded.length && !report.downloaded.length && !report.updated.length && !report.conflicts.length && !report.skipped.length) {
     console.log('✓ 已是最新（镜像区=云端，收集箱为空）')
   }
+
+  // 同步完成后重建本地检索索引（#246：增量对账含向量完整性校验，坏记录自动重 embed）
+  try {
+    const { reindex } = await import('../lib/indexer')
+    const idx = await reindex(root)
+    if (idx.indexed > 0 || idx.removed > 0) {
+      console.log(`索引更新: +${idx.indexed} 新增/更新, -${idx.removed} 移除`)
+    }
+  } catch (e) {
+    console.error(`⚠ 索引更新失败（检索暂不可用，可重跑 sync 或 search 重试）: ${String(e)}`)
+  }
 }
 
 const MIRROR_HINT = '文档/、知识页/ = 云端镜像；收集箱/ = 上传入口'

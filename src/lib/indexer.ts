@@ -97,10 +97,15 @@ export async function reindex(root: string): Promise<ReindexReport> {
 
   const toEmbed: Array<{ doc: IndexedDoc; rowid?: number }> = []
   const wantIds = new Set<string>()
+  // 向量存在性校验（#246）：坏引擎时代的索引可能 docs_meta 有记录但 docs_vec 空（embed 半途失败，
+  // meta 已 autocommit）——只对账 updatedAt 会永远 skip 坏记录。skip 必须同时满足向量存在。
+  const vecRows = new Set(
+    (db.query('SELECT rowid FROM docs_vec').all() as Array<{ rowid: number }>).map((r) => r.rowid),
+  )
   for (const doc of docs) {
     wantIds.add(doc.docId)
     const prev = byId.get(doc.docId)
-    if (prev && prev.updated_at === doc.updatedAt && prev.version === doc.version) {
+    if (prev && prev.updated_at === doc.updatedAt && prev.version === doc.version && vecRows.has(prev.rowid)) {
       report.skipped++
       continue
     }
