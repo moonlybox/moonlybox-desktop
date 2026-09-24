@@ -31,7 +31,7 @@ function nativeDir(): string {
   return dir
 }
 
-function extractNative(destDir?: string): string {
+function extractNative(destDir?: string): { dir: string; fresh: boolean } {
   const dir = destDir ?? nativeDir()
   fs.mkdirSync(dir, { recursive: true })
   const marker = path.join(dir, `.ok-${NATIVE_VERSION}`)
@@ -46,8 +46,9 @@ function extractNative(destDir?: string): string {
     fs.writeFileSync(target, fs.readFileSync(sharedLib as string))
     fs.writeFileSync(bindingTarget, fs.readFileSync(bindingLib as string))
     fs.writeFileSync(marker, 'ok')
+    return { dir, fresh: true }
   }
-  return dir
+  return { dir, fresh: false }
 }
 
 /** exe 所在目录（Windows LoadLibrary 第一顺位搜索） */
@@ -143,11 +144,16 @@ export async function ensureNativeOrt(): Promise<boolean> {
   // 不触发对 System32 旧 DLL 的探测——探测本身会让 ORT C++ 层向 stderr 打 API version 噪音）
   if (process.platform === 'win32') {
     let dir: string
+    let fresh = false
     if (canWrite(exeDir())) {
-      dir = extractNative(exeDir())
+      const r = extractNative(exeDir())
+      dir = r.dir
+      fresh = r.fresh
     } else {
-      dir = extractNative()
-      console.error(`提示: exe 目录不可写（安装版？），引擎库部署在 ${dir}`)
+      const r = extractNative()
+      dir = r.dir
+      fresh = r.fresh
+      console.log(`提示: exe 目录不可写（安装版？），引擎库部署在 ${dir}`)
     }
     const env: Record<string, string> = { ...process.env, MOONLYBOX_NATIVE_DIR: dir }
     if (process.env[ENV_KEY] !== '1') {
@@ -156,9 +162,12 @@ export async function ensureNativeOrt(): Promise<boolean> {
       process.env.MOONLYBOX_NATIVE_DIR = dir
       lockNativeDir()
       if (await ortHealthy()) {
-        const deployed = path.join(dir, SHARED_NAME)
-        const size = fs.statSync(deployed).size
-        console.error(`内置引擎 ${NATIVE_VERSION} 就绪 → ${deployed}（${(size / 1024 / 1024).toFixed(1)}MB）`)
+        // 仅首次部署时提示（就绪信息；日常启动静默）
+        if (fresh) {
+          const deployed = path.join(dir, SHARED_NAME)
+          const size = fs.statSync(deployed).size
+          console.log(`内置引擎 ${NATIVE_VERSION} 就绪 → ${deployed}（${(size / 1024 / 1024).toFixed(1)}MB）`)
+        }
         return false
       }
       // 预加载后仍不健康（理论上不应发生）：exec 自身走 PATH 兜底
@@ -180,7 +189,7 @@ export async function ensureNativeOrt(): Promise<boolean> {
   // Linux/macOS：探测 → 不健康则解压+exec-self（环境变量搜索链）
   if (await ortHealthy()) return false
   if (process.env[ENV_KEY] === '1') return false
-  const dir = extractNative()
+  const { dir } = extractNative()
   const env: Record<string, string> = { ...process.env, [ENV_KEY]: '1' }
   if (process.platform === 'darwin') {
     env.DYLD_LIBRARY_PATH = `${dir}:${env.DYLD_LIBRARY_PATH ?? ''}`
