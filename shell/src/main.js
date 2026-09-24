@@ -7,7 +7,7 @@
  * - IPC 安全（Hermes Desktop 范式）：contextIsolation=true + nodeIntegration=false + preload 白名单桥；
  * - D12 内存形态：托盘常驻≠窗口常驻，关窗即销毁 renderer。
  */
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut, clipboard, Notification } = require('electron')
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut, clipboard, Notification, dialog } = require('electron')
 const { initUpdater } = require('./updater')
 const path = require('path')
 const { spawn } = require('child_process')
@@ -18,10 +18,16 @@ let win = null
 
 // ---------- 内核定位：开发=仓根 bun 源；打包=resources/kernel/moonlybox 单文件 ----------
 function kernelCmd() {
-  const packaged = process.resourcesPath
-    ? path.join(process.resourcesPath, 'kernel', 'moonlybox')
-    : null
-  if (packaged && fs.existsSync(packaged)) return { cmd: packaged, base: [] }
+  // 打包态：resources/kernel/ 下 Windows=moonlybox.exe、mac/linux=moonlybox
+  if (process.resourcesPath) {
+    const exe = path.join(process.resourcesPath, 'kernel', process.platform === 'win32' ? 'moonlybox.exe' : 'moonlybox')
+    if (fs.existsSync(exe)) return { cmd: exe, base: [] }
+    // 内核缺失=打包缺陷，弹可见错误而非静默回退 'bun'（打包态无 bun，ENOENT 用户看不懂）
+    const msg = `内核缺失：${exe} 不在安装包内（打包缺陷，请上报 + 附版本号）`
+    dialog.showErrorBox('魔力宝盒', msg)
+    app.quit()
+    return { cmd: 'missing-kernel', base: [] }
+  }
   return { cmd: 'bun', base: ['run', 'src/cli.ts'] } // 开发态（cwd=REPO_ROOT）
 }
 

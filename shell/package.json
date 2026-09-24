@@ -31,8 +31,12 @@
     ],
     "extraResources": [
       {
-        "from": "../dist/moonlybox",
-        "to": "kernel/moonlybox"
+        "from": "../dist/",
+        "to": "kernel",
+        "filter": [
+          "moonlybox",
+          "moonlybox.exe"
+        ]
       }
     ],
     "compression": "maximum",
