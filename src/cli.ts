@@ -12,6 +12,7 @@
  * 本文件只做命令路由；各命令实现在 src/commands/*，骨架阶段输出「未实现」。
  */
 import { defineCommand, runCli } from './lib/runner'
+import pkg from '../package.json'
 import { loadConfig, configPath } from './lib/config'
 import { loadCredentials } from './lib/auth'
 import { cmdLogin } from './commands/login'
@@ -33,7 +34,7 @@ if (process.argv[2] !== 'daemon' && (await ensureNativeOrt())) {
 
 const cli = defineCommand({
   name: 'moonlybox',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'MoonlyBox desktop client (M1 CLI)',
   subcommands: {
     login: {
@@ -96,7 +97,7 @@ const cli = defineCommand({
   run: () => {
     const cfg = loadConfig()
     const creds = loadCredentials()
-    console.log(`moonlybox v0.1.0`)
+    console.log(`moonlybox v${pkg.version}`)
     console.log(`  config: ${configPath()}`)
     console.log(`  account: ${creds?.accountEmail ?? '(not logged in — run `moonlybox login`)'}`)
     console.log('')
