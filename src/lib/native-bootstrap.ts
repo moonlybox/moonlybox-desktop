@@ -65,25 +65,34 @@ function canWrite(dir: string): boolean {
 }
 
 /**
- * Windows：用 LoadLibraryExW 按绝对路径预加载共享库。
- * 之后 binding 的静态导入 onnxruntime.dll 会命中已加载的同名模块（loader 复用），
- * 完全绕开 DLL 搜索链（System32/PATH 里任何旧版 dll 都不再参与）。
+ * Windows：DLL 搜索链最终修正。
+ *
+ * 背景：binding（.node）在 bunfs 虚拟路径上，「应用目录」语义失效；System32 里若有旧版
+ * onnxruntime.dll（如 1.17.1），静态导入解析会命中它（PATH 前置也输给 System32）。
+ *
+ * 解法（Win32 标准）：SetDefaultDllDirectories 切换到显式搜索语义
+ * （应用目录 | 用户目录 | System32），再 AddDllDirectory 把内置引擎目录插入
+ * USER_DIRS——**UserDirs 优先于 System32**，内嵌 1.21.0 必定压制系统旧版。
  */
-function preloadWindowsDll(dir: string): void {
+export function lockNativeDir(): void {
+  if (process.platform !== 'win32') return
+  const dir = process.env.MOONLYBOX_NATIVE_DIR
+  if (!dir || !fs.existsSync(path.join(dir, SHARED_NAME))) return
   try {
     const { dlopen, FFIType } = require('bun:ffi')
-    const dllPath = path.join(dir, SHARED_NAME)
-    const wide = Buffer.from(`${dllPath}\0`, 'utf16le')
-    // LoadLibraryExW(lpLibFileName: ptr, hFile: 0, dwFlags: LOAD_WITH_ALTERED_SEARCH_PATH=8)
-    const { LoadLibraryExW } = dlopen('kernel32.dll', {
-      LoadLibraryExW: { args: [FFIType.ptr, FFIType.ptr, FFIType.i32], returns: FFIType.ptr },
+    const wide = Buffer.from(`${dir}\0`, 'utf16le')
+    const kernel32 = dlopen('kernel32.dll', {
+      AddDllDirectory: { args: [FFIType.ptr], returns: FFIType.ptr },
+      SetDefaultDllDirectories: { args: [FFIType.u32], returns: FFIType.i32 },
     }).symbols
-    const handle = LoadLibraryExW(wide, 0, 8)
-    if (!handle || Number(handle) === 0) {
-      console.error(`警告: 预加载 ${dllPath} 失败（将回落系统搜索链）`)
+    // LOAD_LIBRARY_SEARCH_APPLICATION_DIR=0x200 | LOAD_LIBRARY_SEARCH_USER_DIRS=0x400 | LOAD_LIBRARY_SEARCH_SYSTEM32=0x800
+    const ok = kernel32.SetDefaultDllDirectories(0x200 | 0x400 | 0x800)
+    const cookie = kernel32.AddDllDirectory(wide)
+    if (!ok || !cookie || Number(cookie) === 0) {
+      console.error('警告: DLL 搜索目录配置未生效（将回落系统搜索链）')
     }
   } catch (e) {
-    console.error(`警告: DLL 预加载异常（将回落系统搜索链）: ${String(e).slice(0, 120)}`)
+    console.error(`警告: DLL 搜索目录配置异常（将回落系统搜索链）: ${String(e).slice(0, 120)}`)
   }
 }
 
@@ -150,12 +159,3 @@ export async function ensureNativeOrt(): Promise<boolean> {
   return true
 }
 
-/**
- * 引导后的子进程在首次 import ORT 前调用：Windows 用 LoadLibraryExW 锁定内嵌版本。
- * （必须在 import('onnxruntime-node') 之前；Linux/macOS 由环境变量覆盖搜索链，无需此步）
- */
-export function lockNativeDir(): void {
-  if (process.platform !== 'win32') return
-  const dir = process.env.MOONLYBOX_NATIVE_DIR
-  if (dir && fs.existsSync(path.join(dir, SHARED_NAME))) preloadWindowsDll(dir)
-}
