@@ -102,10 +102,10 @@ function createWindow() {
     },
   })
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'))
-  // D12：关窗=隐藏释放显示，renderer 进程随 hide 不销毁——先按「hide 保活」实现（切回秒开），
-  // 内存复测超 D12 口径再改 destroy（形态开关留 IPC）。
-  win.on('close', (e) => {
-    if (!app.isQuiting) { e.preventDefault(); win.hide() }
+  // D12：关窗=真销毁 renderer（2026-09-24 T6 卡7 实测：hide 保活待命 368MB 超 D12 80-150MB 口径 2.5 倍，
+  // 触发预埋的切换条件——destroy 换待命内存达标，代价=重开窗口 ~300ms 重建）
+  win.on('close', () => {
+    win = null
   })
   win.once('ready-to-show', () => win.show())
 }
