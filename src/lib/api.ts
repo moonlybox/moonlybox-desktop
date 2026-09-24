@@ -47,7 +47,10 @@ export async function apiGet<T = any>(path: string, opts?: { baseUrl?: string })
   const { loadCredentials } = await import('./auth')
   const creds = loadCredentials()
   const res = await apiCall<T>('GET', `/api${path}`, undefined, { ...opts, token: creds?.accessToken })
-  if (!res.ok) throw new Error(`GET ${path} → ${res.status}`)
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('未登录或登录已过期：先运行 `moonlybox login`')
+    throw new Error(`GET ${path} → ${res.status}`)
+  }
   return res.data as T
 }
 
@@ -55,6 +58,9 @@ export async function apiPost<T = any>(path: string, body?: unknown, opts?: { ba
   const { loadCredentials } = await import('./auth')
   const creds = loadCredentials()
   const res = await apiCall<T>('POST', `/api${path}`, body, { ...opts, token: creds?.accessToken })
-  if (!res.ok) throw new Error(`POST ${path} → ${res.status}`)
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('未登录或登录已过期：先运行 `moonlybox login`')
+    throw new Error(`POST ${path} → ${res.status}`)
+  }
   return res.data as T
 }
