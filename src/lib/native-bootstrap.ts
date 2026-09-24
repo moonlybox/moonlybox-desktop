@@ -13,7 +13,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import * as cp from 'node:child_process'
-import { sharedLib, SHARED_NAME, NATIVE_VERSION } from './native-bindings'
+import { sharedLib, smokeModel, SHARED_NAME, NATIVE_VERSION } from './native-bindings'
 
 function nativeDir(): string {
   const dir = path.join(os.tmpdir(), `moonlybox-native-${NATIVE_VERSION}-${process.platform}-${process.arch}`)
@@ -32,11 +32,19 @@ function extractNative(): string {
   return dir
 }
 
-/** ORT 原生层当前是否可加载（不实际跑推理） */
-async function ortLoadable(): Promise<boolean> {
+/**
+ * ORT 原生层健康检查（#246 二轮）：
+ * 仅 import 成功不算数——dlopen 可能命中系统搜索链上的**旧版**共享库（用户机器报
+ * 「API version 21 vs 1.17.1」即此因）。必须真跑一次最小推理（69 字节 Identity 模型），
+ * 版本不匹配/注册损坏时 create 直接抛错 → 视为不健康 → 走引导。
+ */
+async function ortHealthy(): Promise<boolean> {
   try {
-    await import('onnxruntime-node')
-    return true
+    const ort = await import('onnxruntime-node')
+    const session = await ort.InferenceSession.create(smokeModel as string)
+    const feed = new ort.Tensor('float32', new Float32Array([1]), [1])
+    const out = await session.run({ x: feed })
+    return Boolean(out.y)
   } catch {
     return false
   }
@@ -47,7 +55,7 @@ async function ortLoadable(): Promise<boolean> {
  * 返回 true=已重新 exec（本进程应立即退出）；false=环境就绪。
  */
 export async function ensureNativeOrt(): Promise<boolean> {
-  if (await ortLoadable()) return false
+  if (await ortHealthy()) return false
   const dir = extractNative()
   const envKey = 'MOONLYBOX_NATIVE_BOOTSTRAP'
   if (process.env[envKey] === '1') return false // 已引导过仍失败——不循环，让上层报真实错误

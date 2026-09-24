@@ -5,13 +5,11 @@
  * native-bootstrap.ts 引用 ./native-bindings.ts（gitignore，构建时生成本平台 assets 绑定），
  * 避免 exe 内嵌三平台全部原生库。
  */
-import { $ } from 'bun'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
 const p = process.platform // darwin | linux | win32
 const arch = process.arch // x64 | arm64
-const ortBin = `../../node_modules/onnxruntime-node/bin/napi-v3/${p}/${arch}`
 
 // 各平台共享库文件名
 const sharedNames: Record<string, string[]> = {
@@ -32,7 +30,7 @@ for (const n of names) {
     break
   }
 }
-if (!sharedRel) throw new Error(`ORT 共享库未找到: ${ortBin}/{${names.join(',')}}`)
+if (!sharedRel) throw new Error(`ORT 共享库未找到: napi-v3/${p}/${arch}/{${names.join(',')}}`)
 
 const bindingRel = `../../node_modules/onnxruntime-node/bin/napi-v3/${p}/${arch}/onnxruntime_binding.node`
 const sharedName = p === 'win32' ? 'onnxruntime.dll' : p === 'darwin' ? 'libonnxruntime.dylib' : 'libonnxruntime.so.1'
@@ -43,12 +41,14 @@ const bindingCode = `/**
  */
 // @ts-expect-error bun assets
 import sharedLib from '${sharedRel}' with { type: 'file' }
-export { sharedLib }
+// @ts-expect-error bun assets
+import smokeModel from '../../assets/ort-smoke.onnx' with { type: 'file' }
+export { sharedLib, smokeModel }
 export const SHARED_NAME = ${JSON.stringify(sharedName)}
 export const NATIVE_VERSION = '1.21.0'
 export const BINDING_PATH = ${JSON.stringify(bindingRel)}
 `
 fs.writeFileSync(path.join(repoRoot, 'src/lib/native-bindings.ts'), bindingCode)
 
-await $`bun build src/cli.ts --compile --outfile dist/moonlybox`
+await Bun.$`bun build src/cli.ts --compile --outfile dist/moonlybox`
 console.log(`BUILD-OK ${p}-${arch}`)
