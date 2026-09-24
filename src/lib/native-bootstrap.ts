@@ -139,33 +139,50 @@ async function ortHealthy(): Promise<boolean> {
  * 返回 true=已重新 exec（本进程应立即退出）；false=环境就绪（或引导后仍失败，交上层报错）。
  */
 export async function ensureNativeOrt(): Promise<boolean> {
-  if (await ortHealthy()) return false
-  if (process.env[ENV_KEY] === '1') return false // 已引导过仍失败——不循环，让上层报真实错误
-
-  let dir: string
-  let deployed = ''
+  // Windows：先无条件部署+按真实目录预加载 binding（此顺序保证首次 import ORT 就命中内嵌 1.21.0，
+  // 不触发对 System32 旧 DLL 的探测——探测本身会让 ORT C++ 层向 stderr 打 API version 噪音）
   if (process.platform === 'win32') {
-    // Windows：exe 同目录是 LoadLibrary 第一顺位（高于 System32），必须尽力复制到位
+    let dir: string
     if (canWrite(exeDir())) {
       dir = extractNative(exeDir())
-      deployed = path.join(exeDir(), SHARED_NAME)
     } else {
       dir = extractNative()
-      deployed = path.join(dir, SHARED_NAME)
-      console.error(`提示: exe 目录不可写（安装版？），引擎库部署在 ${dir}（PATH 方案）`)
+      console.error(`提示: exe 目录不可写（安装版？），引擎库部署在 ${dir}`)
     }
-  } else {
-    dir = extractNative()
+    const env: Record<string, string> = { ...process.env, MOONLYBOX_NATIVE_DIR: dir }
+    if (process.env[ENV_KEY] !== '1') {
+      // 未引导过：注入环境并 lock（预加载真实目录 binding，NAPI 注册去重使后续 import 复用）
+      env[ENV_KEY] = '1'
+      process.env.MOONLYBOX_NATIVE_DIR = dir
+      lockNativeDir()
+      if (await ortHealthy()) {
+        const deployed = path.join(dir, SHARED_NAME)
+        const size = fs.statSync(deployed).size
+        console.error(`内置引擎 ${NATIVE_VERSION} 就绪 → ${deployed}（${(size / 1024 / 1024).toFixed(1)}MB）`)
+        return false
+      }
+      // 预加载后仍不健康（理论上不应发生）：exec 自身走 PATH 兜底
+      env.PATH = `${dir};${process.env.PATH ?? ''}`
+      const child = cp.spawn(process.execPath, process.argv.slice(2), { env, stdio: 'inherit', windowsHide: true })
+      await new Promise<void>((resolve) => child.on('exit', (code) => {
+        process.exitCode = code ?? 1
+        resolve()
+      }))
+      return true
+    }
+    // 已引导过（bootstrap=1）：lock 后正常探测
+    lockNativeDir()
+    if (await ortHealthy()) return false
+    console.error(`警告: 引擎引导后仍不健康（onnxruntime 版本校验失败），检索功能不可用`)
+    return false
   }
-  if (deployed) {
-    const size = fs.statSync(deployed).size
-    console.error(`已部署内置引擎 ${NATIVE_VERSION} → ${deployed}（${(size / 1024 / 1024).toFixed(1)}MB）；此前若报 API version 1.17.1，旧 DLL 来自系统目录`)
-  }
+
+  // Linux/macOS：探测 → 不健康则解压+exec-self（环境变量搜索链）
+  if (await ortHealthy()) return false
+  if (process.env[ENV_KEY] === '1') return false
+  const dir = extractNative()
   const env: Record<string, string> = { ...process.env, [ENV_KEY]: '1' }
-  if (process.platform === 'win32') {
-    env.PATH = `${dir};${env.PATH ?? ''}`
-    env.MOONLYBOX_NATIVE_DIR = dir
-  } else if (process.platform === 'darwin') {
+  if (process.platform === 'darwin') {
     env.DYLD_LIBRARY_PATH = `${dir}:${env.DYLD_LIBRARY_PATH ?? ''}`
   } else {
     env.LD_LIBRARY_PATH = `${dir}:${env.LD_LIBRARY_PATH ?? ''}`
