@@ -50,5 +50,15 @@ export const BINDING_PATH = ${JSON.stringify(bindingRel)}
 `
 fs.writeFileSync(path.join(repoRoot, 'src/lib/native-bindings.ts'), bindingCode)
 
-await Bun.$`bun build src/cli.ts --compile --outfile dist/moonlybox`
+try {
+  await Bun.$`bun build src/cli.ts --compile --outfile dist/moonlybox`
+} catch (e) {
+  const msg = String(e)
+  if (msg.includes('EPERM') || msg.includes(' Permission denied')) {
+    console.error('编译成功但无法替换 dist/moonlybox.exe：文件被占用（Windows）——上一次运行的 moonlybox.exe 进程还没退出。')
+    console.error('处理：任务管理器结束所有 moonlybox.exe 进程，或运行： taskkill /F /IM moonlybox.exe ，然后重跑 bun run build。')
+    process.exit(1)
+  }
+  throw e
+}
 console.log(`BUILD-OK ${p}-${arch}`)
