@@ -31,6 +31,11 @@ function kernelCmd() {
   return { cmd: 'bun', base: ['run', 'src/cli.ts'] } // 开发态（cwd=REPO_ROOT）
 }
 
+// 跨平台用户目录：Windows=USERPROFILE，unix=HOME（Windows 无 HOME，反之亦然）
+function homeDir() {
+  return process.env.USERPROFILE || process.env.HOME || ''
+}
+
 const REPO_ROOT = path.join(__dirname, '..', '..')
 
 // ---------- daemon 常驻通道（stdio JSONL，协议见 src/commands/daemon.ts） ----------
@@ -45,7 +50,7 @@ function ensureDaemon() {
   daemon = spawn(cmd, [...base, 'daemon'], {
     cwd: REPO_ROOT,
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, MOONLYBOX_VAULT: process.env.MOONLYBOX_VAULT || `${process.env.HOME}/MyMoonVault` },
+    env: { ...process.env, MOONLYBOX_VAULT: process.env.MOONLYBOX_VAULT || path.join(homeDir(), 'MyMoonVault') },
   })
   let buf = ''
   daemon.stdout.on('data', (d) => {
@@ -109,7 +114,7 @@ function createWindow() {
 function inboxPath() {
   return process.env.MOONLYBOX_VAULT
     ? path.join(process.env.MOONLYBOX_VAULT, '收集箱')
-    : path.join(process.env.HOME, 'MyMoonVault', '收集箱')
+    : path.join(homeDir(), 'MyMoonVault', '收集箱')
 }
 
 function quickCapture(text, source = 'clipboard') {
