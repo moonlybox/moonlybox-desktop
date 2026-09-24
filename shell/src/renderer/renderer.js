@@ -56,7 +56,13 @@ loadAbout()
 $('btn-check-update').onclick = async () => {
   $('update-state').textContent = '检查中…'
   const st = await window.moonlybox.updateCheck()
-  if (st.available) $('update-state').textContent = `新版本 v${st.version}（下载中/已就绪，重启生效）`
+  if (st.available) {
+    $('update-state').textContent = `新版本 v${st.version}（下载中/已就绪，重启生效）`
+    // 已下载就绪 → 显示重启安装按钮（T4 闭环：无此按钮时用户只能退出重开，依赖 autoInstallOnAppQuit）
+    const btn = document.getElementById('update-install')
+    if (btn && st.downloaded) btn.style.display = 'inline-block'  // 下载完成就绪才显示
+    if (btn) btn.onclick = () => window.moonlybox.updateInstall()
+  }
   else if (st.error) $('update-state').textContent = `检查失败（离线或网络受限）`
   else $('update-state').textContent = '已是最新版本'
 }

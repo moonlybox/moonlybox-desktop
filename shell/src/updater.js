@@ -6,7 +6,7 @@
 const { autoUpdater } = require('electron-updater')
 const { Notification, ipcMain } = require('electron')
 
-let updateState = { checking: false, available: false, version: null, error: null }
+let updateState = { checking: false, available: false, version: null, error: null, downloaded: false }
 
 function initUpdater(getMainWindow) {
   autoUpdater.autoDownload = true
@@ -14,11 +14,11 @@ function initUpdater(getMainWindow) {
 
   autoUpdater.on('checking-for-update', () => { updateState = { ...updateState, checking: true, error: null } })
   autoUpdater.on('update-available', (info) => {
-    updateState = { checking: false, available: true, version: info.version, error: null }
+    updateState = { checking: false, available: true, version: info.version, error: null, downloaded: false }
     new Notification({ title: '魔力宝盒', body: `发现新版本 v${info.version}，后台下载中…` }).show()
   })
   autoUpdater.on('update-not-available', () => {
-    updateState = { checking: false, available: false, version: null, error: null }
+    updateState = { checking: false, available: false, version: null, error: null, downloaded: false }
   })
   autoUpdater.on('error', (e) => {
     // 静默：未签名/无网/离线场景不弹窗，仅记录状态（关于页可查）
@@ -28,6 +28,7 @@ function initUpdater(getMainWindow) {
     updateState.progress = Math.round(p.percent)
   })
   autoUpdater.on('update-downloaded', (info) => {
+    updateState.downloaded = true
     new Notification({
       title: '魔力宝盒',
       body: `v${info.version} 已就绪，重启应用后生效`,
