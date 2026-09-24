@@ -35,12 +35,14 @@ function extractNative(destDir?: string): string {
   const dir = destDir ?? nativeDir()
   fs.mkdirSync(dir, { recursive: true })
   const marker = path.join(dir, `.ok-${NATIVE_VERSION}`)
-  if (!fs.existsSync(marker)) {
+  const target = path.join(dir, SHARED_NAME)
+  // 完整性判据=marker 且 dll 都存在（用户/清理工具可能删 dll 留 marker）
+  if (!fs.existsSync(marker) || !fs.existsSync(target)) {
     for (const f of fs.readdirSync(dir)) {
       if (f === SHARED_NAME) continue
       try { fs.unlinkSync(path.join(dir, f)) } catch { /* 非本组件文件跳过 */ }
     }
-    fs.writeFileSync(path.join(dir, SHARED_NAME), fs.readFileSync(sharedLib as string))
+    fs.writeFileSync(target, fs.readFileSync(sharedLib as string))
     fs.writeFileSync(marker, 'ok')
   }
   return dir
