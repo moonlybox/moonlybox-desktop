@@ -1,13 +1,19 @@
 /**
- * 原生模块 bootstrap（#246）。
+ * 原生模块 bootstrap（#246，三轮）。
  *
  * 问题：bun compile 单文件把 onnxruntime 的 binding（.node）内嵌进 exe，但其共享库
- * （libonnxruntime.so.1 / onnxruntime.dll）按 dlopen 搜索链解析——binding 的 $ORIGIN 在
- * bunfs 虚拟路径下失效，用户机器上命中不到（或命中旧版 DLL，报 API version 错误）。
+ * （libonnxruntime.so.1 / onnxruntime.dll）按 dlopen/LoadLibrary 搜索链解析——binding 的
+ * $ORIGIN 在 bunfs 虚拟路径下失效：
+ *   - Linux/macOS：搜不到 → ERR_DLOPEN_FAILED
+ *   - Windows：可能命中系统搜索链上的**旧版** onnxruntime.dll → 推理时报 API version 错
+ *   - bunfs 虚拟路径的文件不能直接传给 ORT create(path)（C 层真实文件 API 读不到）
  *
- * 方案：编译期把当前平台的 ORT 共享库作为 bun assets 内嵌（.node binding 不重复内嵌——
- * bundle 里 onnxruntime-node 自带；重复内嵌会双实例破坏 backend 注册）；运行时检测 ORT 加载，
- * 失败则解压共享库到持久目录并重新 exec 自身（Linux: LD_LIBRARY_PATH / Windows: PATH 前置）。
+ * 方案（三轮收敛）：
+ *   1. 编译期把当前平台 ORT 共享库作为 bun assets 内嵌（.node 不重复内嵌——双实例破坏 backend 注册）
+ *   2. 健康检查=真跑一次最小推理（smoke 模型以 Buffer 传入，不落虚拟路径）
+ *   3. 不健康 → 解压共享库 → 重新 exec 自身：
+ *      Windows: 首选复制到 exe 同目录（LoadLibrary 应用目录第一顺位），失败回落 tmpdir+PATH 前置
+ *      Linux/macOS: tmpdir + LD_LIBRARY_PATH / DYLD_LIBRARY_PATH
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -21,27 +27,48 @@ function nativeDir(): string {
   return dir
 }
 
-function extractNative(): string {
-  const dir = nativeDir()
+function extractNative(destDir?: string): string {
+  const dir = destDir ?? nativeDir()
+  fs.mkdirSync(dir, { recursive: true })
   const marker = path.join(dir, `.ok-${NATIVE_VERSION}`)
   if (!fs.existsSync(marker)) {
-    for (const f of fs.readdirSync(dir)) fs.unlinkSync(path.join(dir, f))
+    for (const f of fs.readdirSync(dir)) {
+      if (f === SHARED_NAME) continue
+      try { fs.unlinkSync(path.join(dir, f)) } catch { /* 非本组件文件跳过 */ }
+    }
     fs.writeFileSync(path.join(dir, SHARED_NAME), fs.readFileSync(sharedLib as string))
     fs.writeFileSync(marker, 'ok')
   }
   return dir
 }
 
+/** exe 所在目录（Windows LoadLibrary 第一顺位搜索） */
+function exeDir(): string {
+  return path.dirname(process.execPath)
+}
+
+function canWrite(dir: string): boolean {
+  try {
+    const probe = path.join(dir, `.moonlybox-write-probe-${Date.now()}`)
+    fs.writeFileSync(probe, '1')
+    fs.unlinkSync(probe)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
- * ORT 原生层健康检查（#246 二轮）：
- * 仅 import 成功不算数——dlopen 可能命中系统搜索链上的**旧版**共享库（用户机器报
- * 「API version 21 vs 1.17.1」即此因）。必须真跑一次最小推理（69 字节 Identity 模型），
- * 版本不匹配/注册损坏时 create 直接抛错 → 视为不健康 → 走引导。
+ * ORT 原生层健康检查：
+ * 仅 import 成功不算数——dlopen 可能命中旧版共享库（Windows「API version 21 vs 1.17.1」即此因）。
+ * 必须真跑一次最小推理；smoke 模型以 Buffer 传入（bunfs 虚拟路径 ORT C 层读不到）。
+ * 版本不匹配/注册损坏时 create/run 抛错 → 视为不健康 → 走引导。
  */
 async function ortHealthy(): Promise<boolean> {
   try {
     const ort = await import('onnxruntime-node')
-    const session = await ort.InferenceSession.create(smokeModel as string)
+    const modelBytes = fs.readFileSync(smokeModel as string)
+    const session = await ort.InferenceSession.create(modelBytes)
     const feed = new ort.Tensor('float32', new Float32Array([1]), [1])
     const out = await session.run({ x: feed })
     return Boolean(out.y)
@@ -51,14 +78,22 @@ async function ortHealthy(): Promise<boolean> {
 }
 
 /**
- * 入口调用：若 ORT 原生层不可加载，解压共享库并 exec 自身（注入平台库搜索路径）。
- * 返回 true=已重新 exec（本进程应立即退出）；false=环境就绪。
+ * 入口调用：ORT 原生层不健康时解压共享库并 exec 自身（注入平台库搜索路径）。
+ * 返回 true=已重新 exec（本进程应立即退出）；false=环境就绪（或引导后仍失败，交上层报错）。
  */
 export async function ensureNativeOrt(): Promise<boolean> {
   if (await ortHealthy()) return false
-  const dir = extractNative()
   const envKey = 'MOONLYBOX_NATIVE_BOOTSTRAP'
   if (process.env[envKey] === '1') return false // 已引导过仍失败——不循环，让上层报真实错误
+
+  let dir: string
+  if (process.platform === 'win32' && canWrite(exeDir())) {
+    // Windows：复制到 exe 同目录（应用目录是 LoadLibrary 第一顺位，优先级高于 PATH）
+    dir = extractNative(exeDir())
+  } else {
+    dir = extractNative()
+  }
+
   const env: Record<string, string> = { ...process.env, [envKey]: '1' }
   if (process.platform === 'win32') {
     env.PATH = `${dir};${env.PATH ?? ''}`
