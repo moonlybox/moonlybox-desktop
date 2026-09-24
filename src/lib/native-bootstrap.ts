@@ -113,13 +113,24 @@ export async function ensureNativeOrt(): Promise<boolean> {
   if (process.env[ENV_KEY] === '1') return false // 已引导过仍失败——不循环，让上层报真实错误
 
   let dir: string
-  if (process.platform === 'win32' && canWrite(exeDir())) {
-    // Windows：复制到 exe 同目录（应用目录是 LoadLibrary 第一顺位，优先级高于 PATH）
-    dir = extractNative(exeDir())
+  let deployed = ''
+  if (process.platform === 'win32') {
+    // Windows：exe 同目录是 LoadLibrary 第一顺位（高于 System32），必须尽力复制到位
+    if (canWrite(exeDir())) {
+      dir = extractNative(exeDir())
+      deployed = path.join(exeDir(), SHARED_NAME)
+    } else {
+      dir = extractNative()
+      deployed = path.join(dir, SHARED_NAME)
+      console.error(`提示: exe 目录不可写（安装版？），引擎库部署在 ${dir}（PATH 方案）`)
+    }
   } else {
     dir = extractNative()
   }
-
+  if (deployed) {
+    const size = fs.statSync(deployed).size
+    console.error(`已部署内置引擎 ${NATIVE_VERSION} → ${deployed}（${(size / 1024 / 1024).toFixed(1)}MB）；此前若报 API version 1.17.1，旧 DLL 来自系统目录`)
+  }
   const env: Record<string, string> = { ...process.env, [ENV_KEY]: '1' }
   if (process.platform === 'win32') {
     env.PATH = `${dir};${env.PATH ?? ''}`
