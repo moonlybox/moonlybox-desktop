@@ -30,6 +30,17 @@ export async function cmdSearch(args: string[], options: CommandOptions): Promis
     try {
       const { ortRuntimeVersion } = await import('../lib/embedding')
       console.error(`诊断: onnxruntime 实际加载版本 = ${await ortRuntimeVersion()}（期望 1.21；若不符，删除 exe 旁/项目里的旧 node_modules 后重新 bun install + bun run build）`)
+      if (process.platform === 'win32') {
+        const path = await import('node:path')
+        const fs = await import('node:fs')
+        const candidates = [
+          path.join(path.dirname(process.execPath), 'onnxruntime.dll'),
+          'C:\\Windows\\System32\\onnxruntime.dll',
+        ]
+        for (const c of candidates) {
+          if (fs.existsSync(c)) console.error(`提示: 发现系统 DLL ${c}——若其中是旧版 onnxruntime，会覆盖客户端内嵌版本；可改名（如 onnxruntime.dll.bak）后重试`)
+        }
+      }
     } catch { /* 诊断失败不影响原报错 */ }
     process.exitCode = 1
     return

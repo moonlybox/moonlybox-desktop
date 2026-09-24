@@ -24,9 +24,11 @@ import { cmdWhoami } from './commands/whoami'
 import { cmdSearch } from './commands/search'
 import { cmdMemory } from './commands/memory'
 import { runDaemon } from './commands/daemon'
-import { ensureNativeOrt } from './lib/native-bootstrap'
+import { ensureNativeOrt, lockNativeDir } from './lib/native-bootstrap'
 
 /** 入口：ORT 原生层不可用时解压+exec 自身（#246）；daemon 模式跑在 shell node_modules 环境无需引导 */
+// 引导后的子进程先锁定内嵌版 DLL（Windows LoadLibraryExW 预加载，须在 import ORT 之前）
+if (process.env.MOONLYBOX_NATIVE_BOOTSTRAP === '1') lockNativeDir()
 if (process.argv[2] !== 'daemon' && (await ensureNativeOrt())) {
   process.exit(process.exitCode ?? 0)
 }
