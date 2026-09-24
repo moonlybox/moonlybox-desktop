@@ -21,7 +21,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import * as cp from 'node:child_process'
-import { sharedLib, smokeModel, SHARED_NAME, NATIVE_VERSION } from './native-bindings'
+import { sharedLib, smokeModel, bindingLib, SHARED_NAME, BINDING_NAME, NATIVE_VERSION } from './native-bindings'
 
 const ENV_KEY = 'MOONLYBOX_NATIVE_BOOTSTRAP'
 
@@ -36,13 +36,15 @@ function extractNative(destDir?: string): string {
   fs.mkdirSync(dir, { recursive: true })
   const marker = path.join(dir, `.ok-${NATIVE_VERSION}`)
   const target = path.join(dir, SHARED_NAME)
-  // 完整性判据=marker 且 dll 都存在（用户/清理工具可能删 dll 留 marker）
-  if (!fs.existsSync(marker) || !fs.existsSync(target)) {
+  const bindingTarget = path.join(dir, BINDING_NAME)
+  // 完整性判据=marker 且 共享库+binding 都存在（用户/清理工具可能删除部分文件）
+  if (!fs.existsSync(marker) || !fs.existsSync(target) || !fs.existsSync(bindingTarget)) {
     for (const f of fs.readdirSync(dir)) {
-      if (f === SHARED_NAME) continue
+      if (f === SHARED_NAME || f === BINDING_NAME) continue
       try { fs.unlinkSync(path.join(dir, f)) } catch { /* 非本组件文件跳过 */ }
     }
     fs.writeFileSync(target, fs.readFileSync(sharedLib as string))
+    fs.writeFileSync(bindingTarget, fs.readFileSync(bindingLib as string))
     fs.writeFileSync(marker, 'ok')
   }
   return dir
@@ -77,7 +79,24 @@ function canWrite(dir: string): boolean {
 export function lockNativeDir(): void {
   if (process.platform !== 'win32') return
   const dir = process.env.MOONLYBOX_NATIVE_DIR
-  if (!dir || !fs.existsSync(path.join(dir, SHARED_NAME))) return
+  const bindingPath = dir ? path.join(dir, BINDING_NAME) : ''
+  if (!bindingPath || !fs.existsSync(bindingPath)) return
+  // ①先从真实目录 dlopen binding：依赖 onnxruntime.dll 按 binding 真实目录解析（ALTERED 语义）
+  //   → 命中同目录内嵌 1.21.0；NAPI 模块注册表按模块注册名去重 →
+  //   bundle 内 bunfs binding 的后续 require 复用已注册实例（不双实例）。
+  //   binding 从 assets blob 写出（.blob 后缀避开 bun 对 .node 的编译期预加载——那会双实例）。
+  try {
+    const m = { exports: {} as Record<string, unknown> }
+    process.dlopen(m, bindingPath)
+    // CJS 模块可能整体替换 exports——以 dlopen 后的最终对象为准
+    const exports = m.exports as Record<string, unknown>
+    if (typeof exports.InferenceSession !== 'function') {
+      console.error('警告: 引擎绑定预加载后导出不完整')
+    }
+  } catch (e) {
+    console.error(`警告: 引擎绑定预加载失败: ${String(e).slice(0, 120)}`)
+  }
+  // ②双保险：显式 DLL 搜索语义（UserDirs 优先于 System32）
   try {
     const { dlopen, FFIType } = require('bun:ffi')
     const wide = Buffer.from(`${dir}\0`, 'utf16le')

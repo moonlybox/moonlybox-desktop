@@ -23,3 +23,4 @@ dist-shell/
 # 开发纪律（仅本地）
 AGENTS.md
 src/lib/native-bindings.ts
+assets/ort-binding.blob

@@ -43,11 +43,19 @@ const bindingCode = `/**
 import sharedLib from '${sharedRel}' with { type: 'file' }
 // @ts-expect-error bun assets
 import smokeModel from '../../assets/ort-smoke.onnx' with { type: 'file' }
-export { sharedLib, smokeModel }
+// @ts-expect-error bun assets
+import bindingLib from '../../assets/ort-binding.blob' with { type: 'file' }
+export { sharedLib, smokeModel, bindingLib }
 export const SHARED_NAME = ${JSON.stringify(sharedName)}
+export const BINDING_NAME = 'onnxruntime_binding.node'
 export const NATIVE_VERSION = '1.21.0'
 export const BINDING_PATH = ${JSON.stringify(bindingRel)}
 `
+// binding 复制为 .blob（避开 bun 对 .node 后缀的 native 模块预加载特判——双实例根源）
+fs.copyFileSync(
+  path.join(repoRoot, 'node_modules/onnxruntime-node/bin/napi-v3', p, arch, 'onnxruntime_binding.node'),
+  path.join(repoRoot, 'assets/ort-binding.blob'),
+)
 fs.writeFileSync(path.join(repoRoot, 'src/lib/native-bindings.ts'), bindingCode)
 
 try {
