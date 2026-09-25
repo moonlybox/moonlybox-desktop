@@ -105,3 +105,55 @@ export async function byokChat(system: string, question: string, timeoutMs = 60_
     return { ok: false, error: String((e as Error).message ?? e) }
   }
 }
+
+export interface ToolCallRequest {
+  id: string
+  type: 'function'
+  function: { name: string; arguments: string }
+}
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content?: string | null
+  tool_calls?: ToolCallRequest[]
+  tool_call_id?: string
+}
+
+export interface ChatWithToolsResult {
+  ok: boolean
+  text?: string
+  toolCalls?: ToolCallRequest[]
+  error?: string
+}
+
+/** 多轮 messages + tools 对话（Agent loop 核心原语；BYOK 直连，key 永不出本机） */
+export async function byokChatMessages(
+  messages: ChatMessage[],
+  tools?: Array<{ type: 'function'; function: { name: string; description?: string; parameters: unknown } }>,
+  timeoutMs = 90_000,
+): Promise<ChatWithToolsResult> {
+  const meta = loadByokMeta()
+  const apiKey = loadByokKey()
+  if (!meta || !apiKey) return { ok: false, error: 'BYOK 未配置' }
+  try {
+    const res = await fetch(`${meta.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: meta.model,
+        messages,
+        ...(tools && tools.length ? { tools } : {}),
+        max_tokens: 1500,
+        temperature: 0.3,
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
+    const body = (await res.json()) as { choices?: Array<{ message?: { content?: string; tool_calls?: ToolCallRequest[] } }> }
+    const msg = body.choices?.[0]?.message
+    if (!msg) return { ok: false, error: '空回复' }
+    return { ok: true, text: msg.content?.trim() || undefined, toolCalls: msg.tool_calls }
+  } catch (e) {
+    return { ok: false, error: String((e as Error).message ?? e) }
+  }
+}
