@@ -224,6 +224,9 @@ export async function syncDownFull(root: string, report: SyncReport): Promise<vo
   const manifest = loadManifest(root)
 
   const cloudIds = new Set<string>()
+  // D6 断点续传：下行每 N 篇落一次 manifest（中断后下轮从已存进度续跑，不整体重来）
+  let processedSinceSave = 0
+  const SAVE_EVERY = 20
   for (const doc of documents) {
     if (doc.status !== 'active' || doc.isArchived) continue
     cloudIds.add(doc.id)
@@ -262,20 +265,30 @@ export async function syncDownFull(root: string, report: SyncReport): Promise<vo
     manifest[doc.id] = { path: rel.split(path.sep).join('/'), sha256: sha256(content), version: doc.version, updatedAt: doc.updatedAt }
     if (prev) report.updated.push(rel); else report.downloaded.push(rel)
     log(root, { op: prev ? 'update-down' : 'download', doc: doc.id, version: doc.version, path: rel })
+    // D6：批量落盘断点（写盘过的才计数；中断时已处理进度在 manifest 里持久化）
+    if (++processedSinceSave >= SAVE_EVERY) {
+      saveManifest(root, manifest)
+      processedSinceSave = 0
+    }
   }
 
-  // 云端已删除/归档的 tracked 文件 → 本地移除（镜像区=云端权威；用户资产仍在云端回收站，不做人质原则不受影响）
-  for (const [id, entry] of Object.entries(manifest)) {
-    if (cloudIds.has(id)) continue
-    const abs = path.join(root, entry.path)
-    if (fs.existsSync(abs)) {
-      fs.unlinkSync(abs)
-      report.skipped.push(`removed ${entry.path} (云端已删除/归档)`)
-      log(root, { op: 'remove-down', doc: id, path: entry.path })
+  // D6：主循环正常走完后清理残余断点计数（finally 兜底见下）
+  try {
+    // 云端已删除/归档的 tracked 文件 → 本地移除（镜像区=云端权威；用户资产仍在云端回收站，不做人质原则不受影响）
+    for (const [id, entry] of Object.entries(manifest)) {
+      if (cloudIds.has(id)) continue
+      const abs = path.join(root, entry.path)
+      if (fs.existsSync(abs)) {
+        fs.unlinkSync(abs)
+        report.skipped.push(`removed ${entry.path} (云端已删除/归档)`)
+        log(root, { op: 'remove-down', doc: id, path: entry.path })
+      }
+      delete manifest[id]
     }
-    delete manifest[id]
+  } finally {
+    // D6 断点续传兜底：任何路径退出（含异常/中断）都把已处理进度持久化
+    saveManifest(root, manifest)
   }
-  saveManifest(root, manifest)
   // 全量成功 → cursor 重置为全量集最大 updatedAt（下轮走增量）
   const maxUpdated = documents
     .filter((x) => x.status === 'active' && !x.isArchived)
@@ -316,6 +329,7 @@ export async function syncInbox(root: string, report: SyncReport): Promise<void>
         report.inboxFiled.push(`${INBOX}/${name} → ${MIRROR_DOCS}/${name}`)
       }
       fs.unlinkSync(abs) // 处理完即清空（§5.10.2 步骤5）
+      saveManifest(root, manifest) // D6 断点续传：上传成功即时落账（中断不重复上传已传文件）
       log(root, { op: 'upload-inbox', file: name, doc: doc?.id })
     } catch (e: any) {
       report.conflicts.push({ path: `${INBOX}/${name}`, reason: `上传失败：${e.message}（留收集箱待重试）` })

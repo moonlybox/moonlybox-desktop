@@ -13,6 +13,12 @@ const path = require('path')
 const { spawn } = require('child_process')
 const fs = require('fs')
 
+// D12 内存优化（T6 卡7 实测偏差治理）：
+// - renderer V8 老生代限堆 256MB（UI 场景足够，防单窗膨胀拖累待命基线）
+// - 关 GPU shader disk cache（省磁盘写入；GPU 进程常驻为 Chromium 基线，砍掉需关硬件加速=显示性能代价，不做）
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256')
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
+
 let tray = null
 let win = null
 
