@@ -19,7 +19,7 @@
  */
 import { cmdXiaoyue } from '../commands/xiaoyue'
 import { runAgentTools } from '../commands/xiaoyue'
-import { byokReady } from '../lib/llm'
+import { byokReady, byokChat } from '../lib/llm'
 import { cmdSync } from '../commands/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
@@ -145,6 +145,38 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         } else if (op === 'get') {
           const res = await apiGet<any>(`/library/diagrams/${encodeURIComponent(String(args.id ?? ''))}`)
           text = JSON.stringify(res)
+        } else if (op === 'ai' || op === 'fix') {
+          // T4：AI 生成/修复图示（§8.2 AI 生成=小月 BYOK 通道，错误回喂重试闭环）
+          if (!byokReady()) {
+            code = 1
+            text = 'AI 生成需要 BYOK：先运行 `moonlybox xiaoyue --setup`'
+            break
+          }
+          const prompt = String(args.prompt ?? '').trim()
+          if (!prompt) {
+            code = 2
+            text = '描述为空'
+            break
+          }
+          const sys = op === 'ai'
+            ? '你是 Mermaid 图表专家。根据用户描述生成一个 Mermaid 图。只输出单个 ```mermaid 代码块，不要任何解释。支持 flowchart/sequence/class/ER/state/甘特/思维导图等。节点文字用中文。'
+            : '你是 Mermaid 图表专家。用户的 Mermaid 图渲染报错了。修复语法错误，保持原图意图。只输出修复后的单个 ```mermaid 代码块，不要任何解释。'
+          const question = op === 'ai'
+            ? prompt
+            : `渲染错误信息：\n${String(args.error ?? '')}\n\n当前源码：\n${prompt}`
+          const parts: string[] = []
+          let aiErr = ''
+          await withCapturedConsole(async () => {
+            const r = await byokChat(sys, question, 120_000)
+            if (r.ok) parts.push(r.text ?? '')
+            else aiErr = r.error ?? '未知错误'
+          }, (t) => { parts.push(t) })
+          if (!parts.length) {
+            code = 1
+            text = aiErr || 'AI 无回复'
+            break
+          }
+          text = JSON.stringify({ ok: true, source: parts.join('\n') })
         } else {
           code = 2
           text = `未知 diagram op：${op}`

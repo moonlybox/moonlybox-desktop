@@ -141,6 +141,7 @@ $('btn-sync').onclick = async () => {
 // 生命周期：保存草稿（云端 draft，不进书房）→ 存进书房（activate 跃迁）
 let dgCurrentId = null
 let dgRenderTimer = null
+let dgLastError = null
 
 mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' })
 
@@ -160,10 +161,15 @@ async function dgRender() {
     box.innerHTML = svg
     err.style.display = 'none'
   } catch (e) {
-    // parse 校验错误行内联（§8.2）——错误回喂输入侧（AI 生成重试闭环同款语义）
-    err.textContent = '⚠ ' + String(e && e.message || e).slice(0, 300)
+    // parse 校验错误行内联（§8.2）——错误回喂输入侧；暴露 AI 修复按钮（错误回喂重试闭环）
+    dgLastError = String(e && e.message || e)
+    err.textContent = '⚠ ' + dgLastError.slice(0, 300)
     err.style.display = 'block'
+    $('dg-fix').style.display = 'inline-block'
+    return
   }
+  dgLastError = null
+  $('dg-fix').style.display = 'none'
 }
 
 $('dg-code').addEventListener('input', () => {
@@ -236,6 +242,41 @@ $('dg-activate').onclick = async () => {
   if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = '准入失败：' + (r.text || r.message); return }
   $('dg-state').textContent = '📚 已存进书房'
   dgRefreshList()
+}
+
+// T4：AI 生成（描述→源码）与 AI 修复（源码+错误→修好的源码）——错误回喂重试闭环 §8.2
+$('dg-ai').onclick = async () => {
+  const prompt = window.prompt('描述你要画的图（例：登录流程：输入账号密码→校验→成功进首页/失败提示错误）')
+  if (!prompt || !prompt.trim()) return
+  $('dg-ai').disabled = true
+  $('dg-state').textContent = '✨ AI 生成中…'
+  const r = await window.moonlybox.rpc('diagram', { op: 'ai', prompt }, 150_000)
+  $('dg-ai').disabled = false
+  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = 'AI 生成失败：' + (r.text || r.message); return }
+  try {
+    const d = JSON.parse(r.text)
+    $('dg-code').value = d.source
+    $('dg-title').value = $('dg-title').value.trim() || prompt.slice(0, 30)
+    dgCurrentId = null // 新生成=新草稿
+    $('dg-state').textContent = '✓ AI 已生成（检查后保存草稿）'
+    dgRender()
+  } catch { $('dg-state').textContent = 'AI 响应解析失败' }
+}
+
+$('dg-fix').onclick = async () => {
+  const src = $('dg-code').value
+  if (!src.trim() || !dgLastError) return
+  $('dg-fix').disabled = true
+  $('dg-state').textContent = '✨ AI 修复中…'
+  const r = await window.moonlybox.rpc('diagram', { op: 'fix', prompt: src, error: dgLastError }, 150_000)
+  $('dg-fix').disabled = false
+  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = 'AI 修复失败：' + (r.text || r.message); return }
+  try {
+    const d = JSON.parse(r.text)
+    $('dg-code').value = d.source
+    $('dg-state').textContent = '✓ AI 已修复（检查预览）'
+    dgRender() // 修好后预览若仍错会再次亮出 fix 按钮——闭环
+  } catch { $('dg-state').textContent = 'AI 响应解析失败' }
 }
 
 // tab 切换（小月 / 图示）

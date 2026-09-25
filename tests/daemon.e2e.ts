@@ -101,6 +101,13 @@ assert('diagram list 终止（done，未登录则为 code=1 引导）', dgDone?.
 const pingDg = await rpc('ping', {})
 assert('diagram 调用后 daemon 存活', pingDg.at(-1)?.text === 'pong')
 
+// #252 T4：AI 生成未配 BYOK → 引导文案（与 xiaoyue tools 同款语义）
+const dgAi = await rpc('diagram', { op: 'ai', prompt: '登录流程图' }, 30_000)
+const dgAiDone = dgAi.at(-1)
+assert('diagram ai BYOK 引导', dgAiDone?.event === 'done' && String(dgAiDone?.text ?? '').includes('BYOK'), JSON.stringify(dgAiDone)?.slice(0, 120))
+const pingAi = await rpc('ping', {})
+assert('diagram ai 调用后 daemon 存活', pingAi.at(-1)?.text === 'pong')
+
 proc.kill()
 console.log(`\n${results.length - failed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)
