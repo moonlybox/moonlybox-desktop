@@ -33,7 +33,7 @@ bun run src/cli.ts sync init
 bun run src/cli.ts sync
 
 # 5. 本地混合检索（离线可用）
-bun run src/cli.ts search "血小板输注有什么讲究"
+bun run src/cli.ts search "项目排期要注意什么"
 
 # 6. 问 Moonie（小月）
 bun run src/cli.ts xiaoyue "我的书房里有什么"
@@ -45,15 +45,15 @@ bun run src/cli.ts xiaoyue --setup
 # 8. 小月管家模式（Agent 工具循环：LLM 自动调 MoonLink 工具帮你操作）
 bun run src/cli.ts xiaoyue --tools "帮我收藏 https://example.com 这篇文章"
 bun run src/cli.ts xiaoyue --tools "记个便签：明天上午十点开产品会"
-bun run src/cli.ts xiaoyue --tools "书房里有没有输血相关的资料？"
+bun run src/cli.ts xiaoyue --tools "书房里有没有 PostgreSQL 索引优化的资料？"
 #   写操作（收藏/便签/待办/删除）执行前需 y 确认；查询类自动执行
 
 # 9. 日常：把新文件扔进 收集箱/ 即自动上传（监听模式）
 bun run src/cli.ts inbox
 
 # 10. 记忆面板
-bun run src/cli.ts memory search 输血
-bun run src/cli.ts memory add "用户是输血医学主任医师"
+bun run src/cli.ts memory search 咖啡
+bun run src/cli.ts memory add "用户偏好简洁的沟通风格"
 
 # 11. 远程工具
 bun run src/cli.ts tools
