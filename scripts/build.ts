@@ -51,6 +51,13 @@ export const BINDING_NAME = 'onnxruntime_binding.node'
 export const NATIVE_VERSION = '1.21.0'
 export const BINDING_PATH = ${JSON.stringify(bindingRel)}
 `
+// --gen-only：只生成绑定不 compile（CI typecheck 前置步——native-bindings.ts 是 gitignore 生成物，
+// fresh clone 没有，typecheck 的 TS2307 是 ci(main) 长期红根因 #251.4）
+if (process.argv.includes('--gen-only')) {
+  fs.writeFileSync(path.join(repoRoot, 'src/lib/native-bindings.ts'), bindingCode)
+  console.log('GEN-ONLY: native-bindings.ts 已生成（跳过 compile）')
+  process.exit(0)
+}
 // binding 复制为 .blob（避开 bun 对 .node 后缀的 native 模块预加载特判——双实例根源）
 fs.copyFileSync(
   path.join(repoRoot, 'node_modules/onnxruntime-node/bin/napi-v3', p, arch, 'onnxruntime_binding.node'),
