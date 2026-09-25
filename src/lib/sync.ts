@@ -316,7 +316,35 @@ export async function syncInbox(root: string, report: SyncReport): Promise<void>
       continue
     }
     const title = name.replace(/\.md$/i, '').slice(0, 200)
+    // 镜像区回传识别（§5.10.4「作为新版本回传」）：文件带 moonlybox:{id,version} frontmatter
+    // → 走 /library/import/files（服务端识别既有实体进版本管道/幂等跳过/非本人降级新建），
+    // 走 POST /library 会剥掉身份重复建档
+    const fmBlock = raw.match(/^---\n[\s\S]*?\n---/)?.[0] ?? ''
+    const mirrorId = fmBlock.match(/"id"\s*:\s*"([0-9A-HJKMNP-TV-Z]{26})"/i)?.[1]
+      ?? fmBlock.match(/^moonlybox:\s*([0-9A-HJKMNP-TV-Z]{26})/im)?.[1]
     try {
+      if (mirrorId) {
+        const res = await apiPost<any>('/library/import/files', { channel: 'upload', items: [{ title, content: raw }] })
+        log(root, { op: 'mirror-return', file: name, doc: mirrorId, updated: res.data?.updated ?? 0, skipped: res.data?.skipped ?? 0, created: res.data?.created ?? 0 })
+        if ((res.data?.updated ?? 0) > 0 || (res.data?.skipped ?? 0) > 0) {
+          // 版本已回传（或幂等跳过）：本地移入镜像区，版本号以下次下行为准（不臆测）
+          const dest = path.join(d.docs, name)
+          fs.writeFileSync(dest, raw)
+          manifest[mirrorId] = { path: path.relative(root, dest).split(path.sep).join('/'), sha256: sha256(raw), version: manifest[mirrorId]?.version ?? 1, updatedAt: new Date().toISOString() }
+          if ((res.data?.updated ?? 0) > 0) report.uploaded.push(name)
+          else report.skipped.push(`${INBOX}/${name}（云端内容无变化，幂等跳过）`)
+          report.inboxFiled.push(`${INBOX}/${name} → ${MIRROR_DOCS}/${name}（回传）`)
+        } else if ((res.data?.created ?? 0) > 0) {
+          // id 非本人/不存在：服务端已降级新建——本地按普通上传归位（frontmatter 已被服务端剥除，重新走下行修正）
+          report.uploaded.push(name)
+          report.inboxFiled.push(`${INBOX}/${name} → ${MIRROR_DOCS}/${name}（id 失效，按新文档）`)
+          const dest = path.join(d.docs, name)
+          fs.writeFileSync(dest, raw)
+        }
+        fs.unlinkSync(abs)
+        saveManifest(root, manifest)
+        continue
+      }
       const res = await apiPost<any>('/library', { title, content: stripped })
       const doc = res.data?.document
       // 归位：移入镜像区（云端产物回流由下次下行完成；本地先按上传版落位）
