@@ -35,7 +35,8 @@ async function ask() {
 function renderConfirmBar(rpcId, payload) {
   const box = document.createElement('div')
   box.id = `confirm-${rpcId}`
-  box.style.cssText = 'margin:6px 0;padding:8px 10px;border:1px solid #f59e0b;border-radius:6px;background:#fffbeb'
+  // 配色跟随主题：半透明琥珀叠底+继承主题文字色（硬编码浅底在深色模式下浅底浅字不可读——真机反馈）
+  box.style.cssText = 'margin:6px 0;padding:8px 10px;border:1px solid rgba(245,158,11,.55);border-radius:6px;background:rgba(245,158,11,.12);color:inherit'
   const tool = payload && payload.tool ? payload.tool : '?'
   const args = payload && payload.args ? String(payload.args).slice(0, 160) : ''
   box.innerHTML = `<div style="font-size:12px;margin-bottom:6px">⚠ 小月请求执行 <b>${tool}</b>${args ? `：${args}` : ''}</div>`
