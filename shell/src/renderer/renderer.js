@@ -90,6 +90,11 @@ async function loadAbout() {
 }
 function renderUpdateState(st) {
   const btn = document.getElementById('update-install')
+  if (btn && !btn.dataset.bound) {
+    // onclick 绑定只做一次；0.2.1 重构显示逻辑时曾把绑定弄丢=按钮可见但点击无反应（真机反馈实锤）
+    btn.dataset.bound = '1'
+    btn.onclick = () => window.moonlybox.updateInstall()
+  }
   if (st && st.available) {
     $('update-state').textContent = st.downloaded
       ? `新版本 v${st.version} 已就绪`
