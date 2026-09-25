@@ -80,6 +80,18 @@ assert('坏 JSON 容错', bad.value?.event === 'error' && bad.value?.id === -1)
 const [a, b] = await Promise.all([rpc('ping', {}), rpc('ping', {})])
 assert('并发请求各自 done', a.at(-1)?.text === 'pong' && b.at(-1)?.text === 'pong')
 
+// P2：xiaoyue tools:true——BYOK 未配路径（XDG 隔离环境无 BYOK，断言错误文案而非 usage 死路）
+const xyTools = await rpc('xiaoyue', { q: '测试', tools: true }, 30_000)
+const doneT = xyTools.at(-1)
+assert('xiaoyue tools done/error 终止', doneT?.event === 'done' || doneT?.event === 'error', JSON.stringify(doneT)?.slice(0, 120))
+assert('xiaoyue tools BYOK 引导', String(doneT?.text ?? doneT?.message ?? '').includes('BYOK'))
+
+// P2：confirm_response 孤儿行不崩（无挂起确认时静默忽略）
+proc.stdin.write(JSON.stringify({ id: 999999, cmd: 'confirm_response', args: { value: true } }) + '\n')
+await proc.stdin.flush()
+const pingAfter = await rpc('ping', {})
+assert('孤儿 confirm_response 后 daemon 存活', pingAfter.at(-1)?.text === 'pong')
+
 proc.kill()
 console.log(`\n${results.length - failed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

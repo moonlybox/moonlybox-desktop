@@ -69,7 +69,14 @@ function ensureDaemon() {
       let msg
       try { msg = JSON.parse(lineStr) } catch { continue }
       if (msg.event === 'log') {
-        eventHooks.forEach((h) => h(msg.id, 'log', msg.text))
+        // P2：确认请求——daemon 把确认请求编码为 log 文本前缀（__CONFIRM_REQUEST__{json}），转独立事件给 renderer
+        if (typeof msg.text === 'string' && msg.text.startsWith('__CONFIRM_REQUEST__')) {
+          let payload = null
+          try { payload = JSON.parse(msg.text.slice('__CONFIRM_REQUEST__'.length)) } catch {}
+          eventHooks.forEach((h) => h(msg.id, 'confirm_request', payload ?? { tool: '?', args: '' }))
+        } else {
+          eventHooks.forEach((h) => h(msg.id, 'log', msg.text))
+        }
       } else if (msg.event === 'done' || msg.event === 'error') {
         const p = pending.get(msg.id)
         if (p) { pending.delete(msg.id); p(msg) }
@@ -236,6 +243,14 @@ app.whenReady().then(() => {
       const i = eventHooks.indexOf(hook)
       if (i >= 0) eventHooks.splice(i, 1)
     })
+  })
+  // P2：UI 确认制——renderer 确认/取消按钮回传 → daemon stdin confirm_response（同 rpcId）
+  ipcMain.handle('kernel:confirmResponse', (_e, { rpcId, value }) => {
+    if (daemon && daemon.stdin.writable) {
+      daemon.stdin.write(JSON.stringify({ id: rpcId, cmd: 'confirm_response', args: { value: !!value } }) + '\n')
+      return true
+    }
+    return false
   })
   ipcMain.handle('shell:openExternal', (_e, url) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url)

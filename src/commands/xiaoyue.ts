@@ -206,6 +206,7 @@ async function askWithTools(question: string): Promise<void> {
     console.error('工具模式需要 BYOK：先运行 `moonlybox xiaoyue --setup`')
     return
   }
+  // CLI 确认通道：stdin readline（P2 起桌面壳走 IPC 确认，见 daemon.ts confirm_request/confirm_response）
   const rl = nodeReadline.createInterface({ input: process.stdin, output: process.stdout })
   const confirm = (toolName: string, argsJson: string) =>
     new Promise<boolean>((resolve) => {
@@ -214,31 +215,40 @@ async function askWithTools(question: string): Promise<void> {
       })
     })
   try {
-    const system =
-      `你是「小月」，用户个人知识库（魔力宝盒）的操作助理。你可以调用 MoonLink 工具帮用户：\n` +
-      `收藏网页（add_bookmark）、记便签（add_sticky）、记待办（add_todo/complete_todo）、\n` +
-      `保存记忆（add_memory）、查询书房（search_library/search_bookmarks/search_memory）等。\n` +
-      `纪律：1. 用户意图涉及「记录/收藏/保存/查询」时主动调工具，不要只口头答应；\n` +
-      `2. 参数从用户话里提取，缺关键参数先问；3. 操作完成后用一句话汇报结果；\n` +
-      `4. 语气亲切简洁，中文回答。`
-    const result = await agentLoop({
-      system,
-      question,
-      ready: true,
-      chat: byokChatMessages,
-      confirm,
-      say: (line) => console.log(line),
-    })
-    if (result.answer) console.log(`小月：${result.answer}`)
-    if (result.toolCalls.length) {
-      const ok = result.toolCalls.filter((t) => t.ok).length
-      console.log(`（工具调用 ${ok}/${result.toolCalls.length} 成功）`)
-    }
+    await runAgentTools(question, confirm)
   } catch (e) {
     console.error(`工具模式失败：${String((e as Error).message ?? e)}`)
   } finally {
     rl.close()
   }
+}
+
+/** Agent 工具循环核心（CLI 与 daemon 单源）：confirm 由调用方注入（CLI=stdin / daemon=IPC 双向）。 */
+export async function runAgentTools(
+  question: string,
+  confirm: (toolName: string, argsJson: string) => Promise<boolean>,
+): Promise<{ answer: string; toolCalls: Array<{ name: string; ok: boolean }> }> {
+  const system =
+    `你是「小月」，用户个人知识库（魔力宝盒）的操作助理。你可以调用 MoonLink 工具帮用户：\n` +
+    `收藏网页（add_bookmark）、记便签（add_sticky）、记待办（add_todo/complete_todo）、\n` +
+    `保存记忆（add_memory）、查询书房（search_library/search_bookmarks/search_memory）等。\n` +
+    `纪律：1. 用户意图涉及「记录/收藏/保存/查询」时主动调工具，不要只口头答应；\n` +
+    `2. 参数从用户话里提取，缺关键参数先问；3. 操作完成后用一句话汇报结果；\n` +
+    `4. 语气亲切简洁，中文回答。`
+  const result = await agentLoop({
+    system,
+    question,
+    ready: true,
+    chat: byokChatMessages,
+    confirm,
+    say: (line) => console.log(line),
+  })
+  if (result.answer) console.log(`小月：${result.answer}`)
+  if (result.toolCalls.length) {
+    const ok = result.toolCalls.filter((t) => t.ok).length
+    console.log(`（工具调用 ${ok}/${result.toolCalls.length} 成功）`)
+  }
+  return result
 }
 
 const CONFIRM_SET = new Set(['y', 'Y', 'yes', 'Yes', '是', '好'])

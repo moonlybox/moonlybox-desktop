@@ -18,6 +18,8 @@
  * - 壳可并发发多个 id，daemon 逐行读顺序执行（单 worker 足够：本地操作毫秒级，LLM 调用为主耗时）。
  */
 import { cmdXiaoyue } from '../commands/xiaoyue'
+import { runAgentTools } from '../commands/xiaoyue'
+import { byokReady } from '../lib/llm'
 import { cmdSync } from '../commands/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
@@ -29,6 +31,23 @@ interface Request {
   id: number
   cmd: string
   args?: Record<string, unknown>
+}
+
+// ---------- P2：UI 确认制双向管道（confirm_request → 壳按钮 → confirm_response） ----------
+// 壳对同一 rpcId 发第二条请求 {id, cmd:'confirm_response', args:{value:bool}}，
+// 主循环收到后 resolve 这里挂起的 Promise——agent 循环继续。
+const pendingConfirms = new Map<number, (v: boolean) => void>()
+
+function requestUiConfirm(
+  rpcId: number,
+  toolName: string,
+  argsJson: string,
+  emit: (t: string) => void,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    pendingConfirms.set(rpcId, resolve)
+    emit(`__CONFIRM_REQUEST__${JSON.stringify({ tool: toolName, args: argsJson })}`)
+  })
 }
 
 /** 把全局 console 换成发 log 事件的通道（执行期），结束恢复。 */
@@ -61,7 +80,19 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
       // askOnce 内 console.log 过程行 → emit；最终回答也在 console 输出里，捕获全文为 text
       const parts: string[] = []
       await withCapturedConsole(async () => {
-        await cmdXiaoyue([q, ...(args.cloud ? ['--cloud'] : [])], { dir } as CommandOptions)
+        if (args.tools === true) {
+          // P2：桌面壳工具模式（Agent 循环进 UI）——确认制走 confirm_request/confirm_response IPC 双向
+          if (!byokReady()) {
+            code = 1
+            parts.push('工具模式需要 BYOK：先运行 `moonlybox xiaoyue --setup`')
+          } else {
+            const confirm = (toolName: string, argsJson: string) =>
+              requestUiConfirm(req.id, toolName, argsJson, emit)
+            await runAgentTools(q, confirm)
+          }
+        } else {
+          await cmdXiaoyue([q, ...(args.cloud ? ['--cloud'] : [])], { dir } as CommandOptions)
+        }
       }, (t) => { parts.push(t); emit(t) })
       text = parts.join('\n')
       break
@@ -102,23 +133,39 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
 export async function runDaemon(): Promise<void> {
   process.stdout.write(JSON.stringify({ id: 0, event: 'ready' }) + '\n')
   const rl = require('node:readline').createInterface({ input: process.stdin })
-  for await (const raw of rl) {
+  // P2：事件驱动行处理——dispatch await 期间到达的 confirm_response 必须能被处理
+  // （for await 顺序迭代会把行缓冲到 dispatch 结束后，确认请求会死锁）。
+  const write = (obj: Json) => process.stdout.write(JSON.stringify(obj) + '\n')
+  const handleLine = async (raw: unknown) => {
     const lineStr = String(raw).trim()
-    if (!lineStr) continue
+    if (!lineStr) return
     let req: Request
     try {
       req = JSON.parse(lineStr)
     } catch {
-      process.stdout.write(JSON.stringify({ id: -1, event: 'error', message: 'bad json' }) + '\n')
-      continue
+      write({ id: -1, event: 'error', message: 'bad json' })
+      return
     }
-    const write = (obj: Json) => process.stdout.write(JSON.stringify(obj) + '\n')
+    // 确认响应：resolve 挂起的 UI 确认（非命令请求）
+    if (req.cmd === 'confirm_response') {
+      const v = (req.args ?? {}) as Record<string, unknown>
+      const resolve = pendingConfirms.get(req.id)
+      if (resolve) {
+        pendingConfirms.delete(req.id)
+        resolve(v.value === true)
+      }
+      return
+    }
     try {
       const { code, text } = await dispatch(req, (t) => write({ id: req.id, event: 'log', text: t }))
       write({ id: req.id, event: 'done', code, text })
     } catch (e) {
       write({ id: req.id, event: 'error', message: String(e instanceof Error ? e.message : e) })
     }
+  }
+  for await (const raw of rl) {
+    // 不 await：dispatch 内部自带顺序语义（同 id 串行由壳侧保证），confirm_response 需要插队处理
+    void handleLine(raw)
   }
 }
 

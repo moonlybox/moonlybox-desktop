@@ -7,6 +7,7 @@ window.moonlybox.subscribe()
 window.moonlybox.onKernelEvent((msg) => {
   if (msg.event === 'log') log(msg.payload)
   else if (msg.event === 'stderr') log('[stderr] ' + msg.payload)
+  else if (msg.event === 'confirm_request') renderConfirmBar(msg.id, msg.payload)
 })
 
 // 内核探针：daemon ping
@@ -24,9 +25,39 @@ async function ask() {
   $('q').value = ''
   $('btn-ask').disabled = true
   log(`\n你> ${q}`)
-  const r = await window.moonlybox.rpc('xiaoyue', { q })
+  const tools = $('cb-tools') && $('cb-tools').checked
+  const r = await window.moonlybox.rpc('xiaoyue', tools ? { q, tools: true } : { q }, 300_000)
   $('btn-ask').disabled = false
   if (r.event === 'error') log(`[错误] ${r.message}`)
+}
+
+// P2：确认条——写操作确认制在 UI 的承载（daemon confirm_request → 按钮 → confirm_response）
+function renderConfirmBar(rpcId, payload) {
+  const box = document.createElement('div')
+  box.id = `confirm-${rpcId}`
+  box.style.cssText = 'margin:6px 0;padding:8px 10px;border:1px solid #f59e0b;border-radius:6px;background:#fffbeb'
+  const tool = payload && payload.tool ? payload.tool : '?'
+  const args = payload && payload.args ? String(payload.args).slice(0, 160) : ''
+  box.innerHTML = `<div style="font-size:12px;margin-bottom:6px">⚠ 小月请求执行 <b>${tool}</b>${args ? `：${args}` : ''}</div>`
+  const row = document.createElement('div')
+  const mk = (label, value, primary) => {
+    const b = document.createElement('button')
+    b.className = 'btn'
+    b.textContent = label
+    if (primary) b.style.background = '#f59e0b', b.style.borderColor = '#f59e0b'
+    b.onclick = async () => {
+      await window.moonlybox.confirmResponse(rpcId, value)
+      box.remove()
+      log(value ? `[已确认] 执行 ${tool}` : `[已取消] 跳过 ${tool}`)
+    }
+    return b
+  }
+  row.appendChild(mk('✓ 确认执行', true, true))
+  row.appendChild(mk('✕ 取消', false, false))
+  box.appendChild(row)
+  const logEl = document.getElementById('log')
+  if (logEl) logEl.appendChild(box)
+  logEl && (logEl.scrollTop = logEl.scrollHeight)
 }
 
 $('btn-ask').onclick = ask

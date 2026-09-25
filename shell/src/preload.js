@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('moonlybox', {
   updateState: () => ipcRenderer.invoke('shell:updateState'),
   updateInstall: () => ipcRenderer.invoke('shell:updateInstall'),
   onUpdateReady: (cb) => ipcRenderer.on('shell:updateReady', (_e, msg) => cb(msg)),
+  // P2：UI 确认制——renderer 对挂起的 confirm_request 回传结果
+  confirmResponse: (rpcId, value) => ipcRenderer.invoke('kernel:confirmResponse', { rpcId, value }),
   // T3：剪贴板监听开关 / 手动采集 / 协议注册状态
   setClipboardWatch: (on) => ipcRenderer.invoke('shell:clipboardWatch', on),
   capture: (text) => ipcRenderer.invoke('shell:capture', text),
