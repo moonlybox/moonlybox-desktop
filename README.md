@@ -13,6 +13,7 @@
 - **vault 同步**：`sync` 把云端书房镜像到本地文件夹（双向：收集箱上行 + 镜像区下行对账），`inbox` 监听收集箱自动上传；
 - **本地混合检索**：`search` 关键词（FTS5）+ 语义向量（sqlite-vec）RRF 融合；embedding 用本地 CPU 小模型（bge-small-zh，q8 量化 33MB，首跑自动下载后全离线）；索引落 `.moonlybox/index.db`，**数据不出本机、零流量离线可用**；
 - **Moonie 问答**（中文名「小月」，命令 `xiaoyue`）：本地轨优先——命中书房直接答（BYOK key 只存本机钥匙串直连 LLM）；未命中升级云端轨；对话按日落盘 `.moonlybox/dialogs/`；
+- **小月管家模式**（`xiaoyue --tools`）：小月不止能答——通过 MoonLink 远程 MCP 调用全部 29 个工具帮你**动手**：收藏网页、记便签待办、保存记忆、查询书房。写操作执行前需确认（只读查询自动执行），每步操作可见（`⚙` 活动流）；
 - **记忆面板**：`memory` 搜索/追加你的记忆（走 moonlink MCP 同轨配额）；
 - **远程工具**：`tools` 列出并调用 MoonLink 全部远程工具。
 
@@ -41,14 +42,20 @@ bun run src/cli.ts xiaoyue        # REPL 模式
 # 7. 配置 BYOK 直连（可选：用自己的 LLM key 本地生成回答，key 只存本机钥匙串）
 bun run src/cli.ts xiaoyue --setup
 
-# 8. 日常：把新文件扔进 收集箱/ 即自动上传（监听模式）
+# 8. 小月管家模式（Agent 工具循环：LLM 自动调 MoonLink 工具帮你操作）
+bun run src/cli.ts xiaoyue --tools "帮我收藏 https://example.com 这篇文章"
+bun run src/cli.ts xiaoyue --tools "记个便签：明天上午十点开产品会"
+bun run src/cli.ts xiaoyue --tools "书房里有没有输血相关的资料？"
+#   写操作（收藏/便签/待办/删除）执行前需 y 确认；查询类自动执行
+
+# 9. 日常：把新文件扔进 收集箱/ 即自动上传（监听模式）
 bun run src/cli.ts inbox
 
-# 9. 记忆面板
+# 10. 记忆面板
 bun run src/cli.ts memory search 输血
 bun run src/cli.ts memory add "用户是输血医学主任医师"
 
-# 10. 远程工具
+# 11. 远程工具
 bun run src/cli.ts tools
 bun run src/cli.ts tools call list_stickies '{}'
 ```
