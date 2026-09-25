@@ -23,6 +23,7 @@ import { byokReady } from '../lib/llm'
 import { cmdSync } from '../commands/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
+import { apiGet, apiPost } from '../lib/api'
 import type { CommandOptions } from '../lib/runner'
 
 type Json = Record<string, unknown>
@@ -121,6 +122,37 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         await cmdMemory([sub, ...tail], {} as CommandOptions)
       }, (t) => { parts.push(t); emit(t) })
       text = parts.join('\n')
+      break
+    }
+    case 'diagram': {
+      // 图示（#252 §8）：list|save|activate|get——壳工作台 ↔ 服务端图示 API（草稿两级制）
+      try {
+        const op = String(args.op ?? 'list')
+        if (op === 'list') {
+          const res = await apiGet<any>('/library/diagrams')
+          text = JSON.stringify(res)
+        } else if (op === 'save') {
+          const res = await apiPost<any>('/library/diagrams', {
+            id: args.id ?? null,
+            title: String(args.title ?? '未命名图示'),
+            content: String(args.content ?? ''),
+            diagramType: args.diagramType ?? null,
+          })
+          text = JSON.stringify(res)
+        } else if (op === 'activate') {
+          const res = await apiPost<any>(`/library/diagrams/${encodeURIComponent(String(args.id ?? ''))}/activate`)
+          text = JSON.stringify(res)
+        } else if (op === 'get') {
+          const res = await apiGet<any>(`/library/diagrams/${encodeURIComponent(String(args.id ?? ''))}`)
+          text = JSON.stringify(res)
+        } else {
+          code = 2
+          text = `未知 diagram op：${op}`
+        }
+      } catch (e: any) {
+        code = 1
+        text = String(e?.message ?? e)
+      }
       break
     }
     default:

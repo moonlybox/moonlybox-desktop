@@ -135,3 +135,119 @@ $('btn-sync').onclick = async () => {
   if (r.event === 'error') log(`[错误] ${r.message}`)
   else log('[sync] 完成')
 }
+
+// ==================== 图示工作台（#252 §8） ====================
+// 三区：代码面板+实时预览（分栏，v1 不做折叠按钮——CSS flex 已分栏）+状态条
+// 生命周期：保存草稿（云端 draft，不进书房）→ 存进书房（activate 跃迁）
+let dgCurrentId = null
+let dgRenderTimer = null
+
+mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' })
+
+function dgExtractMermaid(src) {
+  // 源码=唯一事实源（§8.1）：正文单个 mermaid 代码块；容错裸写 mermaid 语法
+  const m = src.match(/```mermaid\n([\s\S]*?)```/)
+  return (m ? m[1] : src).trim()
+}
+
+async function dgRender() {
+  const err = $('dg-err')
+  const box = $('dg-preview')
+  const code = dgExtractMermaid($('dg-code').value)
+  if (!code) { box.innerHTML = '<span style="opacity:.4;font-size:12px">左侧输入 mermaid 即时预览</span>'; err.style.display = 'none'; return }
+  try {
+    const { svg } = await mermaid.render('dg-svg-' + Date.now(), code)
+    box.innerHTML = svg
+    err.style.display = 'none'
+  } catch (e) {
+    // parse 校验错误行内联（§8.2）——错误回喂输入侧（AI 生成重试闭环同款语义）
+    err.textContent = '⚠ ' + String(e && e.message || e).slice(0, 300)
+    err.style.display = 'block'
+  }
+}
+
+$('dg-code').addEventListener('input', () => {
+  clearTimeout(dgRenderTimer)
+  dgRenderTimer = setTimeout(dgRender, 400)
+})
+
+async function dgRefreshList() {
+  const r = await window.moonlybox.rpc('diagram', { op: 'list' }, 30_000)
+  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = '列表加载失败'; return }
+  try {
+    const items = JSON.parse(r.text).data.diagrams || []
+    const sel = $('dg-list')
+    sel.innerHTML = '<option value="">— 草稿/书房图示 —</option>'
+    for (const it of items) {
+      const opt = document.createElement('option')
+      opt.value = it.id
+      opt.textContent = `${it.state === 'draft' ? '📝' : '📚'} ${it.title}`
+      opt.dataset.state = it.state
+      sel.appendChild(opt)
+    }
+  } catch { $('dg-state').textContent = '列表解析失败' }
+}
+
+$('dg-list').onchange = async () => {
+  const id = $('dg-list').value
+  if (!id) { dgCurrentId = null; return }
+  const r = await window.moonlybox.rpc('diagram', { op: 'get', id }, 30_000)
+  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = '读取失败：' + r.text; return }
+  try {
+    const d = JSON.parse(r.text).data
+    dgCurrentId = d.id
+    $('dg-title').value = d.title
+    $('dg-code').value = d.content
+    $('dg-state').textContent = d.diagramState === 'draft' ? '📝 云端草稿（未进书房）' : '📚 已存书房'
+    dgRender()
+  } catch (e) { $('dg-state').textContent = '解析失败' }
+}
+
+$('dg-new').onclick = () => {
+  dgCurrentId = null
+  $('dg-title').value = ''
+  $('dg-code').value = ''
+  $('dg-state').textContent = '新草稿'
+  $('dg-preview').innerHTML = ''
+  $('dg-err').style.display = 'none'
+}
+
+$('dg-save').onclick = async () => {
+  const title = $('dg-title').value.trim() || '未命名图示'
+  const content = $('dg-code').value
+  if (!content.trim()) { $('dg-state').textContent = '内容为空'; return }
+  $('dg-save').disabled = true
+  const r = await window.moonlybox.rpc('diagram', { op: 'save', id: dgCurrentId, title, content }, 60_000)
+  $('dg-save').disabled = false
+  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = '保存失败：' + (r.text || r.message); return }
+  try {
+    const d = JSON.parse(r.text).data
+    dgCurrentId = d.id
+    $('dg-state').textContent = `✓ 已保存草稿 v${d.version}`
+    dgRefreshList()
+  } catch { $('dg-state').textContent = '保存响应异常' }
+}
+
+$('dg-activate').onclick = async () => {
+  if (!dgCurrentId) { $('dg-state').textContent = '先保存草稿'; return }
+  $('dg-activate').disabled = true
+  const r = await window.moonlybox.rpc('diagram', { op: 'activate', id: dgCurrentId }, 60_000)
+  $('dg-activate').disabled = false
+  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = '准入失败：' + (r.text || r.message); return }
+  $('dg-state').textContent = '📚 已存进书房'
+  dgRefreshList()
+}
+
+// tab 切换（小月 / 图示）
+function switchTab(name) {
+  const chat = name === 'chat'
+  $('view-chat').style.display = chat ? 'flex' : 'none'
+  $('view-diagram').style.display = chat ? 'none' : 'flex'
+  $('tab-chat').style.color = chat ? '#4f46e5' : 'inherit'
+  $('tab-chat').style.opacity = chat ? 1 : .55
+  $('tab-diagram').style.color = chat ? 'inherit' : '#4f46e5'
+  $('tab-diagram').style.opacity = chat ? .55 : 1
+  if (!chat) { dgRefreshList(); dgRender() }
+}
+$('tab-chat').onclick = () => switchTab('chat')
+$('tab-diagram').onclick = () => switchTab('diagram')

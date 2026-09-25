@@ -35,18 +35,27 @@ import { syncInbox } from '../src/lib/sync'
 import type { SyncReport } from '../src/lib/sync'
 
 let root = ''
+let credsFile = ''
 beforeAll(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'mirror-return-'))
   fs.mkdirSync(path.join(root, '收集箱'), { recursive: true })
   fs.mkdirSync(path.join(root, '文档'), { recursive: true })
   fs.mkdirSync(path.join(root, '.moonlybox'), { recursive: true })
   fs.writeFileSync(path.join(root, '.moonlybox', 'manifest.json'), '{}')
-  // creds 文件（legacy 全量格式，loadCredentials 会迁移）
-  const cfg = path.join(process.env.HOME ?? '/root', '.moonlybox')
+  // creds 文件自备（不依赖其它测试留下的状态）：legacy 全量格式，loadCredentials 直接读
+  const cfg = path.join(process.env.HOME ?? '/root', '.config', 'moonlybox')
   fs.mkdirSync(cfg, { recursive: true })
+  credsFile = path.join(cfg, 'credentials.json')
+  fs.writeFileSync(credsFile, JSON.stringify({
+    accessToken: 'test-token-mirror-return',
+    accessTokenExpiresAt: '2099-01-01T00:00:00.000Z',
+  }))
 })
 
-afterAll(() => fs.rmSync(root, { recursive: true, force: true }))
+afterAll(() => {
+  fs.rmSync(root, { recursive: true, force: true })
+  if (credsFile && fs.existsSync(credsFile)) fs.rmSync(credsFile, { force: true })
+})
 
 function report(): SyncReport {
   return { uploaded: [], skipped: [], conflicts: [], inboxFiled: [], downloaded: [], upToDate: 0 } as any

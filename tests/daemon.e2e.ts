@@ -92,6 +92,15 @@ await proc.stdin.flush()
 const pingAfter = await rpc('ping', {})
 assert('孤儿 confirm_response 后 daemon 存活', pingAfter.at(-1)?.text === 'pong')
 
+// #252 图示 RPC：未登录环境 diagram list 优雅报错（code=1，不崩 daemon），坏 op 拒绝
+const dgBad = await rpc('diagram', { op: 'nope' })
+assert('diagram 未知 op 拒绝', dgBad.at(-1)?.event === 'done' && dgBad.at(-1)?.code === 2)
+const dgList = await rpc('diagram', { op: 'list' }, 15_000)
+const dgDone = dgList.at(-1)
+assert('diagram list 终止（done，未登录则为 code=1 引导）', dgDone?.event === 'done', JSON.stringify(dgDone)?.slice(0, 100))
+const pingDg = await rpc('ping', {})
+assert('diagram 调用后 daemon 存活', pingDg.at(-1)?.text === 'pong')
+
 proc.kill()
 console.log(`\n${results.length - failed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

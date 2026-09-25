@@ -18,6 +18,7 @@ import { apiGet, apiPost } from './api'
 import { loadCredentials } from './auth'
 
 export const MIRROR_DOCS = '文档'
+export const MIRROR_DIAGRAM = '图示'
 export const MIRROR_KB = '知识页'
 export const INBOX = '收集箱'
 export const META = '.moonlybox'
@@ -40,6 +41,7 @@ export function vaultDirs(root: string) {
   return {
     docs: path.join(root, MIRROR_DOCS),
     kb: path.join(root, MIRROR_KB),
+    diagrams: path.join(root, MIRROR_DIAGRAM),
     inbox: path.join(root, INBOX),
     meta: path.join(root, META),
   }
@@ -47,7 +49,7 @@ export function vaultDirs(root: string) {
 
 export function initVault(root: string): void {
   const d = vaultDirs(root)
-  for (const dir of [d.docs, d.kb, d.inbox, d.meta]) {
+  for (const dir of [d.docs, d.kb, d.diagrams, d.inbox, d.meta]) {
     fs.mkdirSync(dir, { recursive: true })
   }
   const readme = path.join(root, 'README.md')
@@ -55,7 +57,7 @@ export function initVault(root: string): void {
     fs.writeFileSync(readme, [
       '# MyMoonVault',
       '',
-      '- `文档/`、`知识页/`：云端镜像区（客户端管理；外部修改会在下次同步时被检测并提示）',
+      '- `文档/`、`知识页/`、`图示/`：云端镜像区（客户端管理；外部修改会在下次同步时被检测并提示）',
       '- `收集箱/`：把新文件扔进这里 = 上传到云端（唯一上行口，处理完自动归位）',
       '- `.moonlybox/`：同步元数据（请勿编辑）',
       '',
@@ -105,6 +107,7 @@ function safeName(title: string): string {
 }
 
 function docDir(doc: any, directories: any[], base: string): string {
+  if (doc.kind === 'diagram') return base // 图示平铺（图示/ 镜像区，由调用方传 d.diagrams）
   if (doc.kind === 'wiki') return base // 知识页平铺
   const dir = directories.find((x: any) => x.id === doc.directoryId)
   if (!dir?.name) return base
@@ -129,7 +132,7 @@ function saveCursor(root: string, cursor: string | null): void {
 
 /** 单文档下行落盘（增量与全量共用）：版本对账 + 外部修改检测，返回 true=已处理 */
 function applyDownDoc(root: string, doc: any, directories: any[], manifest: VaultManifest, report: SyncReport, d: ReturnType<typeof vaultDirs>): boolean {
-  const base = doc.kind === 'wiki' ? d.kb : d.docs
+  const base = doc.kind === 'diagram' ? d.diagrams : doc.kind === 'wiki' ? d.kb : d.docs
   const dir = docDir(doc, directories, base)
   fs.mkdirSync(dir, { recursive: true })
   const file = path.join(dir, `${safeName(doc.title)}.md`)
@@ -230,7 +233,7 @@ export async function syncDownFull(root: string, report: SyncReport): Promise<vo
   for (const doc of documents) {
     if (doc.status !== 'active' || doc.isArchived) continue
     cloudIds.add(doc.id)
-    const base = doc.kind === 'wiki' ? d.kb : d.docs
+    const base = doc.kind === 'diagram' ? d.diagrams : doc.kind === 'wiki' ? d.kb : d.docs
     const dir = docDir(doc, directories, base)
     fs.mkdirSync(dir, { recursive: true })
     const file = path.join(dir, `${safeName(doc.title)}.md`)
