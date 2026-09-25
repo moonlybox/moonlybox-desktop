@@ -143,9 +143,15 @@ export async function cmdXiaoyue(args: string[], options: CommandOptions): Promi
   }
 
   // Agent 工具模式：moonlybox xiaoyue --tools "问题"（D9 装配：LLM+moonlink 工具循环）
+  // 真机验收 bug（2026-09-25）：runner.parseArgs 对 --tools 吞下一个 token 当值（options['tools']=问题文本，
+  // args 里不再有它）→ questionArgs 恒空 → usage 死路。兜底：options['tools'] 为字符串时即问题文本。
   const questionArgs = args.filter((a) => !a.startsWith('--'))
   if (args.includes('--tools') || options['tools']) {
-    const q = questionArgs.length ? questionArgs.join(' ') : ''
+    const q = questionArgs.length
+      ? questionArgs.join(' ')
+      : typeof options['tools'] === 'string'
+        ? options['tools']
+        : ''
     if (!q) {
       console.error('usage: moonlybox xiaoyue --tools "问题"')
       return

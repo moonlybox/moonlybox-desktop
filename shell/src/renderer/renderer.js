@@ -50,21 +50,45 @@ window.moonlybox.protocolState().then((st) => {
 async function loadAbout() {
   const v = await window.moonlybox.versions()
   $('about').textContent = `壳 v${v.shellVersion} · 内核 v${v.kernelVersion}`
+  // 打开页面即拉全量更新状态（不依赖手动点检查；修复=自动下载就绪后按钮永不出现）
+  try {
+    const st = await window.moonlybox.updateState()
+    renderUpdateState(st)
+  } catch {}
+}
+function renderUpdateState(st) {
+  const btn = document.getElementById('update-install')
+  if (st && st.available) {
+    $('update-state').textContent = st.downloaded
+      ? `新版本 v${st.version} 已就绪`
+      : `新版本 v${st.version} 下载中${typeof st.progress === 'number' ? ` ${st.progress}%` : '…'}`
+    if (btn) btn.style.display = st.downloaded ? 'inline-block' : 'none'
+  } else if (st && st.error) {
+    $('update-state').textContent = '检查失败（离线或网络受限）'
+    if (btn) btn.style.display = 'none'
+  } else {
+    $('update-state').textContent = '已是最新版本'
+    if (btn) btn.style.display = 'none'
+  }
 }
 loadAbout()
+// 主进程推送：下载就绪即时亮按钮（修复=推送无人监听）
+if (window.moonlybox.onUpdateReady) {
+  window.moonlybox.onUpdateReady((info) => renderUpdateState({ available: true, downloaded: true, version: info && info.version }))
+}
+// 下载进度节流刷新（10s 一次拉状态，避免高频 IPC）
+setInterval(async () => {
+  try { renderUpdateState(await window.moonlybox.updateState()) } catch {}
+}, 10_000)
 
 $('btn-check-update').onclick = async () => {
   $('update-state').textContent = '检查中…'
-  const st = await window.moonlybox.updateCheck()
-  if (st.available) {
-    $('update-state').textContent = `新版本 v${st.version}（下载中/已就绪，重启生效）`
-    // 已下载就绪 → 显示重启安装按钮（T4 闭环：无此按钮时用户只能退出重开，依赖 autoInstallOnAppQuit）
-    const btn = document.getElementById('update-install')
-    if (btn && st.downloaded) btn.style.display = 'inline-block'  // 下载完成就绪才显示
-    if (btn) btn.onclick = () => window.moonlybox.updateInstall()
-  }
-  else if (st.error) $('update-state').textContent = `检查失败（离线或网络受限）`
-  else $('update-state').textContent = '已是最新版本'
+  await window.moonlybox.updateCheck().catch(() => {})
+  // 竞态修复：checkForUpdates 的 await 返回早于 update-downloaded 事件（状态被重置）——
+  // 稍候 1.5s 拉最终状态快照再渲染（缓存命中时 downloaded 已置回 true）
+  setTimeout(async () => {
+    try { renderUpdateState(await window.moonlybox.updateState()) } catch {}
+  }, 1500)
 }
 
 // 同步
