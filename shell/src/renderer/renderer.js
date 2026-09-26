@@ -1,6 +1,32 @@
 /** renderer：#253 壳层重构——3 列布局（图标栏/功能列表/工作台）+ 标题栏 MDI 页帧 + 设置弹窗。 */
 const $ = (id) => document.getElementById(id)
 
+// renderer 全局错误可见化（UI 瘫痪时不再靠猜——错误横幅直接显示）
+window.addEventListener('error', (e) => {
+  try {
+    let bar = document.getElementById('renderer-error')
+    if (!bar) {
+      bar = document.createElement('div')
+      bar.id = 'renderer-error'
+      bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#dc2626;color:#fff;font:12px/1.5 monospace;padding:6px 10px;max-height:120px;overflow:auto'
+      document.body.appendChild(bar)
+    }
+    bar.textContent += `[renderer] ${e.message} @ ${e.filename?.split('/').pop()}:${e.lineno}\n`
+  } catch {}
+})
+window.addEventListener('unhandledrejection', (e) => {
+  try {
+    let bar = document.getElementById('renderer-error')
+    if (!bar) {
+      bar = document.createElement('div')
+      bar.id = 'renderer-error'
+      bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#dc2626;color:#fff;font:12px/1.5 monospace;padding:6px 10px;max-height:120px;overflow:auto'
+      document.body.appendChild(bar)
+    }
+    bar.textContent += `[promise] ${e.reason?.message ?? e.reason}\n`
+  } catch {}
+})
+
 // ---------- 窗口控制 ----------
 $('win-min').onclick = () => window.moonlybox.winMin()
 $('win-max').onclick = () => window.moonlybox.winMax()
@@ -24,9 +50,9 @@ const NAVS = {
   xiaoyue: { label: '小月' },
   help: { label: '帮助' },
   settings: { label: '设置' },
-}
+}  // ASI 陷阱防护（对象字面量后接 IIFE 必须分号）
 let currentNav = null
-const openFrames = new Set()
+const openFrames = new Set()  // ASI 陷阱防护：下一 IIFE 以 ( 开头，无分号会被解析为跨行调用
 
 // ---- 第二列拖宽（#253.18：限幅 180-420px，持久化；防误操作比例失调） ----
 (() => {
