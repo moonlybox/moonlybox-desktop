@@ -51,18 +51,24 @@ export const BINDING_NAME = 'onnxruntime_binding.node'
 export const NATIVE_VERSION = '1.21.0'
 export const BINDING_PATH = ${JSON.stringify(bindingRel)}
 `
-// --gen-only：只生成绑定不 compile（CI typecheck 前置步——native-bindings.ts 是 gitignore 生成物，
-// fresh clone 没有，typecheck 的 TS2307 是 ci(main) 长期红根因 #251.4）
+// binding 复制为 .blob（避开 bun 对 .node 后缀的 native 模块预加载特判——双实例根源）
+// dev 态 daemon 虽不真用 ORT，但 bun 静态 import 需要文件存在——缺了直接 exit(1)（#253.9 用户实测）
+function ensureBindingBlob() {
+  const src = path.join(repoRoot, 'node_modules/onnxruntime-node/bin/napi-v3', p, arch, 'onnxruntime_binding.node')
+  const dst = path.join(repoRoot, 'assets/ort-binding.blob')
+  if (fs.existsSync(dst) && fs.existsSync(src) && fs.statSync(dst).size === fs.statSync(src).size) return
+  fs.mkdirSync(path.dirname(dst), { recursive: true })
+  fs.copyFileSync(src, dst)
+}
+// --gen-only：生成绑定+blob 不 compile（CI typecheck 前置步+壳 dev 自愈步——
+// native-bindings.ts 与 blob 都是 gitignore 生成物，fresh clone 都没有）
 if (process.argv.includes('--gen-only')) {
+  ensureBindingBlob()
   fs.writeFileSync(path.join(repoRoot, 'src/lib/native-bindings.ts'), bindingCode)
-  console.log('GEN-ONLY: native-bindings.ts 已生成（跳过 compile）')
+  console.log('GEN-ONLY: native-bindings.ts + ort-binding.blob 已生成（跳过 compile）')
   process.exit(0)
 }
-// binding 复制为 .blob（避开 bun 对 .node 后缀的 native 模块预加载特判——双实例根源）
-fs.copyFileSync(
-  path.join(repoRoot, 'node_modules/onnxruntime-node/bin/napi-v3', p, arch, 'onnxruntime_binding.node'),
-  path.join(repoRoot, 'assets/ort-binding.blob'),
-)
+ensureBindingBlob()
 fs.writeFileSync(path.join(repoRoot, 'src/lib/native-bindings.ts'), bindingCode)
 
 try {
