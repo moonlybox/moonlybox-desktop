@@ -1,6 +1,6 @@
 {
   "name": "moonlybox-desktop",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "MoonlyBox desktop client — CLI first (M1): login / sync / inbox / xiaoyue",
   "type": "module",
   "bin": {
