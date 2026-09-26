@@ -368,3 +368,46 @@ export async function syncInbox(root: string, report: SyncReport): Promise<void>
   }
   saveManifest(root, manifest)
 }
+
+/**
+ * #253.49 书房镜像区文件「保存即回传」：单文件走 /library/import/files 版本管道（与收集箱回传同源）。
+ * frontmatter moonlybox.id 命中本人既有实体 → updateDoc（版本 bump）；内容未变 → 幂等跳过；
+ * 识别不到镜像 id → 抛错（本地文档不走此通道，上行仍走收集箱）。
+ */
+export async function syncReturnFile(root: string, rel: string): Promise<string> {
+  const creds = loadCredentials()
+  if (!creds?.accessToken) throw new Error('未登录：先在壳端头像登录')
+  const abs = path.resolve(root, rel)
+  if (!abs.startsWith(path.resolve(root) + path.sep)) throw new Error('路径越界')
+  const raw = fs.readFileSync(abs, 'utf8')
+  const fmBlock = raw.match(/^---\n[\s\S]*?\n---/)?.[0] ?? ''
+  const mirrorId = fmBlock.match(/"id"\s*:\s*"([0-9A-HJKMNP-TV-Z]{26})"/i)?.[1]
+    ?? fmBlock.match(/^moonlybox:\s*([0-9A-HJKMNP-TV-Z]{26})/im)?.[1]
+  if (!mirrorId) throw new Error('本地文档（非云端镜像）：已保存到书房；上行云端请放入收集箱')
+  const title = path.basename(rel).replace(/\.md$/i, '').slice(0, 200)
+  const res = await apiPost<any>('/library/import/files', { channel: 'upload', items: [{ title, content: raw }] })
+  const updated = res.data?.updated ?? 0
+  const skipped = res.data?.skipped ?? 0
+  const created = res.data?.created ?? 0
+  const manifest = loadManifest(root)
+  if (updated > 0) {
+    // 新版本号=max(manifest 记忆, 文件 frontmatter 标注)+1（manifest 缺行时 frontmatter 是唯一版本线索）
+    const fmVersion = Number(fmBlock.match(/"version"\s*:\s*(\d+)/)?.[1] ?? 0)
+    const prevVersion = Math.max(manifest[mirrorId]?.version ?? 0, fmVersion)
+    manifest[mirrorId] = { path: rel.split(path.sep).join('/'), sha256: sha256(raw), version: prevVersion + 1, updatedAt: new Date().toISOString() }
+    saveManifest(root, manifest)
+    log(root, { op: 'mirror-return', file: rel, doc: mirrorId })
+    return `✓ 已回传云端（版本 +1）`
+  }
+  if (skipped > 0) {
+    log(root, { op: 'mirror-return-skip', file: rel, doc: mirrorId })
+    return '云端内容无变化（幂等跳过，未产生新版本）'
+  }
+  if (created > 0) {
+    // id 非本人/不存在：服务端已降级新建——提示用户下次 sync 下行对齐（frontmatter 已被服务端重写）
+    log(root, { op: 'mirror-return-created', file: rel, doc: mirrorId })
+    return '云端已按新文档收录（原 id 失效）：执行同步后本地会与云端对齐'
+  }
+  throw new Error('回传响应异常：' + JSON.stringify(res).slice(0, 160))
+}
+

@@ -134,6 +134,28 @@
     .set-status.ok { color: var(--ok); }
     .set-status.err { color: var(--err); }
 
+
+    /* ===== md 阅读视图（#253.49：排版全走主题 CSS 变量，不硬编码色值） ===== */
+    .md-view { user-select: text; font-size: 14px; line-height: 1.75; }
+    .md-view h1, .md-view h2, .md-view h3, .md-view h4 { margin: 1.2em 0 .5em; line-height: 1.4; }
+    .md-view h1 { font-size: 1.5em; } .md-view h2 { font-size: 1.3em; } .md-view h3 { font-size: 1.15em; }
+    .md-view h1:first-child, .md-view h2:first-child, .md-view h3:first-child { margin-top: .2em; }
+    .md-view p { margin: .6em 0; }
+    .md-view ul, .md-view ol { margin: .6em 0; padding-left: 1.6em; }
+    .md-view li { margin: .25em 0; }
+    .md-view blockquote { margin: .8em 0; padding: .4em 1em; border-left: 3px solid var(--border); color: var(--muted); background: var(--hover); border-radius: 0 8px 8px 0; }
+    .md-view code { font: 12.5px ui-monospace, monospace; background: var(--hover); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; }
+    .md-view pre { margin: .8em 0; padding: 12px 14px; background: var(--hover); border: 1px solid var(--border); border-radius: 8px; overflow: auto; }
+    .md-view pre code { background: transparent; border: 0; padding: 0; }
+    .md-view table { border-collapse: collapse; margin: .8em 0; width: 100%; font-size: 13px; }
+    .md-view th, .md-view td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+    .md-view th { background: var(--hover); font-weight: 600; }
+    .md-view img { max-width: 100%; border-radius: 8px; }
+    .md-view hr { border: 0; border-top: 1px solid var(--border); margin: 1.4em 0; }
+    .md-view a { color: var(--accent); }
+    .mb-mermaid { margin: 1em 0; text-align: center; }
+    .mb-mermaid svg { max-width: 100%; }
+
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { border-radius: 9999px; background: rgba(148,163,184,.45); }
@@ -223,6 +245,7 @@
   </div>
 
   <script src="vendor/mermaid.min.js"></script>
+  <script src="vendor/marked.min.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

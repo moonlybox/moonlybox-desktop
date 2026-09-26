@@ -140,6 +140,13 @@ assert('byok clear 后 get 回空态', byGet1Ok)
 const pingBy = await rpc('ping', {})
 assert('byok 调用后 daemon 存活', pingBy.at(-1)?.text === 'pong')
 
+// #253.49：syncreturn——保存即回传协议（未登录环境优雅报错不崩）
+const sr = await rpc('syncreturn', { rel: '文档/不存在.md' }, 15_000)
+const srDone = sr.at(-1)
+assert('syncreturn 终止（未登录/未选 vault 优雅报错）', srDone?.event === 'done' && srDone?.code === 1, JSON.stringify(srDone)?.slice(0, 100))
+const pingSr = await rpc('ping', {})
+assert('syncreturn 调用后 daemon 存活', pingSr.at(-1)?.text === 'pong')
+
 proc.kill()
 console.log(`\n${results.length - failed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

@@ -329,7 +329,7 @@ async function renderTree(container, rel, depth) {
 async function renderWork(nav, arg, label2) {
   const w = $('work')
   if (nav === 'vault' && arg && !arg.dir) {
-    // 文件工作台：编辑/预览分栏
+    // 文件工作台：阅读（默认，md 渲染+mermaid 出图）⇄ 编辑 双态切换（#253.49 用户：预览为默认，不固定分栏）
     const r = await window.moonlybox.fsRead(arg.rel)
     w.innerHTML = `
       <div class="row" style="padding:10px 16px;border-bottom:1px solid var(--border)">
@@ -337,22 +337,76 @@ async function renderWork(nav, arg, label2) {
         <span class="muted" style="font-size:11px;margin-left:auto" id="wf-state"></span>
       </div>
       <div style="flex:1;display:flex;min-height:0">
-        <textarea id="wf-edit" spellcheck="false" style="flex:1;border:0;border-right:1px solid var(--border);padding:14px;font:12.5px/1.7 ui-monospace,monospace;resize:none;background:transparent;color:inherit;outline:none"></textarea>
-        <div id="wf-view" style="flex:1;overflow:auto;padding:16px" class="mono"></div>
+        <textarea id="wf-edit" spellcheck="false" style="flex:1;border:0;padding:14px;font:12.5px/1.7 ui-monospace,monospace;resize:none;background:transparent;color:inherit;outline:none;display:none"></textarea>
+        <div id="wf-view" style="flex:1;overflow:auto;padding:20px 28px" class="md-view"></div>
       </div>`
     if (!r.ok) { $('wf-state').textContent = r.message; return }
-    $('wf-edit').value = r.content
-    $('wf-view').textContent = '（预览：markdown 渲染接 v0.6）\n\n' + r.content.slice(0, 2000)
-    $('wf-state').textContent = `${r.content.length} 字符 · 编辑后点保存`
-    const save = document.createElement('button')
-    save.className = 'btn'
-    save.textContent = '保存'
-    save.style.marginLeft = '8px'
-    save.onclick = async () => {
-      const wr = await window.moonlybox.fsWrite(arg.rel, $('wf-edit').value)
-      $('wf-state').textContent = wr.ok ? '✓ 已保存（sync 后上云/对账）' : '保存失败：' + wr.message
+    const edit = $('wf-edit'), view = $('wf-view'), state = $('wf-state')
+    edit.value = r.content
+    // mermaid 围栏块先摘出（防 marked 当普通代码转义），渲染时按占位符回填出图
+    const mermaidBlocks = []
+    const mdToHtml = (src) => {
+      const staged = src.replace(/```mermaid[^\n]*\n([\s\S]*?)```/g, (_m, code) => {
+        mermaidBlocks.push(code)
+        return `\n<!--MBMERMAID${mermaidBlocks.length - 1}-->\n`
+      })
+      let html = window.marked ? window.marked.parse(staged, { breaks: true, gfm: true }) : '<pre>' + staged.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])) + '</pre>'
+      // 本地文档安全：去脚本/内联事件（marked 不做 sanitize）
+      const tpl = document.createElement('template')
+      tpl.innerHTML = html
+      tpl.content.querySelectorAll('script,iframe,object,embed,link,meta').forEach((el) => el.remove())
+      tpl.content.querySelectorAll('*').forEach((el) => {
+        for (const attr of [...el.attributes]) {
+          if (/^on/i.test(attr.name) || (/^(href|src)$/i.test(attr.name) && /^\s*javascript:/i.test(attr.value))) el.removeAttribute(attr.name)
+        }
+      })
+      return tpl.innerHTML.replace(/<!--MBMERMAID(\d+)-->/g, (_m, i) => `<div class="mb-mermaid" data-mbcode="${encodeURIComponent(mermaidBlocks[Number(i)] ?? '')}"></div>`)
     }
-    $('wf-state').after(save)
+    const renderMermaids = () => {
+      view.querySelectorAll('.mb-mermaid').forEach(async (el) => {
+        const code = decodeURIComponent(el.dataset.mbcode ?? '')
+        if (!code || !window.mermaid) return
+        try {
+          const { svg } = await window.mermaid.render('wfmd-' + Date.now() + '-' + Math.floor(Math.random() * 1e6), code)
+          el.innerHTML = svg
+        } catch (e) {
+          el.innerHTML = '<pre style="color:var(--err)">⚠ mermaid 渲染失败：' + String(e?.message ?? e).slice(0, 200) + '</pre>'
+        }
+      })
+    }
+    const renderView = () => { view.innerHTML = mdToHtml(edit.value); renderMermaids() }
+    let mode = 'read' // read | edit
+    const mkBtn = (label, ghost) => { const b = document.createElement('button'); b.className = ghost ? 'btn ghost' : 'btn'; b.textContent = label; b.style.marginLeft = '8px'; return b }
+    const btnToggle = mkBtn('编辑', true)
+    const btnSave = mkBtn('保存', false)
+    const applyMode = () => {
+      if (mode === 'read') {
+        edit.style.display = 'none'; view.style.display = ''
+        renderView()
+        btnToggle.textContent = '编辑'
+        state.textContent = `${edit.value.length} 字符 · 阅读视图`
+      } else {
+        view.style.display = 'none'; edit.style.display = ''
+        btnToggle.textContent = '预览'
+        state.textContent = `${edit.value.length} 字符 · 编辑中（预览显示未保存内容）`
+      }
+    }
+    btnToggle.onclick = () => { mode = mode === 'read' ? 'edit' : 'read'; applyMode() }
+    btnSave.onclick = async () => {
+      const wr = await window.moonlybox.fsWrite(arg.rel, edit.value)
+      if (!wr.ok) { state.textContent = '保存失败：' + wr.message; return }
+      state.textContent = '✓ 已保存 · 回传云端中…'
+      // 保存即回传（#253.49）：镜像区文件直接走 /library/import/files 版本管道；本地文档提示走收集箱
+      try {
+        const rt = await window.moonlybox.rpc('syncreturn', { rel: arg.rel }, 120_000)
+        state.textContent = rt.event === 'done' ? '✓ 已保存 · ' + (rt.text ?? '') : '✓ 已保存 · 回传失败：' + (rt.message ?? '未知错误')
+      } catch (e) {
+        state.textContent = '✓ 已保存 · 回传失败：' + String(e?.message ?? e)
+      }
+      if (mode === 'read') renderView()
+    }
+    state.after(btnToggle, btnSave)
+    applyMode()
     return
   }
   if (nav === 'vault' && arg?.dir) {

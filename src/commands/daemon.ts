@@ -21,6 +21,7 @@ import { cmdXiaoyue } from '../commands/xiaoyue'
 import { runAgentTools } from '../commands/xiaoyue'
 import { byokReady, byokChat, loadByokMeta, saveByokMeta, saveByokKey, clearByok, loadByokKey } from '../lib/llm'
 import { cmdSync } from '../commands/sync'
+import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
 import { apiGet, apiPost } from '../lib/api'
@@ -136,6 +137,20 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         await cmdSync([], { dir, once: true } as CommandOptions)
       }, (t) => { parts.push(t); emit(t) })
       text = parts.join('\n')
+      break
+    }
+    case 'syncreturn': {
+      // #253.49：书房镜像区文件「保存即回传」——复用 /library/import/files 版本管道（与收集箱回传同源）
+      try {
+        const parts: string[] = []
+        await withCapturedConsole(async () => {
+          await syncReturnFile(dir, String(args.rel ?? ''))
+        }, (t) => { parts.push(t); emit(t) })
+        text = parts.join('\n') || '✓ 已回传'
+      } catch (e: any) {
+        code = 1
+        text = String(e?.message ?? e)
+      }
       break
     }
     case 'memory': {
