@@ -126,8 +126,18 @@ function ensureDaemon() {
       }
     }
   })
-  daemon.stderr.on('data', (d) => eventHooks.forEach((h) => h(0, 'stderr', d.toString())))
-  daemon.on('exit', () => { daemon = null; pending.forEach((p) => p({ event: 'error', message: 'daemon exited' })); pending.clear() })
+  let stderrTail = ''
+  daemon.stderr.on('data', (d) => {
+    stderrTail = (stderrTail + d.toString()).slice(-2000)
+    eventHooks.forEach((h) => h(0, 'stderr', d.toString()))
+  })
+  daemon.on('exit', (code) => {
+    daemon = null
+    const tail = stderrTail.trim().split('\n').slice(-3).join(' | ').slice(0, 300)
+    const msg = `daemon exited (${code})${tail ? '：' + tail : ''}`
+    pending.forEach((p) => p({ event: 'error', message: msg }))
+    pending.clear()
+  })
   return daemon
 }
 

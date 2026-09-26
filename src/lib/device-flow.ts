@@ -37,6 +37,7 @@ export async function requestDeviceCode(clientId: string, baseUrl?: string): Pro
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
+    signal: AbortSignal.timeout(20_000),
   })
   const json = (await res.json()) as any
   if (!res.ok) throw new Error(`device/code 失败 (${res.status}): ${JSON.stringify(json)}`)
@@ -56,6 +57,7 @@ export async function pollToken(clientId: string, deviceCode: string, baseUrl?: 
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
+    signal: AbortSignal.timeout(20_000),
   })
   const json = (await res.json()) as any
   if (res.ok && json.access_token) {

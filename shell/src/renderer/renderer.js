@@ -423,6 +423,7 @@ async function refreshAvatar() {
 }
 
 async function showLoginDialog() {
+  if (loginPolling) return // start 在途/轮询中：不重复发起（防多弹窗+RPC 堆积）
   const dlg = document.createElement('dialog')
   dlg.style.cssText = 'border:1px solid var(--border);border-radius:12px;background:var(--bg2);color:var(--fg);padding:24px;min-width:460px'
   dlg.innerHTML = `
@@ -456,6 +457,8 @@ async function showLoginDialog() {
   det.innerHTML = `<summary class="muted" style="font-size:11px;cursor:pointer">手动复制授权链接</summary><div class="mono" style="font-size:11px;user-select:all;word-break:break-all">${url}</div>`
   dlg.appendChild(det)
   // 轮询授权结果（5s 间隔，快调用不阻塞 daemon worker）
+  loginPolling = true
+  try {
   const deadline = Date.now() + (d.expiresIn ?? 900) * 1000
   while (!closed && Date.now() < deadline) {
     await new Promise((r2) => setTimeout(r2, 5000))
@@ -476,6 +479,7 @@ async function showLoginDialog() {
       // pending/slow_down → 继续等
     } catch {}
   }
+  } finally { loginPolling = false }
 }
 
 // ---------- 版本显示 + 首屏 ----------
