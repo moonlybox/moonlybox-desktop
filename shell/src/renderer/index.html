@@ -2,76 +2,155 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
   <title>魔力宝盒</title>
   <style>
-    :root { color-scheme: light dark; }
-    * { box-sizing: border-box; margin: 0; }
-    body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; height: 100vh; display: flex; }
-    aside { width: 280px; border-right: 1px solid #e2e8f0; padding: 16px; overflow-y: auto; }
-    main { flex: 1; display: flex; flex-direction: column; }
-    header { padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
-    h1 { font-size: 15px; }
-    #log { flex: 1; overflow-y: auto; padding: 16px 20px; font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; }
-    .card { background: #f8fafc; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
-    .btn { display: inline-block; border: 0; background: #4f46e5; color: #fff; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
-    .btn:disabled { opacity: .5; }
-    input { border: 1px solid #cbd5e1; border-radius: 8px; padding: 7px 10px; font-size: 13px; width: 100%; }
-    .row { display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid #e2e8f0; }
-    .row input { flex: 1; }
-    @media (prefers-color-scheme: dark) {
-      aside { border-color: #334155; } .card { background: #1e293b; }
-      header, .row { border-color: #334155; } body { background: #0f172a; color: #e2e8f0; }
+    :root {
+      color-scheme: light dark;
+      --titlebar-h: 40px;      /* 比常规标题栏高一点（用户需求 4） */
+      --rail-w: 52px;          /* 图标栏最小宽度 */
+      --list-w: 230px;         /* 第二列 */
+      --bg: #f8fafc; --bg2: #ffffff; --fg: #0f172a; --muted: #64748b;
+      --border: #e2e8f0; --accent: #4f46e5; --hover: #eef2ff;
+      --ok: #059669; --warn: #d97706; --err: #dc2626;
     }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0f172a; --bg2: #1e293b; --fg: #e2e8f0; --muted: #94a3b8; --border: #334155; --hover: #1e293b; }
+    }
+    * { box-sizing: border-box; margin: 0; }
+    body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--fg); overflow: hidden; user-select: none; }
+
+    /* ===== 标题栏（自绘，MDI 页帧切换在此；可拖拽窗口） ===== */
+    #titlebar {
+      height: var(--titlebar-h); display: flex; align-items: center; gap: 10px;
+      padding: 0 0 0 12px; border-bottom: 1px solid var(--border); background: var(--bg2);
+      -webkit-app-region: drag;
+    }
+    #titlebar .brand { font-size: 13px; font-weight: 700; }
+    #titlebar .tabs { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+    #titlebar .frame-tab {
+      border: 0; background: transparent; color: var(--muted); font-size: 12.5px;
+      padding: 5px 12px; border-radius: 7px; cursor: pointer;
+    }
+    #titlebar .frame-tab.active { background: var(--hover); color: var(--accent); font-weight: 600; }
+    #titlebar .spacer { flex: 1; }
+    #titlebar .win-controls { display: flex; gap: 2px; -webkit-app-region: no-drag; }
+    #titlebar .win-controls button {
+      border: 0; background: transparent; color: var(--fg); width: 34px; height: 30px;
+      font-size: 12px; cursor: pointer; border-radius: 6px;
+    }
+    #titlebar .win-controls button:hover { background: var(--hover); }
+    #btn-upgrade { position: relative; }
+    #btn-upgrade .dot {
+      position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--warn); display: none;
+    }
+    #btn-upgrade.ready .dot { background: var(--ok); animation: pulse 1.2s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+    /* ===== 主体 3 列 ===== */
+    #body { flex: 1; display: flex; min-height: 0; }
+    /* 第一列：图标栏 */
+    #rail {
+      width: var(--rail-w); border-right: 1px solid var(--border); background: var(--bg2);
+      display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 6px;
+    }
+    #rail .avatar {
+      width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
+      cursor: pointer; border: 0;
+    }
+    #rail .sep { width: 26px; height: 1px; background: var(--border); margin: 8px 0; }
+    #rail .rail-btn {
+      width: 40px; height: 40px; border: 0; background: transparent; border-radius: 9px;
+      font-size: 18px; cursor: pointer; color: var(--muted); display: flex; align-items: center; justify-content: center;
+    }
+    #rail .rail-btn.active { background: var(--hover); color: var(--accent); }
+    #rail .rail-btn:hover { background: var(--hover); }
+    #rail .grow { flex: 1; }
+
+    /* 第二列：功能列表 */
+    #listcol {
+      width: var(--list-w); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0;
+    }
+    #listcol .list-head { padding: 12px 14px 8px; font-size: 13px; font-weight: 700; }
+    #listcol .list-body { flex: 1; overflow-y: auto; padding: 0 8px 12px; font-size: 13px; }
+
+    /* 第三列：工作台 */
+    #work { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+    /* 通用 */
+    .btn { border: 0; background: var(--accent); color: #fff; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
+    .btn:disabled { opacity: .5; }
+    .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+    input, textarea, select { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 13px; background: var(--bg2); color: var(--fg); }
+    .muted { color: var(--muted); }
+    .mono { font: 12px/1.6 ui-monospace, monospace; }
+    .tree-item { padding: 5px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tree-item:hover { background: var(--hover); }
+    .tree-item.active { background: var(--hover); color: var(--accent); }
+    .tree-item .dir { font-weight: 600; }
+    .row { display: flex; gap: 8px; align-items: center; }
   </style>
 </head>
 <body>
-  <aside>
-    <div class="card"><strong>vault</strong><div id="vault" style="font-size:12px;opacity:.7;margin-top:4px">~/MyMoonVault</div></div>
-    <div class="card"><strong>内核</strong><div id="kernel" style="font-size:12px;opacity:.7;margin-top:4px">未启动</div></div>
-    <button class="btn" id="btn-sync">立即同步（sync）</button>
-    <label class="card" style="display:flex;gap:8px;align-items:center;cursor:pointer">
-      <input type="checkbox" id="cb-tools" style="width:auto" checked /> <label for="cb-tools" style="font-size:11px">⚙ 工具</label>
-      <input type="checkbox" id="cb-watch" style="width:auto" />
-      <span style="font-size:13px">剪贴板自动采集</span>
-    </label>
-    <p style="font-size:11px;opacity:.6">热键：Alt+Shift+M 呼出 · Alt+Shift+C 采集剪贴板</p>
-    <div class="card" style="margin-top:12px">
-      <strong style="font-size:12px">关于</strong>
-      <div style="font-size:11px;opacity:.75;margin-top:4px" id="about">壳 … · 内核 …</div>
-      <button class="btn" id="btn-check-update" style="margin-top:8px;font-size:12px;padding:5px 10px">检查更新</button>
-      <div id="update-state" style="font-size:11px;opacity:.7;margin-top:4px"></div>
-    <button id="update-install" style="display:none;margin-top:6px;padding:2px 10px;font-size:12px">重启安装更新</button>
+  <!-- 标题栏：MDI 页帧 + 升级灯 + 窗口控制 -->
+  <div id="titlebar">
+    <span class="brand">魔力宝盒</span>
+    <div class="tabs" id="frame-tabs"></div>
+    <span class="spacer"></span>
+    <div class="win-controls">
+      <button id="btn-upgrade" title="检查更新">⟳<span class="dot"></span></button>
+      <button id="win-min" title="最小化">—</button>
+      <button id="win-max" title="最大化">□</button>
+      <button id="win-close" title="关闭">✕</button>
     </div>
-  </aside>
-  <main>
-    <header><h1>小月</h1><span style="font-size:12px;opacity:.6" id="ver"></span></header>
-    <div id="log"></div>
-    <div class="row">
-      <input id="q" placeholder="问小月（本地检索+直连回答）…" />
-      <button class="btn" id="btn-ask">发送</button>
-    </div>
-    </div>
-    <div id="view-diagram" style="flex:1;display:none;flex-direction:column;min-height:0">
-      <div style="display:flex;gap:8px;padding:10px 20px;border-bottom:1px solid #e2e8f0;align-items:center">
-        <input id="dg-title" placeholder="图示标题" style="width:200px" />
-        <select id="dg-list" style="border:1px solid #cbd5e1;border-radius:8px;padding:6px;font-size:12px;max-width:180px">
-          <option value="">— 草稿/书房图示 —</option>
-        </select>
-        <button class="btn" id="dg-new" style="background:#64748b;font-size:12px;padding:5px 10px">新建</button>
-        <button class="btn" id="dg-save" style="font-size:12px;padding:5px 10px">保存草稿</button>
-        <button class="btn" id="dg-activate" style="background:#059669;font-size:12px;padding:5px 10px">存进书房</button>
-        <button class="btn" id="dg-ai" style="background:#7c3aed;font-size:12px;padding:5px 10px">✨ AI 生成</button>
-        <button class="btn" id="dg-fix" style="background:#7c3aed;font-size:12px;padding:5px 10px;display:none">AI 修复</button>
-        <span id="dg-state" style="font-size:11px;opacity:.65;margin-left:auto"></span>
+  </div>
+
+  <div id="body">
+    <!-- 第一列：图标栏 -->
+    <nav id="rail">
+      <button class="avatar" id="btn-avatar" title="登录/账号">?</button>
+      <div class="sep"></div>
+      <button class="rail-btn" data-nav="vault" title="书房（本地）">📚</button>
+      <button class="rail-btn" data-nav="cloud" title="云端">☁️</button>
+      <button class="rail-btn" data-nav="diagram" title="图示">📐</button>
+      <button class="rail-btn" data-nav="xiaoyue" title="小月">🌙</button>
+      <span class="grow"></span>
+      <button class="rail-btn" data-nav="help" title="帮助">❓</button>
+      <button class="rail-btn" data-nav="settings" title="设置">⚙️</button>
+    </nav>
+
+    <!-- 第二列：功能列表（内容由 JS 按 nav 填充） -->
+    <section id="listcol">
+      <div class="list-head" id="list-head">—</div>
+      <div class="list-body" id="list-body"></div>
+    </section>
+
+    <!-- 第三列：工作台（各页帧共用容器，JS 按 nav+selection 渲染） -->
+    <section id="work"></section>
+  </div>
+
+  <dialog id="dlg-settings" style="border:1px solid var(--border);border-radius:12px;background:var(--bg2);color:var(--fg);min-width:520px">
+    <form method="dialog" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+      <strong style="font-size:15px">设置</strong>
+      <label class="row" style="justify-content:space-between">⚙ 工具（管家模式） <input type="checkbox" id="set-tools" checked /></label>
+      <label class="row" style="justify-content:space-between">📋 剪贴板自动采集 <input type="checkbox" id="set-watch" /></label>
+      <div class="row">
+        <span style="min-width:120px">Vault 目录</span>
+        <input id="set-vault" style="flex:1" readonly placeholder="未选择" />
+        <button type="button" class="btn ghost" id="set-vault-pick">选择…</button>
       </div>
-      <div id="dg-split" style="flex:1;display:flex;min-height:0">
-        <textarea id="dg-code" spellcheck="false" style="flex:1;border:0;border-right:1px solid #e2e8f0;padding:14px;font:12px/1.6 ui-monospace,monospace;resize:none;background:transparent;color:inherit;outline:none" placeholder="```mermaid&#10;graph TD&#10;  A[开始] --> B[结束]&#10;```"></textarea>
-        <div id="dg-preview" style="flex:1;overflow:auto;padding:16px;display:flex;align-items:flex-start;justify-content:center"></div>
+      <div class="row">
+        <span style="min-width:120px">BYOK 直连</span>
+        <button type="button" class="btn ghost" id="set-byok">配置…</button>
       </div>
-      <div id="dg-err" style="display:none;padding:8px 20px;font-size:12px;color:#dc2626;border-top:1px solid #e2e8f0"></div>
-    </div>
-  </main>
+      <div class="row" style="justify-content:flex-end;gap:8px;margin-top:6px">
+        <button type="button" class="btn ghost" id="set-close">关闭</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="vendor/mermaid.min.js"></script>
   <script src="renderer.js"></script>
 </body>

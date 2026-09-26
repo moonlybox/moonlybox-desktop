@@ -7,6 +7,7 @@
  * - IPC 安全（Hermes Desktop 范式）：contextIsolation=true + nodeIntegration=false + preload 白名单桥；
  * - D12 内存形态：托盘常驻≠窗口常驻，关窗即销毁 renderer。
  */
+const os = require('os')
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, globalShortcut, clipboard, Notification, dialog } = require('electron')
 const { initUpdater } = require('./updater')
 const path = require('path')
@@ -50,13 +51,22 @@ const pending = new Map() // id → {resolve}
 let nextId = 1
 const eventHooks = [] // (id, event, payload) → void（renderer 订阅）
 
+// vault 根解析（#253 需求 6）：用户选择持久化 vault.json → 全链（daemon/采集/树）生效
+function configuredVault() {
+  try {
+    const cfgPath = path.join(process.env.MOONLYBOX_CONFIG_HOME || path.join(os.homedir(), '.config', 'moonlybox'), 'vault.json')
+    if (fs.existsSync(cfgPath)) return JSON.parse(fs.readFileSync(cfgPath, 'utf8')).root || null
+  } catch {}
+  return process.env.MOONLYBOX_VAULT || path.join(homeDir(), 'MyMoonVault')
+}
+
 function ensureDaemon() {
   if (daemon && daemon.exitCode === null) return daemon
   const { cmd, base } = kernelCmd()
   daemon = spawn(cmd, [...base, 'daemon'], {
     cwd: REPO_ROOT,
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, MOONLYBOX_VAULT: process.env.MOONLYBOX_VAULT || path.join(homeDir(), 'MyMoonVault') },
+    env: { ...process.env, MOONLYBOX_VAULT: configuredVault() },
   })
   let buf = ''
   daemon.stdout.on('data', (d) => {
@@ -106,14 +116,18 @@ function kernelRpc(cmd, args = {}, timeoutMs = 120_000) {
 function createWindow() {
   if (win) { win.show(); win.focus(); return }
   win = new BrowserWindow({
-    width: 1080, height: 720, show: false,
+    width: 1240, height: 800, show: false,
     title: '魔力宝盒',
+    // #253：自绘标题栏（MDI 页帧切换+升级灯）——隐藏原生标题栏，去系统菜单栏
+    titleBarStyle: 'hidden',
+    autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, 'preload.js'),
     },
   })
+  Menu.setApplicationMenu(null)
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'))
   // D12：关窗=真销毁 renderer（2026-09-24 T6 卡7 实测：hide 保活待命 368MB 超 D12 80-150MB 口径 2.5 倍，
   // 触发预埋的切换条件——destroy 换待命内存达标，代价=重开窗口 ~300ms 重建）
@@ -125,9 +139,7 @@ function createWindow() {
 
 // ---------- T3a：快速采集——剪贴板文本 → 收集箱 .md（上行走 daemon sync） ----------
 function inboxPath() {
-  return process.env.MOONLYBOX_VAULT
-    ? path.join(process.env.MOONLYBOX_VAULT, '收集箱')
-    : path.join(homeDir(), 'MyMoonVault', '收集箱')
+  return path.join(configuredVault(), '收集箱')
 }
 
 function quickCapture(text, source = 'clipboard') {
@@ -233,6 +245,53 @@ app.whenReady().then(() => {
 
   // IPC 白名单（preload 对应）
   // daemon RPC：{cmd:'xiaoyue', args:{q}} → 过程行推 renderer，done 返回全文
+  // ---------- #253：自绘标题栏窗口控制 + vault 目录选择 + vault 文件树（沙箱内） ----------
+  ipcMain.handle('win:min', () => win?.minimize())
+  ipcMain.handle('win:max', () => { if (!win) return; win.isMaximized() ? win.unmaximize() : win.maximize() })
+  ipcMain.handle('win:close', () => win?.close())
+  ipcMain.handle('upgrade:click', () => { /* renderer 点升级灯：触发检查更新 */ try { require('./updater').checkNow?.() } catch {} return win?.webContents.send('shell:updateReady', {}) })
+
+  ipcMain.handle('vault:get', () => configuredVault())
+  ipcMain.handle('vault:pick', async () => {
+    const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: '选择书房（本地 vault）目录' })
+    if (r.canceled || !r.filePaths?.[0]) return { ok: false }
+    const root = r.filePaths[0]
+    const cfgDir = process.env.MOONLYBOX_CONFIG_HOME || path.join(os.homedir(), '.config', 'moonlybox')
+    fs.mkdirSync(cfgDir, { recursive: true })
+    fs.writeFileSync(path.join(cfgDir, 'vault.json'), JSON.stringify({ root }, null, 2) + '\n')
+    // 全链生效：daemon env + 采集路径
+    process.env.MOONLYBOX_VAULT = root
+    return { ok: true, root }
+  })
+  ipcMain.handle('fs:list', (_e, rel) => {
+    // 沙箱：只允许列 vault 根内目录（防路径逃逸）
+    const root = configuredVault()
+    if (!root || !fs.existsSync(root)) return { ok: false, message: '未选择 vault 目录' }
+    const abs = path.resolve(root, String(rel || '.'))
+    if (!abs.startsWith(path.resolve(root))) return { ok: false, message: '路径越界' }
+    try {
+      const items = fs.readdirSync(abs, { withFileTypes: true })
+        .filter((x) => !x.name.startsWith('.'))
+        .map((x) => ({ name: x.name, dir: x.isDirectory() }))
+        .sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name, 'zh'))
+      return { ok: true, items }
+    } catch (e) { return { ok: false, message: String(e.message ?? e) } }
+  })
+  ipcMain.handle('fs:write', (_e, rel, content) => {
+    const root = configuredVault()
+    if (!root) return { ok: false, message: '未选择 vault 目录' }
+    const abs = path.resolve(root, String(rel || ''))
+    if (!abs.startsWith(path.resolve(root))) return { ok: false, message: '路径越界' }
+    try { fs.writeFileSync(abs, String(content ?? '')); return { ok: true } } catch (e) { return { ok: false, message: String(e.message ?? e) } }
+  })
+  ipcMain.handle('fs:read', (_e, rel) => {
+    const root = configuredVault()
+    if (!root) return { ok: false, message: '未选择 vault 目录' }
+    const abs = path.resolve(root, String(rel || ''))
+    if (!abs.startsWith(path.resolve(root))) return { ok: false, message: '路径越界' }
+    try { return { ok: true, content: fs.readFileSync(abs, 'utf8') } } catch (e) { return { ok: false, message: String(e.message ?? e) } }
+  })
+
   ipcMain.handle('kernel:rpc', (_e, { cmd, args, timeoutMs }) => kernelRpc(cmd, args, timeoutMs))
   ipcMain.on('kernel:subscribe', (e) => {
     const hook = (id, event, payload) => {

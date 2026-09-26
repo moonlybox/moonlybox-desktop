@@ -1,294 +1,363 @@
-/** renderer：daemon RPC 版——过程行流式上屏（log 事件），done 汇总。 */
+/** renderer：#253 壳层重构——3 列布局（图标栏/功能列表/工作台）+ 标题栏 MDI 页帧 + 设置弹窗。 */
 const $ = (id) => document.getElementById(id)
-const log = (t) => { $('log').textContent += t + '\n'; $('log').scrollTop = $('log').scrollHeight }
 
-// 订阅内核过程事件（必须在发请求前）
-window.moonlybox.subscribe()
-window.moonlybox.onKernelEvent((msg) => {
-  if (msg.event === 'log') log(msg.payload)
-  else if (msg.event === 'stderr') log('[stderr] ' + msg.payload)
-  else if (msg.event === 'confirm_request') renderConfirmBar(msg.id, msg.payload)
-})
+// ---------- 窗口控制 ----------
+$('win-min').onclick = () => window.moonlybox.winMin()
+$('win-max').onclick = () => window.moonlybox.winMax()
+$('win-close').onclick = () => window.moonlybox.winClose()
 
-// 内核探针：daemon ping
-async function probe() {
-  $('kernel').textContent = '连接中…'
-  const r = await window.moonlybox.rpc('ping', {}, 10_000)
-  $('kernel').textContent = r.event === 'done' ? `已连接（daemon pong）` : `连接失败：${r.message}`
+// ---------- MDI 页帧（标题栏 tab ↔ 图标栏联动） ----------
+const NAVS = {
+  vault: { icon: '📚', label: '书房（本地）' },
+  cloud: { icon: '☁️', label: '云端' },
+  diagram: { icon: '📐', label: '图示' },
+  xiaoyue: { icon: '🌙', label: '小月' },
+  help: { icon: '❓', label: '帮助' },
+  settings: { icon: '⚙️', label: '设置' },
 }
-probe()
+let currentNav = null
+const openFrames = new Set()
 
-// 小月单问：RPC 流式（过程行实时上屏）
-async function ask() {
-  const q = $('q').value.trim()
-  if (!q) return
-  $('q').value = ''
-  $('btn-ask').disabled = true
-  log(`\n你> ${q}`)
-  const tools = $('cb-tools') && $('cb-tools').checked
-  const r = await window.moonlybox.rpc('xiaoyue', tools ? { q, tools: true } : { q }, 300_000)
-  $('btn-ask').disabled = false
-  if (r.event === 'error') log(`[错误] ${r.message}`)
-}
-
-// P2：确认条——写操作确认制在 UI 的承载（daemon confirm_request → 按钮 → confirm_response）
-function renderConfirmBar(rpcId, payload) {
-  const box = document.createElement('div')
-  box.id = `confirm-${rpcId}`
-  // 配色跟随主题：半透明琥珀叠底+继承主题文字色（硬编码浅底在深色模式下浅底浅字不可读——真机反馈）
-  box.style.cssText = 'margin:6px 0;padding:8px 10px;border:1px solid rgba(245,158,11,.55);border-radius:6px;background:rgba(245,158,11,.12);color:inherit'
-  const tool = payload && payload.tool ? payload.tool : '?'
-  const args = payload && payload.args ? String(payload.args).slice(0, 160) : ''
-  box.innerHTML = `<div style="font-size:12px;margin-bottom:6px">⚠ 小月请求执行 <b>${tool}</b>${args ? `：${args}` : ''}</div>`
-  const row = document.createElement('div')
-  const mk = (label, value, primary) => {
+function renderFrameTabs() {
+  const box = $('frame-tabs')
+  box.innerHTML = ''
+  for (const nav of openFrames) {
     const b = document.createElement('button')
-    b.className = 'btn'
-    b.textContent = label
-    if (primary) b.style.background = '#f59e0b', b.style.borderColor = '#f59e0b'
-    b.onclick = async () => {
-      await window.moonlybox.confirmResponse(rpcId, value)
-      box.remove()
-      log(value ? `[已确认] 执行 ${tool}` : `[已取消] 跳过 ${tool}`)
-    }
-    return b
+    b.className = 'frame-tab' + (nav === currentNav ? ' active' : '')
+    b.textContent = `${NAVS[nav].icon} ${NAVS[nav].label}`
+    b.onclick = () => switchNav(nav)
+    box.appendChild(b)
   }
-  row.appendChild(mk('✓ 确认执行', true, true))
-  row.appendChild(mk('✕ 取消', false, false))
-  box.appendChild(row)
-  const logEl = document.getElementById('log')
-  if (logEl) logEl.appendChild(box)
-  logEl && (logEl.scrollTop = logEl.scrollHeight)
 }
 
-$('btn-ask').onclick = ask
-$('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') ask() })
-
-// 剪贴板监听开关（持久化到 localStorage）
-$('cb-watch').checked = localStorage.getItem('clipWatch') === '1'
-$('cb-watch').onchange = async (e) => {
-  const on = await window.moonlybox.setClipboardWatch(e.target.checked)
-  localStorage.setItem('clipWatch', on ? '1' : '0')
-  log(on ? '[剪贴板监听] 已开启（新内容自动入收集箱）' : '[剪贴板监听] 已关闭')
+function switchNav(nav) {
+  currentNav = nav
+  openFrames.add(nav)
+  document.querySelectorAll('.rail-btn[data-nav]').forEach((el) => el.classList.toggle('active', el.dataset.nav === nav))
+  renderFrameTabs()
+  renderList(nav)
+  renderWork(nav)
+  if (nav === 'settings') $('dlg-settings').showModal()
 }
-if ($('cb-watch').checked) window.moonlybox.setClipboardWatch(true)
 
-// 协议状态显示
-window.moonlybox.protocolState().then((st) => {
-  if (st.isDefault) log('[moonlybox://] 协议已接管')
+document.querySelectorAll('.rail-btn[data-nav]').forEach((el) => {
+  el.onclick = () => switchNav(el.dataset.nav)
 })
 
-// 关于：版本双轨 + 更新
-async function loadAbout() {
-  const v = await window.moonlybox.versions()
-  $('about').textContent = `壳 v${v.shellVersion} · 内核 v${v.kernelVersion}`
-  // 打开页面即拉全量更新状态（不依赖手动点检查；修复=自动下载就绪后按钮永不出现）
-  try {
-    const st = await window.moonlybox.updateState()
-    renderUpdateState(st)
-  } catch {}
-}
-function renderUpdateState(st) {
-  const btn = document.getElementById('update-install')
-  if (btn && !btn.dataset.bound) {
-    // onclick 绑定只做一次；0.2.1 重构显示逻辑时曾把绑定弄丢=按钮可见但点击无反应（真机反馈实锤）
-    btn.dataset.bound = '1'
-    btn.onclick = () => window.moonlybox.updateInstall()
+// ---------- 第二列渲染 ----------
+async function renderList(nav) {
+  const head = $('list-head')
+  const body = $('list-body')
+  head.textContent = NAVS[nav].label
+  body.innerHTML = ''
+
+  if (nav === 'vault') {
+    const v = await window.moonlybox.vaultGet()
+    if (!v || !require_exists(v)) {
+      body.innerHTML = '<div class="muted" style="padding:10px">未选择书房目录<br/>请到 设置 → Vault 目录 选择</div>'
+      return
+    }
+    await renderTree(body, '', 0)
+  } else if (nav === 'cloud') {
+    // 云端功能（MoonLink 工具面对应；只读列表=可验证 tools 落云端）
+    for (const [label, tool] of [['🔖 收藏', 'list_bookmarks'], ['🏷️ 标签', 'list_tags'], ['🗒️ 便签墙', 'list_stickies'], ['✅ 待办', 'list_todos']]) {
+      const item = document.createElement('div')
+      item.className = 'tree-item'
+      item.textContent = label
+      item.onclick = () => renderWork('cloud', tool, label)
+      body.appendChild(item)
+    }
+  } else if (nav === 'diagram') {
+    const r = await window.moonlybox.rpc('diagram', { op: 'list' }, 30_000)
+    try {
+      const items = JSON.parse(r.text).data.diagrams || []
+      for (const it of items) {
+        const el = document.createElement('div')
+        el.className = 'tree-item'
+        el.textContent = `${it.state === 'draft' ? '📝' : '📚'} ${it.title}`
+        el.onclick = () => renderWork('diagram', it)
+        body.appendChild(el)
+      }
+      if (!items.length) body.innerHTML = '<div class="muted" style="padding:10px">暂无图示</div>'
+    } catch {
+      body.innerHTML = '<div class="muted" style="padding:10px">列表加载失败（登录后可用）</div>'
+    }
+  } else if (nav === 'xiaoyue') {
+    body.innerHTML = '<div class="muted" style="padding:10px">小月对话（会话列表规划中）</div>'
+  } else if (nav === 'help') {
+    for (const [label, fn] of [['🧠 内核状态', () => renderWork('help', 'kernel')], ['ℹ️ 关于', () => renderWork('help', 'about')]]) {
+      const el = document.createElement('div')
+      el.className = 'tree-item'
+      el.textContent = label
+      el.onclick = fn
+      body.appendChild(el)
+    }
   }
-  if (st && st.available) {
-    $('update-state').textContent = st.downloaded
-      ? `新版本 v${st.version} 已就绪`
-      : `新版本 v${st.version} 下载中${typeof st.progress === 'number' ? ` ${st.progress}%` : '…'}`
-    if (btn) btn.style.display = st.downloaded ? 'inline-block' : 'none'
-  } else if (st && st.error) {
-    $('update-state').textContent = '检查失败（离线或网络受限）'
-    if (btn) btn.style.display = 'none'
-  } else {
-    $('update-state').textContent = '已是最新版本'
-    if (btn) btn.style.display = 'none'
+}
+
+function require_exists(v) { return typeof v === 'string' && v.length > 0 }
+
+async function renderTree(container, rel, depth) {
+  const r = await window.moonlybox.fsList(rel)
+  if (!r.ok) { container.innerHTML = `<div class="muted" style="padding:10px">${r.message}</div>`; return }
+  for (const item of r.items) {
+    const relPath = rel ? `${rel}/${item.name}` : item.name
+    const el = document.createElement('div')
+    el.className = 'tree-item' + (item.dir ? ' dir' : '')
+    el.style.paddingLeft = `${8 + depth * 14}px`
+    el.textContent = `${item.dir ? '📁' : '📄'} ${item.name}`
+    el.onclick = async () => {
+      container.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
+      el.classList.add('active')
+      if (item.dir) await renderWork('vault', { rel: relPath, dir: true })
+      else await renderWork('vault', { rel: relPath, dir: false })
+    }
+    container.appendChild(el)
+    // 目录默认展开一层（.moonlybox 跳过）
+    if (item.dir && depth < 1 && item.name !== '.moonlybox') await renderTree(container, relPath, depth + 1)
   }
 }
-loadAbout()
-// 主进程推送：下载就绪即时亮按钮（修复=推送无人监听）
-if (window.moonlybox.onUpdateReady) {
-  window.moonlybox.onUpdateReady((info) => renderUpdateState({ available: true, downloaded: true, version: info && info.version }))
-}
-// 下载进度节流刷新（10s 一次拉状态，避免高频 IPC）
-setInterval(async () => {
-  try { renderUpdateState(await window.moonlybox.updateState()) } catch {}
-}, 10_000)
 
-$('btn-check-update').onclick = async () => {
-  $('update-state').textContent = '检查中…'
-  await window.moonlybox.updateCheck().catch(() => {})
-  // 竞态修复：checkForUpdates 的 await 返回早于 update-downloaded 事件（状态被重置）——
-  // 稍候 1.5s 拉最终状态快照再渲染（缓存命中时 downloaded 已置回 true）
-  setTimeout(async () => {
-    try { renderUpdateState(await window.moonlybox.updateState()) } catch {}
-  }, 1500)
+// ---------- 第三列渲染 ----------
+async function renderWork(nav, arg, label2) {
+  const w = $('work')
+  if (nav === 'vault' && arg && !arg.dir) {
+    // 文件工作台：编辑/预览分栏
+    const r = await window.moonlybox.fsRead(arg.rel)
+    w.innerHTML = `
+      <div class="row" style="padding:10px 16px;border-bottom:1px solid var(--border)">
+        <strong style="font-size:13px">${arg.rel}</strong>
+        <span class="muted" style="font-size:11px;margin-left:auto" id="wf-state"></span>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <textarea id="wf-edit" spellcheck="false" style="flex:1;border:0;border-right:1px solid var(--border);padding:14px;font:12.5px/1.7 ui-monospace,monospace;resize:none;background:transparent;color:inherit;outline:none"></textarea>
+        <div id="wf-view" style="flex:1;overflow:auto;padding:16px" class="mono"></div>
+      </div>`
+    if (!r.ok) { $('wf-state').textContent = r.message; return }
+    $('wf-edit').value = r.content
+    $('wf-view').textContent = '（预览：markdown 渲染接 v0.6）\n\n' + r.content.slice(0, 2000)
+    $('wf-state').textContent = `${r.content.length} 字符 · 编辑后点保存`
+    const save = document.createElement('button')
+    save.className = 'btn'
+    save.textContent = '保存'
+    save.style.marginLeft = '8px'
+    save.onclick = async () => {
+      const wr = await window.moonlybox.fsWrite(arg.rel, $('wf-edit').value)
+      $('wf-state').textContent = wr.ok ? '✓ 已保存（sync 后上云/对账）' : '保存失败：' + wr.message
+    }
+    $('wf-state').after(save)
+    return
+  }
+  if (nav === 'vault' && arg?.dir) {
+    w.innerHTML = `<div style="padding:20px" class="muted">📁 ${arg.rel}<br/><br/>目录操作（新建/移动）接 v0.6</div>`
+    return
+  }
+  if (nav === 'cloud' && typeof arg === 'string') {
+    // 云端列表：走 daemon tools 模式调 MoonLink 工具（只读）
+    w.innerHTML = `<div style="padding:16px" class="mono" id="cloud-out">加载 ${label2}…</div>`
+    const r = await window.moonlybox.rpc('xiaoyue', { q: `请列出${label2?.replace(/^[^ ]+ /, '') ?? ''}`, tools: true }, 300_000)
+    const out = $('cloud-out')
+    if (out) out.textContent = r.event === 'done' ? (r.text || '（空）') : `失败：${r.message ?? r.text}`
+    return
+  }
+  if (nav === 'diagram') {
+    // 图示工作台（沿用 #252 三区）
+    w.innerHTML = `
+      <div class="row" style="padding:10px 16px;border-bottom:1px solid var(--border)">
+        <input id="dg-title" placeholder="图示标题" style="width:180px" />
+        <button class="btn" id="dg-save" style="font-size:12px;padding:5px 10px">保存草稿</button>
+        <button class="btn" id="dg-activate" style="background:var(--ok);font-size:12px;padding:5px 10px">存进书房</button>
+        <button class="btn" id="dg-ai" style="background:#7c3aed;font-size:12px;padding:5px 10px">✨ AI 生成</button>
+        <span id="dg-state" class="muted" style="font-size:11px;margin-left:auto"></span>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <textarea id="dg-code" spellcheck="false" style="flex:1;border:0;border-right:1px solid var(--border);padding:14px;font:12px/1.6 ui-monospace,monospace;resize:none;background:transparent;color:inherit;outline:none" placeholder="mermaid 代码（例：graph TD; A[开始] --> B[结束]）"></textarea>
+        <div id="dg-preview" style="flex:1;overflow:auto;padding:16px"></div>
+      </div>
+      <div id="dg-err" style="display:none;padding:8px 16px;font-size:12px;color:var(--err);border-top:1px solid var(--border)"></div>`
+    bindDiagramWorkbench(arg)
+    return
+  }
+  if (nav === 'xiaoyue') {
+    w.innerHTML = `
+      <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:16px;white-space:pre-wrap;user-select:text"></div>
+      <div class="row" style="padding:12px 16px;border-top:1px solid var(--border)">
+        <input id="q" placeholder="问小月（本地检索+直连回答）…" style="flex:1" />
+        <button class="btn" id="btn-ask">发送</button>
+      </div>`
+    bindChat()
+    return
+  }
+  if (nav === 'help' && arg === 'kernel') {
+    const r = await window.moonlybox.rpc('ping', {}, 10_000)
+    w.innerHTML = `<div style="padding:20px" class="mono">内核：${r.event === 'done' ? '✓ 已连接（daemon pong）' : '✗ ' + (r.message ?? '未连接')}<br/>vault：${await window.moonlybox.vaultGet() ?? '未选择'}</div>`
+    return
+  }
+  if (nav === 'help' && arg === 'about') {
+    const v = await window.moonlybox.versions()
+    w.innerHTML = `<div style="padding:20px" class="mono">壳 v${v.shell} · 内核 v${v.kernel}<br/><br/><button class="btn ghost" id="btn-check2">检查更新</button></div>`
+    $('btn-check2').onclick = () => window.moonlybox.updateCheck()
+    return
+  }
+  w.innerHTML = `<div style="padding:20px" class="muted">选择左侧项目开始</div>`
 }
 
-// 同步
-$('btn-sync').onclick = async () => {
-  log('\n[sync] 运行中…')
-  const r = await window.moonlybox.rpc('sync', {})
-  if (r.event === 'error') log(`[错误] ${r.message}`)
-  else log('[sync] 完成')
-}
-
-// ==================== 图示工作台（#252 §8） ====================
-// 三区：代码面板+实时预览（分栏，v1 不做折叠按钮——CSS flex 已分栏）+状态条
-// 生命周期：保存草稿（云端 draft，不进书房）→ 存进书房（activate 跃迁）
+// ---------- 图示工作台绑定（从旧 renderer 迁移，#252 逻辑保留） ----------
 let dgCurrentId = null
 let dgRenderTimer = null
 let dgLastError = null
 
-mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' })
+function bindDiagramWorkbench(existing) {
+  dgCurrentId = existing?.id ?? null
+  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' })
+  $('dg-code').value = existing?.content ?? ''
+  $('dg-title').value = existing?.title ?? ''
+  $('dg-state').textContent = existing?.state === 'draft' ? '📝 云端草稿' : existing?.state ? '📚 已存书房' : '新草稿'
 
-function dgExtractMermaid(src) {
-  // 源码=唯一事实源（§8.1）：正文单个 mermaid 代码块；容错裸写 mermaid 语法
-  const m = src.match(/```mermaid\n([\s\S]*?)```/)
-  return (m ? m[1] : src).trim()
-}
-
-async function dgRender() {
-  const err = $('dg-err')
-  const box = $('dg-preview')
-  const code = dgExtractMermaid($('dg-code').value)
-  if (!code) { box.innerHTML = '<span style="opacity:.4;font-size:12px">左侧输入 mermaid 即时预览</span>'; err.style.display = 'none'; return }
-  try {
-    const { svg } = await mermaid.render('dg-svg-' + Date.now(), code)
-    box.innerHTML = svg
-    err.style.display = 'none'
-  } catch (e) {
-    // parse 校验错误行内联（§8.2）——错误回喂输入侧；暴露 AI 修复按钮（错误回喂重试闭环）
-    dgLastError = String(e && e.message || e)
-    err.textContent = '⚠ ' + dgLastError.slice(0, 300)
-    err.style.display = 'block'
-    $('dg-fix').style.display = 'inline-block'
-    return
-  }
-  dgLastError = null
-  $('dg-fix').style.display = 'none'
-}
-
-$('dg-code').addEventListener('input', () => {
-  clearTimeout(dgRenderTimer)
-  dgRenderTimer = setTimeout(dgRender, 400)
-})
-
-async function dgRefreshList() {
-  const r = await window.moonlybox.rpc('diagram', { op: 'list' }, 30_000)
-  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = '列表加载失败'; return }
-  try {
-    const items = JSON.parse(r.text).data.diagrams || []
-    const sel = $('dg-list')
-    sel.innerHTML = '<option value="">— 草稿/书房图示 —</option>'
-    for (const it of items) {
-      const opt = document.createElement('option')
-      opt.value = it.id
-      opt.textContent = `${it.state === 'draft' ? '📝' : '📚'} ${it.title}`
-      opt.dataset.state = it.state
-      sel.appendChild(opt)
+  const render = async () => {
+    const err = $('dg-err')
+    const box = $('dg-preview')
+    const src = $('dg-code').value
+    const m = src.match(/```mermaid\n([\s\S]*?)```/)
+    const code = (m ? m[1] : src).trim()
+    if (!code) { box.innerHTML = '<span class="muted" style="font-size:12px">左侧输入 mermaid 即时预览</span>'; return }
+    try {
+      const { svg } = await mermaid.render('dg-' + Date.now(), code)
+      box.innerHTML = svg
+      err.style.display = 'none'
+      dgLastError = null
+    } catch (e) {
+      dgLastError = String(e?.message ?? e)
+      err.textContent = '⚠ ' + dgLastError.slice(0, 300)
+      err.style.display = 'block'
     }
-  } catch { $('dg-state').textContent = '列表解析失败' }
+  }
+  $('dg-code').addEventListener('input', () => { clearTimeout(dgRenderTimer); dgRenderTimer = setTimeout(render, 400) })
+  render()
+
+  $('dg-save').onclick = async () => {
+    const title = $('dg-title').value.trim() || '未命名图示'
+    const r = await window.moonlybox.rpc('diagram', { op: 'save', id: dgCurrentId, title, content: $('dg-code').value }, 60_000)
+    if (r.event === 'done' && r.code === 0) {
+      const d = JSON.parse(r.text).data
+      dgCurrentId = d.id
+      $('dg-state').textContent = `✓ 已保存草稿 v${d.version}`
+    } else $('dg-state').textContent = '保存失败：' + (r.text || r.message)
+  }
+  $('dg-activate').onclick = async () => {
+    if (!dgCurrentId) { $('dg-state').textContent = '先保存草稿'; return }
+    const r = await window.moonlybox.rpc('diagram', { op: 'activate', id: dgCurrentId }, 60_000)
+    if (r.event === 'done' && r.code === 0) $('dg-state').textContent = '📚 已存进书房'
+    else $('dg-state').textContent = '准入失败：' + (r.text || r.message)
+  }
+  $('dg-ai').onclick = async () => {
+    const prompt = window.prompt('描述你要画的图')
+    if (!prompt?.trim()) return
+    $('dg-ai').disabled = true
+    $('dg-state').textContent = '✨ AI 生成中…'
+    const r = await window.moonlybox.rpc('diagram', { op: 'ai', prompt }, 150_000)
+    $('dg-ai').disabled = false
+    if (r.event === 'done' && r.code === 0) {
+      $('dg-code').value = JSON.parse(r.text).source
+      dgCurrentId = null
+      $('dg-state').textContent = '✓ AI 已生成'
+      render()
+    } else $('dg-state').textContent = 'AI 生成失败：' + (r.text || r.message)
+  }
 }
 
-$('dg-list').onchange = async () => {
-  const id = $('dg-list').value
-  if (!id) { dgCurrentId = null; return }
-  const r = await window.moonlybox.rpc('diagram', { op: 'get', id }, 30_000)
-  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = '读取失败：' + r.text; return }
-  try {
-    const d = JSON.parse(r.text).data
-    dgCurrentId = d.id
-    $('dg-title').value = d.title
-    $('dg-code').value = d.content
-    $('dg-state').textContent = d.diagramState === 'draft' ? '📝 云端草稿（未进书房）' : '📚 已存书房'
-    dgRender()
-  } catch (e) { $('dg-state').textContent = '解析失败' }
+// ---------- 小月对话绑定（从旧 renderer 迁移） ----------
+function bindChat() {
+  const log = (t) => { $('log').textContent += t + '\n'; $('log').scrollTop = $('log').scrollHeight }
+  window.moonlybox.subscribe()
+  window.moonlybox.onKernelEvent((msg) => {
+    if (msg.event === 'log') log(msg.payload)
+    else if (msg.event === 'stderr') log('[stderr] ' + msg.payload)
+    else if (msg.event === 'confirm_request') renderConfirmBar(msg.id, msg.payload)
+  })
+  async function ask() {
+    const q = $('q').value.trim()
+    if (!q) return
+    $('q').value = ''
+    $('btn-ask').disabled = true
+    log(`\n你> ${q}`)
+    const tools = $('set-tools')?.checked ?? true
+    const r = await window.moonlybox.rpc('xiaoyue', tools ? { q, tools: true } : { q }, 300_000)
+    $('btn-ask').disabled = false
+    log(r.event === 'done' && r.code === 0 ? `小月> ${r.text}` : `⚠ ${r.message ?? r.text}`)
+  }
+  $('btn-ask').onclick = ask
+  $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') ask() })
 }
 
-$('dg-new').onclick = () => {
-  dgCurrentId = null
-  $('dg-title').value = ''
-  $('dg-code').value = ''
-  $('dg-state').textContent = '新草稿'
-  $('dg-preview').innerHTML = ''
-  $('dg-err').style.display = 'none'
+function renderConfirmBar(rpcId, payload) {
+  const log = $('log')
+  if (!log) return
+  const bar = document.createElement('div')
+  bar.style.cssText = 'background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.55);border-radius:8px;padding:8px;margin:6px 0'
+  bar.textContent = `⚙ ${payload.tool} ${payload.argsJson}（写操作，确认执行？）`
+  const yes = document.createElement('button')
+  yes.className = 'btn'; yes.textContent = '确认'; yes.style.marginRight = '6px'
+  const no = document.createElement('button')
+  no.className = 'btn ghost'; no.textContent = '取消'
+  yes.onclick = async () => { await window.moonlybox.confirmResponse(rpcId, true); bar.remove() }
+  no.onclick = async () => { await window.moonlybox.confirmResponse(rpcId, false); bar.remove() }
+  bar.append(yes, no)
+  log.appendChild(bar)
 }
 
-$('dg-save').onclick = async () => {
-  const title = $('dg-title').value.trim() || '未命名图示'
-  const content = $('dg-code').value
-  if (!content.trim()) { $('dg-state').textContent = '内容为空'; return }
-  $('dg-save').disabled = true
-  const r = await window.moonlybox.rpc('diagram', { op: 'save', id: dgCurrentId, title, content }, 60_000)
-  $('dg-save').disabled = false
-  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = '保存失败：' + (r.text || r.message); return }
-  try {
-    const d = JSON.parse(r.text).data
-    dgCurrentId = d.id
-    $('dg-state').textContent = `✓ 已保存草稿 v${d.version}`
-    dgRefreshList()
-  } catch { $('dg-state').textContent = '保存响应异常' }
+// ---------- 设置弹窗（需求 5：集中设置） ----------
+$('btn-avatar').onclick = () => switchNav('help')
+document.querySelectorAll('.rail-btn[data-nav="settings"]')[0].onclick = async () => {
+  const v = await window.moonlybox.vaultGet()
+  $('set-vault').value = v ?? ''
+  $('dlg-settings').showModal()
+}
+$('set-watch').addEventListener('change', (e) => window.moonlybox.setClipboardWatch(e.target.checked))
+$('set-close').onclick = () => $('dlg-settings').close()
+$('set-vault-pick').onclick = async () => {
+  const r = await window.moonlybox.vaultPick()
+  if (r.ok) {
+    $('set-vault').value = r.root
+    // 全链生效：daemon 用新 env 需重启（exit 后下轮自动 spawn 读新 env）
+    $('set-vault').after(Object.assign(document.createElement('span'), { textContent: '✓ 已保存（内核重启后生效）', className: 'muted', style: 'font-size:11px' }))
+  }
+}
+$('set-byok').onclick = () => {
+  // BYOK 三步（setup 走 CLI 交互，壳端 v0.6 做 IPC 表单；此处引导）
+  window.alert('在终端运行：moonlybox xiaoyue --setup（三项：BaseUrl/Model/Key，key 只存本机钥匙串）')
 }
 
-$('dg-activate').onclick = async () => {
-  if (!dgCurrentId) { $('dg-state').textContent = '先保存草稿'; return }
-  $('dg-activate').disabled = true
-  const r = await window.moonlybox.rpc('diagram', { op: 'activate', id: dgCurrentId }, 60_000)
-  $('dg-activate').disabled = false
-  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = '准入失败：' + (r.text || r.message); return }
-  $('dg-state').textContent = '📚 已存进书房'
-  dgRefreshList()
+// ---------- 升级灯（需求 4：有更新=黄点；就绪=绿点闪烁；点击确认安装） ----------
+function setUpgradeState(state, version) {
+  const btn = $('btn-upgrade')
+  const dot = btn.querySelector('.dot')
+  if (state === 'available') { dot.style.display = 'block'; btn.classList.remove('ready'); btn.title = `新版本 v${version} 下载中…` }
+  else if (state === 'ready') { dot.style.display = 'block'; btn.classList.add('ready'); btn.title = `v${version} 已就绪，点击安装并重启` }
+  else { dot.style.display = 'none'; btn.classList.remove('ready'); btn.title = '检查更新' }
+}
+window.moonlybox.onUpdateReady((msg) => setUpgradeState('ready', msg.version))
+$('btn-upgrade').onclick = async () => {
+  const st = await window.moonlybox.updateState()
+  if (st?.downloaded) {
+    if (window.confirm(`v${st.version} 已就绪，安装并重启？`)) window.moonlybox.updateInstall()
+  } else {
+    setUpgradeState('available', st?.version ?? '')
+    await window.moonlybox.updateCheck()
+  }
 }
 
-// T4：AI 生成（描述→源码）与 AI 修复（源码+错误→修好的源码）——错误回喂重试闭环 §8.2
-$('dg-ai').onclick = async () => {
-  const prompt = window.prompt('描述你要画的图（例：登录流程：输入账号密码→校验→成功进首页/失败提示错误）')
-  if (!prompt || !prompt.trim()) return
-  $('dg-ai').disabled = true
-  $('dg-state').textContent = '✨ AI 生成中…'
-  const r = await window.moonlybox.rpc('diagram', { op: 'ai', prompt }, 150_000)
-  $('dg-ai').disabled = false
-  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = 'AI 生成失败：' + (r.text || r.message); return }
-  try {
-    const d = JSON.parse(r.text)
-    $('dg-code').value = d.source
-    $('dg-title').value = $('dg-title').value.trim() || prompt.slice(0, 30)
-    dgCurrentId = null // 新生成=新草稿
-    $('dg-state').textContent = '✓ AI 已生成（检查后保存草稿）'
-    dgRender()
-  } catch { $('dg-state').textContent = 'AI 响应解析失败' }
-}
-
-$('dg-fix').onclick = async () => {
-  const src = $('dg-code').value
-  if (!src.trim() || !dgLastError) return
-  $('dg-fix').disabled = true
-  $('dg-state').textContent = '✨ AI 修复中…'
-  const r = await window.moonlybox.rpc('diagram', { op: 'fix', prompt: src, error: dgLastError }, 150_000)
-  $('dg-fix').disabled = false
-  if (r.event !== 'done' || r.code !== 0) { $('dg-state').textContent = 'AI 修复失败：' + (r.text || r.message); return }
-  try {
-    const d = JSON.parse(r.text)
-    $('dg-code').value = d.source
-    $('dg-state').textContent = '✓ AI 已修复（检查预览）'
-    dgRender() // 修好后预览若仍错会再次亮出 fix 按钮——闭环
-  } catch { $('dg-state').textContent = 'AI 响应解析失败' }
-}
-
-// tab 切换（小月 / 图示）
-function switchTab(name) {
-  const chat = name === 'chat'
-  $('view-chat').style.display = chat ? 'flex' : 'none'
-  $('view-diagram').style.display = chat ? 'none' : 'flex'
-  $('tab-chat').style.color = chat ? '#4f46e5' : 'inherit'
-  $('tab-chat').style.opacity = chat ? 1 : .55
-  $('tab-diagram').style.color = chat ? 'inherit' : '#4f46e5'
-  $('tab-diagram').style.opacity = chat ? .55 : 1
-  if (!chat) { dgRefreshList(); dgRender() }
-}
-$('tab-chat').onclick = () => switchTab('chat')
-$('tab-diagram').onclick = () => switchTab('diagram')
+// ---------- 版本显示 + 首屏 ----------
+(async () => {
+  const v = await window.moonlybox.versions()
+  $('btn-avatar').textContent = '未'
+  $('btn-avatar').title = '未登录（点击了解账号）'
+  // 首屏：未选 vault → 引导；否则进书房
+  const vault = await window.moonlybox.vaultGet()
+  if (!vault) {
+    switchNav('settings')
+    $('dlg-settings').showModal()
+  } else {
+    switchNav('vault')
+  }
+})()

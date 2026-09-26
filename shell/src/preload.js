@@ -18,6 +18,15 @@ contextBridge.exposeInMainWorld('moonlybox', {
   onUpdateReady: (cb) => ipcRenderer.on('shell:updateReady', (_e, msg) => cb(msg)),
   // P2：UI 确认制——renderer 对挂起的 confirm_request 回传结果
   confirmResponse: (rpcId, value) => ipcRenderer.invoke('kernel:confirmResponse', { rpcId, value }),
+  // #253：自绘标题栏窗口控制 + vault 选择/读取 + vault 文件树（沙箱）
+  winMin: () => ipcRenderer.invoke('win:min'),
+  winMax: () => ipcRenderer.invoke('win:max'),
+  winClose: () => ipcRenderer.invoke('win:close'),
+  vaultGet: () => ipcRenderer.invoke('vault:get'),
+  vaultPick: () => ipcRenderer.invoke('vault:pick'),
+  fsList: (rel) => ipcRenderer.invoke('fs:list', rel),
+  fsRead: (rel) => ipcRenderer.invoke('fs:read', rel),
+  fsWrite: (rel, content) => ipcRenderer.invoke('fs:write', rel, content),
   // T3：剪贴板监听开关 / 手动采集 / 协议注册状态
   setClipboardWatch: (on) => ipcRenderer.invoke('shell:clipboardWatch', on),
   capture: (text) => ipcRenderer.invoke('shell:capture', text),
