@@ -353,7 +353,15 @@ async function renderWork(nav, arg, label2) {
           stateBar.textContent = '登录态注入失败：' + String(e2?.message ?? e2).slice(0, 80)
         }
       }
-      wv.loadURL(webBase + arg.url)
+      // 路由跳转：优先 SPA 内 hash 跳（与应用内点击等价，same-document）；loadURL 对 hash-only
+      // 差异可能被 Chromium 当 same-document 忽略导致停在落地页（#253.34 用户实测营销页）
+      try {
+        await wv.executeJavaScript(`location.hash = ${JSON.stringify(arg.url.startsWith('/#') ? arg.url.slice(1) : arg.url)}; location.hash`)
+        stateBar.textContent = '路由跳转：' + (wv.getURL() || '')
+      } catch {
+        await wv.loadURL(webBase + arg.url)
+        stateBar.textContent = '路由跳转（loadURL）：' + (wv.getURL() || '')
+      }
     })
     wv.src = webBase + '/#/login' // 先加载域（localStorage 注入需同源），dom-ready 后跳目标路由
     return
