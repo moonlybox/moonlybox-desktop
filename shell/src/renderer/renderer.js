@@ -172,6 +172,36 @@ for (const b of document.querySelectorAll('#rail .rail-btn')) {
   if (nav && ICON_PATHS[nav]) b.innerHTML = navIconSvg(nav)
 }
 
+// ---------- 自定义 tooltip（#256：data-tip 驱动单例浮层，替代原生 title 的延迟+不可控样式） ----------
+(() => {
+  const tip = document.getElementById('tooltip')
+  let cur = null
+  const show = (el) => {
+    const text = el.getAttribute('data-tip')
+    if (!text) return
+    tip.textContent = text
+    tip.classList.add('show')
+    const r = el.getBoundingClientRect()
+    // 默认右侧弹出（rail 窄栏贴左边）；越界回退左侧
+    const tw = tip.offsetWidth, th = tip.offsetHeight
+    let x = r.right + 8, y = r.top + r.height / 2 - th / 2
+    if (x + tw > window.innerWidth - 8) x = r.left - tw - 8
+    y = Math.max(8, Math.min(window.innerHeight - th - 8, y))
+    tip.style.left = x + 'px'
+    tip.style.top = y + 'px'
+    cur = el
+  }
+  const hide = () => { tip.classList.remove('show'); cur = null }
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('[data-tip]')
+    if (el === cur) return
+    if (el) show(el)
+    else hide()
+  })
+  document.addEventListener('mousedown', hide)
+  window.addEventListener('blur', hide)
+})();  // 下行若接 IIFE/字面量须分号（ASI 纪律）
+
 function renderFrameTabs() {
   const box = $('frame-tabs')
   box.innerHTML = ''
@@ -225,8 +255,8 @@ async function renderList(nav) {
       const el = document.createElement('div')
       const active = cat.id === currentSetCat
       el.className = 'set-cat' + (active ? ' active' : '')
-      const subText = cat.subs ? (currentSetSub ? (SET_SUB_LABELS[currentSetSub] ?? '') : '平台 API · 本地模型 · 自定义') : ''
-      el.innerHTML = `${setIconSvg(cat.id)}<span>${cat.label}</span>${subText ? `<span class="sub">${subText}</span>` : ''}`
+      // #256 用户：第二列只留图标+名称，去掉右侧对齐的二级说明文字
+      el.innerHTML = `${setIconSvg(cat.id)}<span>${cat.label}</span>`
       el.onclick = () => {
         currentSetCat = cat.id
         currentSetSub = null

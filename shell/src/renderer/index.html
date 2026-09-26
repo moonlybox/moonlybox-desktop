@@ -105,7 +105,9 @@
       background: var(--accent); color: #fff;
     }
     #rail .rail-btn.active svg { stroke-width: 2.2; }
-    #rail .rail-btn:hover { background: var(--hover); }
+    /* 悬停高亮色仅非选中按钮——active 保持 accent 实底（#256 用户：悬停不能盖掉选中徽章） */
+    #rail .rail-btn:hover:not(.active) { background: var(--hover); }
+    #rail .rail-btn.active:hover { background: var(--accent); }
     #rail .grow { flex: 1; }
 
     /* 第二列：功能列表 */
@@ -138,6 +140,13 @@
     .set-field > label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 5px; }
     .set-field input { width: 100%; }
     .set-row { display: flex; gap: 8px; align-items: center; margin: 14px 0; flex-wrap: wrap; }
+    /* ===== 自定义 tooltip（#256：原生 title 延迟且样式不可控——data-tip 属性驱动单例浮层） ===== */
+    #tooltip {
+      position: fixed; z-index: 9999; pointer-events: none; opacity: 0; transition: opacity .12s;
+      background: #1e293b; color: #f1f5f9; font-size: 12px; line-height: 1.4; padding: 5px 9px;
+      border-radius: 6px; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,.25); max-width: 260px;
+    }
+    #tooltip.show { opacity: 1; }
     .set-hint { font-size: 12px; line-height: 1.6; }
     .set-hint.ok { color: var(--ok); }
     .set-hint.err { color: var(--err); }
@@ -258,26 +267,27 @@
     <div class="tabs" id="frame-tabs"></div>
     <span class="spacer"></span>
     <div class="win-controls">
-      <button id="btn-upgrade" title="检查更新"><span id="upgrade-icon">⟳</span><span id="upgrade-text"></span><span class="dot"></span></button>
-      <button id="win-min" title="最小化"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
-      <button id="win-max" title="最大化"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></button>
-      <button id="win-close" title="关闭"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <button id="btn-upgrade" data-tip="检查更新"><span id="upgrade-icon">⟳</span><span id="upgrade-text"></span><span class="dot"></span></button>
+      <button id="win-min" data-tip="最小化"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+      <button id="win-max" data-tip="最大化"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></button>
+      <button id="win-close" data-tip="关闭"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>
   </div>
 
+  <div id="tooltip"></div>
   <div id="body">
     <!-- 第一列：图标栏（SVG 描边图标系统——与云端 manifest 图标同一套，保证风格统一） -->
     <nav id="rail">
-      <button class="avatar" id="btn-avatar" title="登录/账号">?</button>
+      <button class="avatar" id="btn-avatar" data-tip="登录/账号">?</button>
       <div class="sep"></div>
       <!-- 图标由 renderer.js navIconSvg 注入（单一源） -->
-      <button class="rail-btn" data-nav="vault" title="书房（本地）"></button>
-      <button class="rail-btn" data-nav="cloud" title="云端"></button>
-      <button class="rail-btn" data-nav="diagram" title="图示"></button>
-      <button class="rail-btn" data-nav="xiaoyue" title="小月"></button>
+      <button class="rail-btn" data-nav="vault" data-tip="书房（本地）"></button>
+      <button class="rail-btn" data-nav="cloud" data-tip="云端"></button>
+      <button class="rail-btn" data-nav="diagram" data-tip="图示"></button>
+      <button class="rail-btn" data-nav="xiaoyue" data-tip="小月"></button>
       <span class="grow"></span>
-      <button class="rail-btn" data-nav="help" title="帮助"></button>
-      <button class="rail-btn" data-nav="settings" title="设置"></button>
+      <button class="rail-btn" data-nav="help" data-tip="帮助"></button>
+      <button class="rail-btn" data-nav="settings" data-tip="设置"></button>
     </nav>
 
     <!-- 第二列：功能列表（内容由 JS 按 nav 填充） -->
@@ -287,7 +297,7 @@
     </section>
 
     <!-- 列宽拖柄 -->
-    <div id="col-resizer" title="拖动调整列宽"></div>
+    <div id="col-resizer" data-tip="拖动调整列宽"></div>
 
     <!-- 第三列：工作台（各页帧共用容器，JS 按 nav+selection 渲染） -->
     <section id="work"></section>
