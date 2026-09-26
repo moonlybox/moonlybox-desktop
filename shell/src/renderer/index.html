@@ -100,10 +100,9 @@
     #titlebar .win-controls #win-close:hover { background: #dc2626; color: #fff; }
     /* 云端列表 manifest 图标同套描边 */
     .cloud-ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-    /* 选中=accent 实底白图标（窄栏强对比，参考网页端 primary 选中态的强化版） */
+    /* 选中=accent 实底白图标（窄栏强对比；无外发光——#256 用户：高亮图标不要阴影扩散） */
     #rail .rail-btn.active {
       background: var(--accent); color: #fff;
-      box-shadow: 0 2px 8px rgba(79,70,229,.45);
     }
     #rail .rail-btn.active svg { stroke-width: 2.2; }
     #rail .rail-btn:hover { background: var(--hover); }
