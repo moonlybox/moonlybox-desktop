@@ -37,7 +37,7 @@
     #titlebar .frame-tab:hover { color: var(--fg); }
     #titlebar .frame-tab.active {
       background: var(--bg2); color: var(--fg); font-weight: 600;
-      box-shadow: 0 1px 4px rgba(0,0,0,.18), inset 0 -2px 0 0 var(--accent);
+      box-shadow: 0 1px 4px rgba(0,0,0,.18); /* 纯色扁平（用户 #253.26：去底部描边），仅留投影表达浮起 */
     }
     #titlebar .spacer { flex: 1; }
     #titlebar .win-controls { display: flex; gap: 2px; -webkit-app-region: no-drag; }
