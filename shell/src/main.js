@@ -25,8 +25,9 @@ let win = null
 
 // ---------- 内核定位：开发=仓根 bun 源；打包=resources/kernel/moonlybox 单文件 ----------
 function kernelCmd() {
-  // 打包态：resources/kernel/ 下 Windows=moonlybox.exe、mac/linux=moonlybox
-  if (process.resourcesPath) {
+  // 打包态判定用 app.isPackaged（dev 下 electron 也有 resourcesPath——指向 node_modules/electron/dist，
+  // 用它判断会把 dev 误判为打包态 →「内核缺失」假警报；0.5.0/0.5.1 dev 首跑即此坑）
+  if (app.isPackaged) {
     const exe = path.join(process.resourcesPath, 'kernel', process.platform === 'win32' ? 'moonlybox.exe' : 'moonlybox')
     if (fs.existsSync(exe)) return { cmd: exe, base: [] }
     // 内核缺失=打包缺陷，弹可见错误而非静默回退 'bun'（打包态无 bun，ENOENT 用户看不懂）
@@ -35,7 +36,9 @@ function kernelCmd() {
     app.quit()
     return { cmd: 'missing-kernel', base: [] }
   }
-  return { cmd: 'bun', base: ['run', 'src/cli.ts'] } // 开发态（cwd=REPO_ROOT）
+  // 开发态：bun 直跑仓内内核源码（cwd=REPO_ROOT；bun 不在 PATH 时 spawn ENOENT，
+  // daemon exit 事件会以「daemon exited」暴露——命令卡已含 bun install 前置）
+  return { cmd: 'bun', base: ['run', 'src/cli.ts'] }
 }
 
 // 跨平台用户目录：Windows=USERPROFILE，unix=HOME（Windows 无 HOME，反之亦然）
