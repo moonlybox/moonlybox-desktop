@@ -137,6 +137,7 @@ const CLOUD_ICONS = {
 const cloudIconSvg = (name) => `<svg class="cloud-ico" viewBox="0 0 24 24">${CLOUD_ICONS[name] ?? CLOUD_ICONS.box}</svg>`
 // 云端隐藏项（服务端 manifest 与客户端白名单双保险；后续云端放开再删）
 const CLOUD_HIDDEN = new Set(['moments', 'square'])
+let currentCloudId = null // 云端列当前浏览项（active 高亮恢复用，#253.45）
 
 async function renderList(nav) {
   const head = $('list-head')
@@ -181,9 +182,15 @@ async function renderList(nav) {
       for (const it of items) {
         if (CLOUD_HIDDEN.has(it.id)) continue // 云端隐藏的功能本地不同步出现
         const el = document.createElement('div')
-        el.className = 'tree-item'
+        el.className = 'tree-item' + (currentCloudId === it.id ? ' active' : '')
+        el.dataset.cid = it.id
         el.innerHTML = `${cloudIconSvg(it.icon)}<span>${it.label}</span>`
-        el.onclick = () => renderWork('cloud', it)
+        el.onclick = () => {
+          body.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
+          el.classList.add('active')
+          currentCloudId = it.id
+          renderWork('cloud', it)
+        }
         body.appendChild(el)
       }
     } catch {
