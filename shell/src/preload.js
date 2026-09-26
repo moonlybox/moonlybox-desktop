@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('moonlybox', {
   // #253：自绘标题栏窗口控制 + vault 选择/读取 + vault 文件树（沙箱）
   winMin: () => ipcRenderer.invoke('win:min'),
   winMax: () => ipcRenderer.invoke('win:max'),
+  onWinState: (cb) => { const h = (_e, st) => cb(st); ipcRenderer.on('shell:winState', h); return () => ipcRenderer.removeListener('shell:winState', h) },
   winClose: () => ipcRenderer.invoke('win:close'),
   vaultGet: () => ipcRenderer.invoke('vault:get'),
   vaultPick: () => ipcRenderer.invoke('vault:pick'),

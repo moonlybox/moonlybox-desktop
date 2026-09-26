@@ -297,6 +297,10 @@ app.whenReady().then(() => {
   // ---------- #253：自绘标题栏窗口控制 + vault 目录选择 + vault 文件树（沙箱内） ----------
   ipcMain.handle('win:min', () => win?.minimize())
   ipcMain.handle('win:max', () => { if (!win) return; win.isMaximized() ? win.unmaximize() : win.maximize() })
+  // #253.28：窗口状态变化推 renderer（最大化按钮切「最大化/还原」图标）
+  const pushWinState = () => { try { win?.webContents.send('shell:winState', { maximized: win.isMaximized() }) } catch {} }
+  win?.on('maximize', pushWinState)
+  win?.on('unmaximize', pushWinState)
   ipcMain.handle('win:close', () => win?.close())
   ipcMain.handle('upgrade:click', () => { /* renderer 点升级灯：触发检查更新 */ try { require('./updater').checkNow?.() } catch {} return win?.webContents.send('shell:updateReady', {}) })
 

@@ -30,6 +30,14 @@ window.addEventListener('unhandledrejection', (e) => {
 // ---------- 窗口控制 ----------
 $('win-min').onclick = () => window.moonlybox.winMin()
 $('win-max').onclick = () => window.moonlybox.winMax()
+// 最大化/还原图标随窗口状态切换（#253.28）
+const ICON_MAX = '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>'
+const ICON_RESTORE = '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg>'
+window.moonlybox.onWinState?.((st) => {
+  const btn = $('win-max')
+  btn.innerHTML = st?.maximized ? ICON_RESTORE : ICON_MAX
+  btn.title = st?.maximized ? '还原' : '最大化'
+})
 $('win-close').onclick = () => window.moonlybox.winClose()
 
 // ---------- MDI 页帧（标题栏 tab ↔ 图标栏联动） ----------
