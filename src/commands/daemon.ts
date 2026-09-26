@@ -157,7 +157,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             const email = meBody?.data?.user?.email ?? meBody?.data?.email
             const userId = meBody?.data?.user?.id ?? meBody?.data?.id
             saveCredentials({
-              clientId: creds.clientId,
+              clientId: clientIdForPoll,
               accessToken: tokens.access_token,
               accessTokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
               refreshToken: tokens.refresh_token,
