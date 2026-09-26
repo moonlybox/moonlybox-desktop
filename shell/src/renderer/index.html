@@ -122,13 +122,20 @@
     input, textarea, select { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 13px; background: var(--bg2); color: var(--fg); }
     .muted { color: var(--muted); }
     .mono { font: 12px/1.6 ui-monospace, monospace; }
-    .tree-item { padding: 5px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* 列表项（云端功能/书房树共用）：网页端侧栏规范（px-3 py-2.5 text-sm font-medium rounded-xl） */
+    .tree-item {
+      padding: 7px 10px; margin: 1px 0; border-radius: 8px; cursor: pointer;
+      font-size: 13px; line-height: 1.5; display: flex; align-items: center; gap: 8px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: background .12s;
+    }
     .tree-item:hover { background: var(--hover); }
     .tree-item.active {
-      background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); font-weight: 600;
+      background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-weight: 600;
       box-shadow: inset 3px 0 0 0 var(--accent); /* 左侧指示条（网页端侧栏同款） */
     }
     .tree-item.active .cloud-ico { color: var(--accent); }
+    #list-body { display: flex; flex-direction: column; gap: 2px; }
     .tree-item .dir { font-weight: 600; }
     .row { display: flex; gap: 8px; align-items: center; }
     /* 全局弹窗规范（用户反馈：所有弹窗需界面居中）——UA 的 dialog::backdrop modal 已固定定位

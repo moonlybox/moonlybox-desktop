@@ -182,9 +182,6 @@ async function renderList(nav) {
         if (CLOUD_HIDDEN.has(it.id)) continue // 云端隐藏的功能本地不同步出现
         const el = document.createElement('div')
         el.className = 'tree-item'
-        el.style.display = 'flex'
-        el.style.alignItems = 'center'
-        el.style.gap = '8px'
         el.innerHTML = `${cloudIconSvg(it.icon)}<span>${it.label}</span>`
         el.onclick = () => renderWork('cloud', it)
         body.appendChild(el)
