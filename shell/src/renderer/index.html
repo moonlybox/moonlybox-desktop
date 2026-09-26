@@ -40,12 +40,16 @@
       font-size: 12px; cursor: pointer; border-radius: 6px;
     }
     #titlebar .win-controls button:hover { background: var(--hover); }
-    #btn-upgrade { position: relative; }
+    #btn-upgrade { position: relative; display: flex; align-items: center; gap: 5px; padding: 0 10px; opacity: .55; }
+    #btn-upgrade:hover { opacity: 1; }
+    #btn-upgrade.active { opacity: 1; color: var(--warn); font-weight: 600; }
+    #btn-upgrade.ready { color: var(--ok); }
     #btn-upgrade .dot {
-      position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%;
+      position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%;
       background: var(--warn); display: none;
     }
     #btn-upgrade.ready .dot { background: var(--ok); animation: pulse 1.2s infinite; }
+    #upgrade-text { font-size: 12px; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 
     /* ===== 主体 3 列 ===== */
@@ -100,7 +104,7 @@
     <div class="tabs" id="frame-tabs"></div>
     <span class="spacer"></span>
     <div class="win-controls">
-      <button id="btn-upgrade" title="检查更新">⟳<span class="dot"></span></button>
+      <button id="btn-upgrade" title="检查更新"><span id="upgrade-icon">⟳</span><span id="upgrade-text"></span><span class="dot"></span></button>
       <button id="win-min" title="最小化">—</button>
       <button id="win-max" title="最大化">□</button>
       <button id="win-close" title="关闭">✕</button>

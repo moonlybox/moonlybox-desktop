@@ -352,18 +352,45 @@ $('set-byok').onclick = () => {
 function setUpgradeState(state, version) {
   const btn = $('btn-upgrade')
   const dot = btn.querySelector('.dot')
-  if (state === 'available') { dot.style.display = 'block'; btn.classList.remove('ready'); btn.title = `新版本 v${version} 下载中…` }
-  else if (state === 'ready') { dot.style.display = 'block'; btn.classList.add('ready'); btn.title = `v${version} 已就绪，点击安装并重启` }
-  else { dot.style.display = 'none'; btn.classList.remove('ready'); btn.title = '检查更新' }
+  const text = $('upgrade-text')
+  if (state === 'available') {
+    dot.style.display = 'block'; btn.classList.remove('ready'); btn.classList.add('active')
+    text.textContent = '更新中'
+    btn.title = `新版本 v${version} 后台下载中…`
+  } else if (state === 'ready') {
+    dot.style.display = 'block'; btn.classList.add('ready', 'active')
+    text.textContent = '重启更新'
+    btn.title = `v${version} 已就绪，点击安装并重启`
+  } else {
+    dot.style.display = 'none'; btn.classList.remove('ready', 'active')
+    text.textContent = ''
+    btn.title = '检查更新'
+  }
 }
 window.moonlybox.onUpdateReady((msg) => setUpgradeState('ready', msg.version))
+// 首屏恢复状态（重启后 downloaded/available 不丢）
+;(async () => {
+  try {
+    const st = await window.moonlybox.updateState()
+    if (st?.downloaded) setUpgradeState('ready', st.version)
+    else if (st?.available) setUpgradeState('available', st.version)
+  } catch {}
+})()
 $('btn-upgrade').onclick = async () => {
   const st = await window.moonlybox.updateState()
   if (st?.downloaded) {
     if (window.confirm(`v${st.version} 已就绪，安装并重启？`)) window.moonlybox.updateInstall()
-  } else {
-    setUpgradeState('available', st?.version ?? '')
-    await window.moonlybox.updateCheck()
+    return
+  }
+  setUpgradeState('available', st?.version ?? '')
+  $('upgrade-text').textContent = '检查中…'
+  const after = await window.moonlybox.updateCheck()
+  if (after?.downloaded) setUpgradeState('ready', after.version)
+  else if (after?.available) setUpgradeState('available', after.version)
+  else {
+    setUpgradeState('none', '')
+    $('upgrade-text').textContent = '最新'
+    setTimeout(() => { if (!$('btn-upgrade').classList.contains('active')) $('upgrade-text').textContent = '' }, 3000)
   }
 }
 
