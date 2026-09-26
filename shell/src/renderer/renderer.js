@@ -59,13 +59,24 @@ async function renderList(nav) {
     }
     await renderTree(body, '', 0)
   } else if (nav === 'cloud') {
-    // 云端功能（MoonLink 工具面对应；只读列表=可验证 tools 落云端）
-    for (const [label, tool] of [['🔖 收藏', 'list_bookmarks'], ['🏷️ 标签', 'list_tags'], ['🗒️ 便签墙', 'list_stickies'], ['✅ 待办', 'list_todos']]) {
-      const item = document.createElement('div')
-      item.className = 'tree-item'
-      item.textContent = label
-      item.onclick = () => renderWork('cloud', tool, label)
-      body.appendChild(item)
+    // #254：云端功能=服务端下发 manifest（功能升级/新增零客户端发版）
+    const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
+    if (r.event !== 'done' || r.code !== 0) {
+      body.innerHTML = '<div class="muted" style="padding:10px">导航加载失败：' + (r.text || r.message) + '</div>'
+      return
+    }
+    try {
+      const { nav: items } = JSON.parse(r.text).data
+      const ICONS = { bookmark: '🔖', tag: '🏷️', sticky: '🗒️', todo: '✅', library: '📚', entity: '🧠', moments: '📣', square: '🏙️' }
+      for (const it of items) {
+        const el = document.createElement('div')
+        el.className = 'tree-item'
+        el.textContent = `${ICONS[it.icon] ?? '📦'} ${it.label}`
+        el.onclick = () => renderWork('cloud', it)
+        body.appendChild(el)
+      }
+    } catch {
+      body.innerHTML = '<div class="muted" style="padding:10px">导航解析失败（登录后可用）</div>'
     }
   } else if (nav === 'diagram') {
     const r = await window.moonlybox.rpc('diagram', { op: 'list' }, 30_000)
@@ -152,12 +163,21 @@ async function renderWork(nav, arg, label2) {
     w.innerHTML = `<div style="padding:20px" class="muted">📁 ${arg.rel}<br/><br/>目录操作（新建/移动）接 v0.6</div>`
     return
   }
-  if (nav === 'cloud' && typeof arg === 'string') {
-    // 云端列表：走 daemon tools 模式调 MoonLink 工具（只读）
-    w.innerHTML = `<div style="padding:16px" class="mono" id="cloud-out">加载 ${label2}…</div>`
-    const r = await window.moonlybox.rpc('xiaoyue', { q: `请列出${label2?.replace(/^[^ ]+ /, '') ?? ''}`, tools: true }, 300_000)
-    const out = $('cloud-out')
-    if (out) out.textContent = r.event === 'done' ? (r.text || '（空）') : `失败：${r.message ?? r.text}`
+  if (nav === 'cloud' && arg && typeof arg === 'object') {
+    // #254：云端功能页=WebView 承载 web SPA（布局/交互/多视图=web 端现成；升级零客户端发版）
+    w.innerHTML = `<webview id="cloud-wv" style="flex:1;width:100%;height:100%" src="about:blank"></webview>`
+    const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
+    if (r.event !== 'done' || r.code !== 0) { w.innerHTML = `<div style="padding:16px" class="muted">加载失败：${r.text ?? ''}</div>`; return }
+    const { webBase, token } = JSON.parse(r.text)
+    const wv = $('cloud-wv')
+    wv.addEventListener('dom-ready', async () => {
+      // 登录态注入：OAuth access token → web SPA localStorage（mf_token）
+      if (token) {
+        await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
+      }
+      wv.loadURL(webBase + arg.url)
+    })
+    wv.src = webBase + '/#/login' // 先加载域（localStorage 注入需同源），dom-ready 后跳目标路由
     return
   }
   if (nav === 'diagram') {

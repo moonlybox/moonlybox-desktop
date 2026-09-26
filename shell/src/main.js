@@ -125,6 +125,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       preload: path.join(__dirname, 'preload.js'),
+      webviewTag: true, // #254：云端功能区 WebView 承载 web SPA（服务端下发 manifest）
     },
   })
   Menu.setApplicationMenu(null)

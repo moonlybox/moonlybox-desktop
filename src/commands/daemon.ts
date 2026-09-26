@@ -24,6 +24,7 @@ import { cmdSync } from '../commands/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
 import { apiGet, apiPost } from '../lib/api'
+import { loadCredentials } from '../lib/auth'
 import type { CommandOptions } from '../lib/runner'
 
 type Json = Record<string, unknown>
@@ -145,6 +146,16 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         } else if (op === 'get') {
           const res = await apiGet<any>(`/library/diagrams/${encodeURIComponent(String(args.id ?? ''))}`)
           text = JSON.stringify(res)
+        } else if (op === 'nav') {
+          // #254：云端功能导航 manifest（服务端下发——功能升级/新增零客户端发版）
+          try {
+            const res = await apiGet<any>('/client/nav')
+            const creds = loadCredentials()
+            text = JSON.stringify({ ok: true, data: res.data, token: creds?.accessToken ?? null })
+          } catch (e: any) {
+            code = 1
+            text = String(e?.message ?? e)
+          }
         } else if (op === 'ai' || op === 'fix') {
           // T4：AI 生成/修复图示（§8.2 AI 生成=小月 BYOK 通道，错误回喂重试闭环）
           if (!byokReady()) {
