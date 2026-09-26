@@ -125,7 +125,7 @@
     /* ===== 设置中心（#253.48：3 列化，复用主布局；不再弹窗） ===== */
     #settings-cat { padding: 6px; }
     .set-cat {
-      padding: 7px 10px; margin: 1px 0; border-radius: 8px; cursor: pointer;
+      padding: 7px 10px; margin: 2px 0; border-radius: 8px; cursor: pointer;
       font-size: 13px; line-height: 1.5; display: flex; align-items: center; gap: 8px;
       color: var(--fg); transition: background .12s; white-space: nowrap; overflow: hidden;
     }
@@ -216,14 +216,18 @@
       padding: 7px 10px; margin: 1px 0; border-radius: 8px; cursor: pointer;
       font-size: 13px; line-height: 1.5; display: flex; align-items: center; gap: 8px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      transition: background .12s;
+      transition: background .12s; flex: none;
     }
+    /* 子树容器：不参与 list-body 的 gap 节奏（间距单源=tree-item 自身 margin），展开/收起行距一致 */
+    .tree-children { display: flex; flex-direction: column; min-width: 0; }
+    #list-body > .tree-children { margin: 0; }
     .tree-item:hover { background: var(--hover); }
     .tree-item.active {
       background: var(--active-bg); color: var(--active-fg); font-weight: 600;
     }
     .tree-item.active .cloud-ico { color: var(--active-fg); }
-    #list-body { display: flex; flex-direction: column; gap: 2px; }
+    /* 间距单源：tree-item margin（gap 会在展开后因 .tree-children 隔层失效造成行距不一致——#256） */
+    #list-body { display: flex; flex-direction: column; }
     .tree-item .dir { font-weight: 600; }
     .row { display: flex; gap: 8px; align-items: center; }
     /* 全局弹窗规范（用户反馈：所有弹窗需界面居中）——UA 的 dialog::backdrop modal 已固定定位
