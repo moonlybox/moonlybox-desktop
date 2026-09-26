@@ -24,3 +24,6 @@ dist-shell/
 AGENTS.md
 src/lib/native-bindings.ts
 assets/ort-binding.blob
+
+# 本地调试脚本（用户自用，不入仓）
+*.ps1
