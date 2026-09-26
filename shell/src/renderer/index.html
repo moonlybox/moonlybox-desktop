@@ -27,13 +27,23 @@
       -webkit-app-region: drag;
     }
     #titlebar .brand { font-size: 13px; font-weight: 700; }
-    #titlebar .tabs { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+    /* 页帧 tab=浏览器页签范式：栏底稍暗，选中 tab 亮底浮起（亮度差而非色相差——用户 #253.23） */
+    #titlebar .tabs {
+      display: flex; gap: 4px; -webkit-app-region: no-drag;
+      background: color-mix(in srgb, var(--fg) 7%, transparent);
+      padding: 4px; border-radius: 9px;
+    }
     #titlebar .frame-tab {
       border: 0; background: transparent; color: var(--muted); font-size: 12.5px;
       padding: 5px 12px; border-radius: 7px; cursor: pointer;
+      display: flex; align-items: center;
     }
-    #titlebar .frame-tab.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); font-weight: 700; }
-    #titlebar .frame-tab { display: flex; align-items: center; }
+    #titlebar .frame-tab:hover { color: var(--fg); }
+    #titlebar .frame-tab.active {
+      background: var(--bg2); color: var(--fg); font-weight: 600;
+      box-shadow: 0 1px 4px rgba(0,0,0,.18);
+    }
+    #titlebar .frame-tab.active svg { color: var(--accent); }
     #titlebar .spacer { flex: 1; }
     #titlebar .win-controls { display: flex; gap: 2px; -webkit-app-region: no-drag; }
     #titlebar .win-controls button {
