@@ -27,10 +27,10 @@
       -webkit-app-region: drag;
     }
     #titlebar .brand { font-size: 13px; font-weight: 700; }
-    /* 页帧 tab（#253.24 用户：只要一层背景）——去掉凹槽容器底，active tab 直接亮底浮起于标题栏 */
+    /* 页帧 tab（#253.25 用户）：active 图标/文字同色；inactive 常驻底色（页帧占位感），与 active 亮底成差 */
     #titlebar .tabs { display: flex; gap: 4px; -webkit-app-region: no-drag; }
     #titlebar .frame-tab {
-      border: 0; background: transparent; color: var(--muted); font-size: 12.5px;
+      border: 0; background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--muted); font-size: 12.5px;
       padding: 5px 12px; border-radius: 7px; cursor: pointer;
       display: flex; align-items: center;
     }
@@ -39,7 +39,6 @@
       background: var(--bg2); color: var(--fg); font-weight: 600;
       box-shadow: 0 1px 4px rgba(0,0,0,.18), inset 0 -2px 0 0 var(--accent);
     }
-    #titlebar .frame-tab.active svg { color: var(--accent); }
     #titlebar .spacer { flex: 1; }
     #titlebar .win-controls { display: flex; gap: 2px; -webkit-app-region: no-drag; }
     #titlebar .win-controls button {
