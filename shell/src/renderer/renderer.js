@@ -317,7 +317,8 @@ async function renderWork(nav, arg, label2) {
   }
   if (nav === 'cloud' && arg && typeof arg === 'object') {
     // #254：云端功能页=WebView 承载 web SPA（布局/交互/多视图=web 端现成；升级零客户端发版）
-    w.innerHTML = `<webview id="cloud-wv" style="flex:1;width:100%;height:100%" src="about:blank"></webview>`
+    // #253.41：防闪烁——webview 初始透明，目标页加载完再淡入（先导页/中间态用户不可见）
+    w.innerHTML = `<div style="flex:1;display:flex;background:var(--bg)"><webview id="cloud-wv" style="flex:1;width:100%;height:100%;opacity:0;transition:opacity .25s" src="about:blank"></webview></div>`
     const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
     if (r.event !== 'done' || r.code !== 0) { w.innerHTML = `<div style="padding:16px" class="muted">加载失败：${r.text ?? ''}</div>`; return }
     const parsed = JSON.parse(r.text)
@@ -354,10 +355,15 @@ async function renderWork(nav, arg, label2) {
         }
       }
       // 路由跳转（#253.35）：web=BrowserRouter（path 路由）——manifest url 归一化去 '#'
-      // （旧形态 '/#/bookmarks' 是锚点不是路由，BrowserRouter 不响应=停在营销页）
       const path = arg.url.replace(/^\/#/, '/')
+      // 目标页就绪后淡入（#253.41）：did-finish-load 只对目标导航触发一次
+      const reveal = () => {
+        wv.style.opacity = '1'
+        stateBar.remove()
+        wv.removeEventListener('did-finish-load', reveal)
+      }
+      wv.addEventListener('did-finish-load', reveal)
       await wv.loadURL(webBase + path)
-      stateBar.textContent = '路由：' + (wv.getURL() || '')
     })
     wv.src = webBase + '/login' // 先加载域（localStorage 注入需同源），dom-ready 后跳目标路由
     return
