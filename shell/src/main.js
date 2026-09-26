@@ -347,8 +347,14 @@ app.whenReady().then(() => {
     try {
       const { cmd, base } = kernelCmd()
       const out = await new Promise((resolve) => {
-        const p = spawn(cmd, [...base, '--help'], { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
         let o = ''
+        let p
+        try {
+          p = spawn(cmd, [...base, '--help'], { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
+        } catch {
+          return resolve('')
+        }
+        p.on('error', () => resolve('')) // dev 无 bun：内核版本 unknown，不裸崩
         p.stdout.on('data', (d) => { o += d })
         p.on('close', () => resolve(o))
         setTimeout(() => resolve(o), 5000)
