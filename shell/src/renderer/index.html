@@ -27,12 +27,8 @@
       -webkit-app-region: drag;
     }
     #titlebar .brand { font-size: 13px; font-weight: 700; }
-    /* 页帧 tab=浏览器页签范式：栏底稍暗，选中 tab 亮底浮起（亮度差而非色相差——用户 #253.23） */
-    #titlebar .tabs {
-      display: flex; gap: 4px; -webkit-app-region: no-drag;
-      background: color-mix(in srgb, var(--fg) 7%, transparent);
-      padding: 4px; border-radius: 9px;
-    }
+    /* 页帧 tab（#253.24 用户：只要一层背景）——去掉凹槽容器底，active tab 直接亮底浮起于标题栏 */
+    #titlebar .tabs { display: flex; gap: 4px; -webkit-app-region: no-drag; }
     #titlebar .frame-tab {
       border: 0; background: transparent; color: var(--muted); font-size: 12.5px;
       padding: 5px 12px; border-radius: 7px; cursor: pointer;
@@ -41,7 +37,7 @@
     #titlebar .frame-tab:hover { color: var(--fg); }
     #titlebar .frame-tab.active {
       background: var(--bg2); color: var(--fg); font-weight: 600;
-      box-shadow: 0 1px 4px rgba(0,0,0,.18);
+      box-shadow: 0 1px 4px rgba(0,0,0,.18), inset 0 -2px 0 0 var(--accent);
     }
     #titlebar .frame-tab.active svg { color: var(--accent); }
     #titlebar .spacer { flex: 1; }
