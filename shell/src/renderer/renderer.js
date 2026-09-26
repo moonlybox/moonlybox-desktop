@@ -346,11 +346,14 @@ async function renderWork(nav, arg, label2) {
       }
       // 路由跳转（#253.35）：web=BrowserRouter（path 路由）——manifest url 归一化去 '#'
       const path = arg.url.replace(/^\/#/, '/')
-      // 目标页就绪后淡入（#253.41）：did-finish-load 只对目标导航触发一次
+      // 目标页就绪后淡入（#253.41）：did-finish-load 后再延迟（用户 #253.43：SPA 内部路由
+      // 跳转/首屏渲染需要一点时间——立即淡入会闪现中间页），spinner 多转一会
       const reveal = () => {
-        wv.style.opacity = '1'
-        $('cloud-loading')?.remove()
         wv.removeEventListener('did-finish-load', reveal)
+        setTimeout(() => {
+          wv.style.opacity = '1'
+          $('cloud-loading')?.remove()
+        }, 450)
       }
       wv.addEventListener('did-finish-load', reveal)
       await wv.loadURL(webBase + path)
