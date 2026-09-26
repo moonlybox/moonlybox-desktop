@@ -14,14 +14,21 @@
       --border: #e2e8f0; --accent: #4f46e5; --hover: #eef2ff;
       --active-bg: #e0e7ff; --active-fg: #3730a3; /* 选中态：实色不透明（#253.46 用户：半透明视觉模糊） */
       --ok: #059669; --warn: #d97706; --err: #dc2626;
+      /* 标题栏裸图形 LOGO 浅底反色组（brand/README 底色双轨：LOGO=裸图形，同 build_pack light_variant） */
+      --logo-box: #201A4D; --logo-swirl-a: #201A4D; --logo-swirl-b: #7B5CFF;
+      --logo-moon: #201A4D; --logo-star: #7B5CFF; --logo-star2: #201A4D; --logo-dot: #201A4D;
     }
     /* #256.2 主题：默认跟随系统（media），data-theme=dark/light 显式覆盖（跟随时间=JS 按钟点写 data-theme） */
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme='light']) { --bg: #0f172a; --bg2: #1e293b; --fg: #e2e8f0; --muted: #94a3b8; --border: #334155; --hover: #1e293b;
-        --active-bg: #3730a3; --active-fg: #ffffff; }
+        --active-bg: #3730a3; --active-fg: #ffffff;
+        --logo-box: #BFD4FF; --logo-swirl-a: #BFD4FF; --logo-swirl-b: #9A78FF;
+        --logo-moon: #EAF1FF; --logo-star: #F2E4BE; --logo-star2: #EAF1FF; --logo-dot: #EAF1FF; }
     }
     html[data-theme='dark'] { --bg: #0f172a; --bg2: #1e293b; --fg: #e2e8f0; --muted: #94a3b8; --border: #334155; --hover: #1e293b;
-      --active-bg: #3730a3; --active-fg: #ffffff; }
+      --active-bg: #3730a3; --active-fg: #ffffff;
+      --logo-box: #BFD4FF; --logo-swirl-a: #BFD4FF; --logo-swirl-b: #9A78FF;
+      --logo-moon: #EAF1FF; --logo-star: #F2E4BE; --logo-star2: #EAF1FF; --logo-dot: #EAF1FF; }
     html[data-theme='light'] { --bg: #f8fafc; --bg2: #ffffff; --fg: #0f172a; --muted: #64748b; --border: #e2e8f0; --hover: #eef2ff;
       --active-bg: #e0e7ff; --active-fg: #3730a3; }
     * { box-sizing: border-box; margin: 0; }
@@ -228,7 +235,26 @@
 <body>
   <!-- 标题栏：MDI 页帧 + 升级灯 + 窗口控制 -->
   <div id="titlebar">
-    <img src="./brand-mark.svg" alt="" style="width:18px;height:18px;flex:none" />
+    <!-- 涌月漩裸图形（无徽章底，与 web 站点 LOGO 同款；描边走 CSS 变量随主题换色） -->
+    <svg viewBox="132 72 236 343" style="width:18px;height:18px;flex:none" aria-hidden="true">
+      <defs>
+        <linearGradient id="tbSwirl" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stop-color="var(--logo-swirl-a)"/>
+          <stop offset="1" stop-color="var(--logo-swirl-b)"/>
+        </linearGradient>
+        <mask id="tbMoon">
+          <rect x="132" y="72" width="236" height="343" fill="#fff"/>
+          <circle cx="271" cy="185" r="36" fill="#000"/>
+        </mask>
+        <path id="tbStar" d="M0 -22 C3.5 -7 7 -3.5 22 0 C7 3.5 3.5 7 0 22 C-3.5 7 -7 3.5 -22 0 C-7 -3.5 -3.5 -7 0 -22 Z"/>
+      </defs>
+      <path d="M163 308 L163 368 Q163 389 184 389 L328 389 Q349 389 349 368 L349 308" fill="none" stroke="var(--logo-box)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M256 288 C205 288 166 246 166 196 C166 146 213 118 256 118 C299 118 322 159 322 196 C322 233 288 254 256 254 C224 254 198 228 198 196" fill="none" stroke="url(#tbSwirl)" stroke-width="14" stroke-linecap="round"/>
+      <circle cx="256" cy="196" r="40" fill="var(--logo-moon)" mask="url(#tbMoon)"/>
+      <use href="#tbStar" transform="translate(168 106)" fill="var(--logo-star)"/>
+      <use href="#tbStar" transform="translate(338 116) scale(0.68)" fill="var(--logo-star2)"/>
+      <circle cx="150" cy="240" r="6" fill="var(--logo-dot)"/>
+    </svg>
     <span class="brand">魔力宝盒</span>
     <div class="tabs" id="frame-tabs"></div>
     <span class="spacer"></span>
