@@ -82,6 +82,46 @@ let currentSetSub = null
 let toolsEnabled = true // 工具（管家模式）开关——原 set-tools checkbox 迁入通用面板
 let clipboardWatch = false; // 剪贴板自动采集（启动默认关，与 T3 行为一致；面板开关即时生效）——分号必须：下行 IIFE 以 ( 开头（ASI 陷阱 #253.20）
 
+// ---------- #256 设置中心运行态（daemon settings 通道单源；localStorage 只做快照缓存） ----------
+let APP_SETTINGS = null // daemon get 的全量 settings（null=未加载）
+let APP_PROVIDERS = null // 提供商清单 {platform,websearch,messaging,memory}
+async function loadAppSettings() {
+  if (APP_SETTINGS) return APP_SETTINGS
+  try {
+    const r = await window.moonlybox.rpc('settings', { op: 'get' }, 15_000)
+    if (r.event === 'done' && r.code === 0) {
+      const d = JSON.parse(r.text)
+      APP_SETTINGS = d.settings
+      APP_PROVIDERS = d.providers
+    }
+  } catch {}
+  if (!APP_SETTINGS) APP_SETTINGS = { general: {}, appearance: {}, chat: {}, model: {}, messaging: { providers: {} }, mcp: {}, websearch: {}, urlextract: {}, docproc: {}, memory: {} }
+  return APP_SETTINGS
+}
+async function saveAppSettings(patch) {
+  const r = await window.moonlybox.rpc('settings', { op: 'save', patch }, 15_000)
+  if (r.event === 'done' && r.code === 0) {
+    APP_SETTINGS = JSON.parse(r.text).settings
+    return { ok: true }
+  }
+  return { ok: false, error: r.message ?? r.text ?? '保存失败' }
+}
+function applyThemeSettings() {
+  // #256.2 主题：dark/light 直接写 data-theme；system 移除（回退 media）；time=18:00-06:00 深色
+  const ap = APP_SETTINGS?.appearance ?? {}
+  const html = document.documentElement
+  const mode = ap.theme ?? 'system'
+  if (mode === 'dark') html.dataset.theme = 'dark'
+  else if (mode === 'light') html.dataset.theme = 'light'
+  else if (mode === 'time') html.dataset.theme = (new Date().getHours() >= 18 || new Date().getHours() < 6) ? 'dark' : 'light'
+  else delete html.dataset.theme
+  // 缩放：webFrame 不经 preload——用 body zoom（Chromium 支持 zoom CSS，全 UI 等比）
+  const zoom = Math.min(200, Math.max(100, Number(ap.zoom ?? 100)))
+  document.body.style.zoom = zoom / 100
+}
+// 跟随时间：每 10 分钟校一次主题（分号必须：下行 IIFE 以 ( 开头——ASI 陷阱 #253.20 同款）
+setInterval(() => { if (APP_SETTINGS?.appearance?.theme === 'time') applyThemeSettings() }, 10 * 60 * 1000);
+
 // ---- 第二列拖宽（#253.18：限幅 180-420px，持久化；防误操作比例失调） ----
 (() => {
   const MIN = 180, MAX = 420
@@ -427,12 +467,118 @@ async function renderWork(nav, arg, label2) {
       })
     }
     if (cat.id === 'general') {
-      panel('通用', '基础行为设置。', `
-        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-tools" ${toolsEnabled ? 'checked' : ''} /> 工具（管家模式）——小月可调用工具代你执行写操作（写操作仍需确认）</label>
-        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-watch" ${clipboardWatch ? 'checked' : ''} /> 剪贴板自动采集——监听复制的文本/链接，存入收集箱</label>
+      const g = await loadAppSettings()
+      const gv = g.general ?? {}
+      const sw = (id, label, desc, checked) => `
+        <label class="set-row" style="cursor:pointer;align-items:flex-start">
+          <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} style="margin-top:3px" />
+          <span><div>${label}</div><div class="set-desc" style="margin:2px 0 0">${desc}</div></span>
+        </label>`
+      panel('通用', '基础行为设置。更改即时生效。', `
+        ${sw('sp-launch', '开机启动', '登录系统后自动启动魔力宝盒（打包版生效）', !!gv.launchAtLogin)}
+        ${sw('sp-min', '启动时最小化到托盘', '开机/启动后不弹主窗口，仅在托盘待命', !!gv.launchMinimized)}
+        ${sw('sp-tray', '关闭时最小化到托盘', '点关闭按钮时隐藏到托盘而非退出（托盘图标可退出）', !!gv.closeToTray)}
+        ${sw('sp-awake', '运行任务时保持电脑唤醒', '小月执行任务期间阻止系统休眠', !!gv.keepAwake)}
+        ${sw('sp-tools', '工具（管家模式）', '小月可调用工具代你执行写操作（写操作仍需确认）', toolsEnabled)}
+        ${sw('sp-watch', '剪贴板自动采集', '监听复制的文本/链接，存入收集箱', clipboardWatch)}
       `)
+      const saveGeneral = async () => {
+        const patch = {
+          general: {
+            launchAtLogin: $('sp-launch').checked,
+            launchMinimized: $('sp-min').checked,
+            closeToTray: $('sp-tray').checked,
+            keepAwake: $('sp-awake').checked,
+          },
+        }
+        const r = await saveAppSettings(patch)
+        toolsEnabled = $('sp-tools').checked
+        clipboardWatch = $('sp-watch').checked
+        window.moonlybox.setClipboardWatch(clipboardWatch)
+        // main 侧行为同步（托盘/唤醒/开机启动）
+        try { await window.moonlybox.applyGeneral(patch.general) } catch {}
+        return r
+      }
+      for (const id of ['sp-launch', 'sp-min', 'sp-tray', 'sp-awake']) $(id).onchange = saveGeneral
       $('sp-tools').onchange = (e) => { toolsEnabled = e.target.checked }
       $('sp-watch').onchange = (e) => { clipboardWatch = e.target.checked; window.moonlybox.setClipboardWatch(e.target.checked) }
+    } else if (cat.id === 'appearance') {
+      const g = await loadAppSettings()
+      const av = g.appearance ?? {}
+      panel('外观', '主题、语言与缩放。', `
+        <div class="set-field"><label>色彩风格</label>
+          <select id="sp-theme" style="width:220px">
+            <option value="system" ${av.theme === 'system' || !av.theme ? 'selected' : ''}>跟随系统</option>
+            <option value="light" ${av.theme === 'light' ? 'selected' : ''}>浅色</option>
+            <option value="dark" ${av.theme === 'dark' ? 'selected' : ''}>深色</option>
+            <option value="time" ${av.theme === 'time' ? 'selected' : ''}>跟随时间（18:00-06:00 深色）</option>
+          </select>
+        </div>
+        <div class="set-field"><label>语言 / Language</label>
+          <select id="sp-lang" style="width:220px">
+            <option value="zh-CN" ${av.lang === 'zh-CN' || !av.lang ? 'selected' : ''}>中文简体</option>
+            <option value="en" ${av.lang === 'en' ? 'selected' : ''}>English</option>
+          </select>
+        </div>
+        <div class="set-field"><label>缩放：<span id="sp-zoom-v">${av.zoom ?? 100}%</span></label>
+          <input type="range" id="sp-zoom" min="100" max="200" step="10" value="${av.zoom ?? 100}" style="width:260px" />
+        </div>
+        <div class="set-status" id="sp-ap-status"></div>
+      `)
+      $('sp-theme').onchange = async (e) => {
+        APP_SETTINGS.appearance = { ...(APP_SETTINGS.appearance ?? {}), theme: e.target.value }
+        applyThemeSettings()
+        await saveAppSettings({ appearance: { theme: e.target.value } })
+      }
+      $('sp-lang').onchange = async (e) => {
+        APP_SETTINGS.appearance = { ...(APP_SETTINGS.appearance ?? {}), lang: e.target.value }
+        await saveAppSettings({ appearance: { lang: e.target.value } })
+        const st = $('sp-ap-status'); st.className = 'set-status ok'; st.textContent = '✓ 已保存（界面文案随下次刷新生效）'
+      }
+      $('sp-zoom').oninput = (e) => { $('sp-zoom-v').textContent = `${e.target.value}%` }
+      $('sp-zoom').onchange = async (e) => {
+        APP_SETTINGS.appearance = { ...(APP_SETTINGS.appearance ?? {}), zoom: Number(e.target.value) }
+        applyThemeSettings()
+        await saveAppSettings({ appearance: { zoom: Number(e.target.value) } })
+      }
+    } else if (cat.id === 'chat') {
+      const g = await loadAppSettings()
+      const cv = g.chat ?? {}
+      panel('对话', '小月的上下文与重试行为。上下文仅存内存（本机），不落盘。', `
+        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-ctx" ${cv.contextEnabled !== false ? 'checked' : ''} /> 启用上下文管理——小月记住本次会话中的对话</label>
+        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-compress" ${cv.autoCompress !== false ? 'checked' : ''} ${cv.contextEnabled === false ? 'disabled' : ''} /> 上下文自动压缩——历史过长时自动摘要，节省 token</label>
+        <div class="set-field"><label>压缩阈值（历史达到容量的比例时触发）：<span id="sp-ct-v">${cv.compressThreshold ?? 80}%</span></label>
+          <input type="range" id="sp-ct" min="50" max="100" step="5" value="${cv.compressThreshold ?? 80}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
+        <div class="set-field"><label>压缩目标（压缩后保留的容量）：<span id="sp-cg-v">${cv.compressTarget ?? 20}%</span></label>
+          <input type="range" id="sp-cg" min="10" max="30" step="5" value="${cv.compressTarget ?? 20}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
+        <div class="set-field"><label>模型重试次数（调用失败自动重试）</label>
+          <input type="number" id="sp-retry" min="1" max="50" value="${cv.maxRetries ?? 10}" style="width:120px" /></div>
+        <div class="set-status" id="sp-chat-status"></div>
+      `)
+      const syncDisabled = () => {
+        const ctx = $('sp-ctx').checked, ac = $('sp-compress').checked
+        $('sp-compress').disabled = !ctx
+        $('sp-ct').disabled = !ctx || !ac
+        $('sp-cg').disabled = !ctx || !ac
+      }
+      $('sp-ctx').onchange = syncDisabled
+      $('sp-compress').onchange = syncDisabled
+      $('sp-ct').oninput = (e) => { $('sp-ct-v').textContent = `${e.target.value}%` }
+      $('sp-cg').oninput = (e) => { $('sp-cg-v').textContent = `${e.target.value}%` }
+      const saveChat = async () => {
+        const st = $('sp-chat-status')
+        st.className = 'set-status'; st.textContent = '保存中…'
+        const r = await saveAppSettings({ chat: {
+          contextEnabled: $('sp-ctx').checked,
+          autoCompress: $('sp-compress').checked,
+          compressThreshold: Number($('sp-ct').value),
+          compressTarget: Number($('sp-cg').value),
+          maxRetries: Number($('sp-retry').value) || 10,
+        } })
+        st.className = r.ok ? 'set-status ok' : 'set-status err'
+        st.textContent = r.ok ? '✓ 已保存（即刻生效）' : (r.error ?? '保存失败')
+      }
+      for (const id of ['sp-ctx', 'sp-compress', 'sp-ct', 'sp-cg', 'sp-retry']) $(id).onchange = saveChat
     } else if (cat.id === 'library') {
       panel('文档库（书房）', '本地书房目录与同步内核。目录是同步、检索、小月的单一数据源。', `
         <div class="set-field">
@@ -451,8 +597,23 @@ async function renderWork(nav, arg, label2) {
         }
       }
     } else if (cat.id === 'model' && currentSetSub === 'platform') {
-      panel('模型 · 平台 API（BYOK）', '自带 API Key 直连大模型平台。Key 只存本机钥匙串，永不上传、不落明文文件。', `
-        <div class="set-field"><label>API BaseUrl</label><input id="sp-byok-url" placeholder="https://api.bigmodel.cn/api/paas/v4" /></div>
+      const g = await loadAppSettings()
+      const provs = APP_PROVIDERS?.platform ?? []
+      const mp = g.model ?? {}
+      const curUrl = mp.baseUrl ?? ''
+      panel('模型 · 平台 API（BYOK）', '按平台提供商列出——选商、填 Key 即成。Key 只存本机钥匙串，永不上传、不落明文文件。', `
+        <div class="set-field"><label>平台提供商</label>
+          <select id="sp-prov" style="width:280px">
+            <option value="">— 选择提供商 —</option>
+            ${provs.map((p) => `<option value="${p.id}" ${mp.provider === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
+          </select>
+          <div class="set-desc" style="margin-top:4px" id="sp-prov-docs"></div>
+        </div>
+        <div class="set-field"><label>模型名（选商后可从推荐列表选或手填）</label>
+          <div class="set-row" style="margin:0 0 6px"><input id="sp-byok-model" placeholder="glm-4.5" style="flex:1" />
+            <select id="sp-prov-models" style="width:220px"><option value="">— 推荐模型 —</option></select></div>
+        </div>
+        <div class="set-field"><label>API 地址（选商自动填）</label><input id="sp-byok-url" placeholder="https://api.bigmodel.cn/api/paas/v4" /></div>
         <div class="set-field"><label>模型名</label><input id="sp-byok-model" placeholder="glm-4.7-flash" /></div>
         <div class="set-field"><label>API Key（本地端点可留空；已配置时不回显）</label><input id="sp-byok-key" type="password" placeholder="sk-…" /></div>
         <div class="set-row">
@@ -464,19 +625,37 @@ async function renderWork(nav, arg, label2) {
       `)
       try {
         const g = JSON.parse((await window.moonlybox.rpc('auth', { op: 'byok', sub: 'get' }, 10_000)).text)
-        $('sp-byok-url').value = g.baseUrl ?? ''
+        $('sp-byok-url').value = g.baseUrl || curUrl || ''
         $('sp-byok-model').value = g.model ?? ''
         $('sp-byok-status').textContent = g.hasKey ? 'Key 已入钥匙串' : ''
       } catch {}
+      const provSync = () => {
+        const pv = provs.find((x) => x.id === $('sp-prov').value)
+        $('sp-prov-docs').innerHTML = pv ? `API Key 获取：<a href="#" data-ext="${pv.docs}">${pv.docs}</a>` : ''
+        $('sp-prov-docs').querySelectorAll('[data-ext]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); window.moonlybox.openExternal(a.dataset.ext) } })
+        const sel = $('sp-prov-models')
+        sel.innerHTML = '<option value="">— 推荐模型 —</option>' + (pv ? pv.models.map((m) => `<option value="${m}">${m}</option>`).join('') : '')
+        if (pv) $('sp-byok-url').value = pv.baseUrl
+      }
+      $('sp-prov').onchange = provSync
+      $('sp-prov-models').onchange = () => { if ($('sp-prov-models').value) $('sp-byok-model').value = $('sp-prov-models').value }
+      if (mp.provider) provSync()
       $('sp-byok-save').onclick = async () => {
         const st = $('sp-byok-status')
         st.className = 'set-status'; st.textContent = '保存中…'
-        const args = { sub: 'save', baseUrl: $('sp-byok-url').value, model: $('sp-byok-model').value, apiKey: $('sp-byok-key').value }
-        const r = await window.moonlybox.rpc('auth', { op: 'byok', ...args }, 15_000)
-        if (r.event === 'done' && r.code === 0) {
+        const apiKey = $('sp-byok-key').value
+        // 双通道：settings save（provider 状态）+ 平台API 字段齐时由 daemon 同步 BYOK（meta+钥匙串）
+        const r = await saveAppSettings({ model: {
+          provider: $('sp-prov').value,
+          baseUrl: $('sp-byok-url').value,
+          model: $('sp-byok-model').value,
+          ...(apiKey ? { apiKey } : {}),
+        } })
+        const byok = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'save', baseUrl: $('sp-byok-url').value, model: $('sp-byok-model').value, ...(apiKey ? { apiKey } : {}) }, 15_000)
+        if (r.ok && byok.event === 'done' && byok.code === 0) {
           st.className = 'set-status ok'; st.textContent = '✓ 已保存'
           $('sp-byok-key').value = ''
-        } else { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '保存失败' }
+        } else { st.className = 'set-status err'; st.textContent = byok.message ?? byok.text ?? r.error ?? '保存失败' }
       }
       $('sp-byok-test').onclick = async () => {
         const st = $('sp-byok-status')
@@ -519,6 +698,218 @@ async function renderWork(nav, arg, label2) {
         const r = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'test' }, 30_000)
         if (r.event === 'done' && r.code === 0) { st.className = 'set-status ok'; st.textContent = '✓ 连接成功' }
         else { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '连接失败' }
+      }
+    } else if (cat.id === 'model' && currentSetSub === 'custom') {
+      const g = await loadAppSettings()
+      const cu = g.model?.custom
+      panel('模型 · 自定义', '自填 OpenAI 兼容 API 地址（vLLM / 中转站 / 私有部署等）。Key 只存本机钥匙串。', `
+        <div class="set-field"><label>API 地址</label><input id="sp-cu-url" placeholder="https://your-endpoint.example.com/v1" value="${cu?.baseUrl ?? ''}" /></div>
+        <div class="set-field"><label>模型名</label><input id="sp-cu-model" placeholder="your-model" value="${cu?.model ?? ''}" /></div>
+        <div class="set-field"><label>API Key（本地端点可留空；已配置时不回显）</label><input id="sp-cu-key" type="password" placeholder="sk-…" /></div>
+        <div class="set-row">
+          <button type="button" class="btn" id="sp-cu-save">保存</button>
+          <button type="button" class="btn ghost" id="sp-cu-test">测试连接</button>
+          <span class="set-status" id="sp-cu-status"></span>
+        </div>
+      `)
+      $('sp-cu-save').onclick = async () => {
+        const st = $('sp-cu-status'); st.className = 'set-status'; st.textContent = '保存中…'
+        const apiKey = $('sp-cu-key').value
+        const r = await saveAppSettings({ model: { custom: { baseUrl: $('sp-cu-url').value, model: $('sp-cu-model').value } } })
+        const byok = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'save', baseUrl: $('sp-cu-url').value, model: $('sp-cu-model').value, ...(apiKey ? { apiKey } : {}) }, 15_000)
+        st.className = r.ok && byok.code === 0 ? 'set-status ok' : 'set-status err'
+        st.textContent = r.ok && byok.code === 0 ? '✓ 已保存（自定义端点即当前对话模型）' : (byok.message ?? byok.text ?? r.error ?? '保存失败')
+        if (r.ok && byok.code === 0) $('sp-cu-key').value = ''
+      }
+      $('sp-cu-test').onclick = async () => {
+        const st = $('sp-cu-status'); st.className = 'set-status'; st.textContent = '测试中…'
+        const r = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'test' }, 30_000)
+        st.className = r.code === 0 ? 'set-status ok' : 'set-status err'
+        st.textContent = r.code === 0 ? '✓ 连接成功' : (r.message ?? r.text ?? '连接失败')
+      }
+    } else if (cat.id === 'messaging') {
+      const g = await loadAppSettings()
+      const provs = APP_PROVIDERS?.messaging ?? []
+      const enabled = g.messaging?.providers ?? {}
+      panel('消息平台', '对接 IM 平台收发消息（参考 Hermes 多平台架构）。Secret/Token 只存本机钥匙串。', `
+        ${provs.map((p) => {
+          const cur = enabled[p.id] ?? { enabled: false }
+          return `<div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px">
+            <label class="set-row" style="cursor:pointer;margin:0 0 8px"><input type="checkbox" data-msg="${p.id}" ${cur.enabled ? 'checked' : ''} />
+              <b>${p.label}</b><span class="set-desc" style="margin:0">${p.enabled ? '已连接' : ''}</span></label>
+            <div data-msgcfg="${p.id}" style="display:${cur.enabled ? 'block' : 'none'}">
+              ${p.needs.map((n) => `<div class="set-field"><label>${n.label}${n.secret ? '（只存钥匙串）' : ''}</label><input type="${n.secret ? 'password' : 'text'}" data-msgkey="${p.id}.${n.key}" value="${(cur.config ?? {})[n.key] && !n.secret ? (cur.config ?? {})[n.key] : ''}" placeholder="${n.secret ? '已配置时不回显' : ''}" /></div>`).join('')}
+            </div>
+          </div>`
+        }).join('')}
+        <div class="set-status" id="sp-msg-status"></div>
+      `)
+      w.querySelectorAll('[data-msg]').forEach((cb) => {
+        cb.onchange = () => { const box = w.querySelector(`[data-msgcfg="${cb.dataset.msg}"]`); if (box) box.style.display = cb.checked ? 'block' : 'none' }
+      })
+      w.querySelectorAll('[data-msgkey]').forEach((inp) => { inp.onchange = saveMessaging })
+      w.querySelectorAll('[data-msg]').forEach((cb) => { const old = cb.onchange; cb.onchange = async (e) => { old(e); await saveMessaging() } })
+      async function saveMessaging() {
+        const st = $('sp-msg-status'); st.className = 'set-status'; st.textContent = '保存中…'
+        const providers = {}
+        for (const p of provs) {
+          const cb = w.querySelector(`[data-msg="${p.id}"]`)
+          const cfg = {}
+          for (const n of p.needs) {
+            const inp = w.querySelector(`[data-msgkey="${p.id}.${n.key}"]`)
+            if (inp && inp.value) cfg[n.key] = n.secret ? `keychain:${p.id}.${n.key}` : inp.value // secret 占位标记（实际入钥匙串待接线）
+            else if (!n.secret && (enabled[p.id]?.config ?? {})[n.key]) cfg[n.key] = (enabled[p.id]?.config ?? {})[n.key]
+          }
+          providers[p.id] = { enabled: cb?.checked ?? false, config: cfg }
+        }
+        const r = await saveAppSettings({ messaging: { providers } })
+        st.className = r.ok ? 'set-status ok' : 'set-status err'
+        st.textContent = r.ok ? '✓ 已保存（通道连接在后续迭代点亮）' : (r.error ?? '保存失败')
+      }
+    } else if (cat.id === 'mcp' && currentSetSub === 'builtin') {
+      const g = await loadAppSettings()
+      panel('MCP · 内置', '内置 MoonLink MCP（即「工具/管家模式」）——小月工具调用的单一来源。', `
+        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-mcp-builtin" ${g.mcp?.builtinEnabled !== false ? 'checked' : ''} /> 启用内置 MoonLink MCP（29 工具：收藏/便签/待办/书房检索/记忆）</label>
+        <div class="set-status" id="sp-mcp-status"></div>
+      `)
+      $('sp-mcp-builtin').onchange = async (e) => {
+        const r = await saveAppSettings({ mcp: { builtinEnabled: e.target.checked } })
+        const st = $('sp-mcp-status'); st.className = r.ok ? 'set-status ok' : 'set-status err'
+        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
+      }
+    } else if (cat.id === 'mcp' && currentSetSub === 'market') {
+      panel('MCP · 市场', 'MCP 服务器市场暂未开放，敬请期待。', '<div class="set-status">市场接入后可一键安装社区 MCP 服务器。</div>')
+    } else if (cat.id === 'mcp' && currentSetSub === 'custom') {
+      const g = await loadAppSettings()
+      const list = g.mcp?.custom ?? []
+      panel('MCP · 自定义', '添加自己的 MCP 服务器（URL 流）。', `
+        <div id="sp-mcp-list">${list.map((m, i) => `<div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:10px">
+          <div class="set-row" style="margin:0 0 6px"><b>${m.name || '未命名'}</b><span class="set-desc" style="margin:0">${m.enabled ? '已启用' : '已停用'}</span>
+            <button type="button" class="btn ghost" data-mcpdel="${i}" style="margin-left:auto">删除</button></div>
+          <div class="set-desc" style="margin:0">${m.url}</div></div>`).join('') || '<div class="set-status">暂无自定义 MCP 服务器。</div>'}</div>
+        <div class="set-field" style="margin-top:14px"><label>名称</label><input id="sp-mcp-name" placeholder="my-mcp" /></div>
+        <div class="set-field"><label>URL</label><input id="sp-mcp-url" placeholder="https://…/mcp" /></div>
+        <div class="set-row"><button type="button" class="btn" id="sp-mcp-add">添加</button><span class="set-status" id="sp-mcp2-status"></span></div>
+      `)
+      w.querySelectorAll('[data-mcpdel]').forEach((b) => {
+        b.onclick = async () => {
+          const list2 = (APP_SETTINGS.mcp?.custom ?? []).filter((_, i) => i !== Number(b.dataset.mcpdel))
+          await saveAppSettings({ mcp: { custom: list2 } })
+          renderWork('settings')
+        }
+      })
+      $('sp-mcp-add').onclick = async () => {
+        const st = $('sp-mcp2-status')
+        const name = $('sp-mcp-name').value.trim(), url = $('sp-mcp-url').value.trim()
+        if (!name || !/^https?:\/\//.test(url)) { st.className = 'set-status err'; st.textContent = '名称与 http(s) URL 必填'; return }
+        const list2 = [...(APP_SETTINGS.mcp?.custom ?? []), { name, url, apiKey: null, enabled: true }]
+        const r = await saveAppSettings({ mcp: { custom: list2 } })
+        if (r.ok) renderWork('settings')
+        else { st.className = 'set-status err'; st.textContent = r.error ?? '保存失败' }
+      }
+    } else if (cat.id === 'skills') {
+      panel('技能', '可组合的能力单元（后续逐步上架）。', `
+        <div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px"><b>URL 提取</b><div class="set-desc" style="margin:4px 0 0">网页正文抓取→Markdown（在「网络搜索/文档处理」配套设置）</div></div>
+        <div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px"><b>文档处理</b><div class="set-desc" style="margin:4px 0 0">PDF/Office 解析→文本（本地 OCR 或第三方，见「文档处理」）</div></div>
+        <div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px"><b>PDF 处理</b><div class="set-desc" style="margin:4px 0 0">PDF 拆分/合并/提取（规划中）</div></div>
+      `)
+    } else if (cat.id === 'websearch') {
+      const g = await loadAppSettings()
+      const provs = APP_PROVIDERS?.websearch ?? []
+      const ws = g.websearch ?? {}
+      panel('网络搜索', '给小月接上搜索能力（本质=搜索服务商暴露给 Agent 的工具）。', `
+        <div class="set-field"><label>搜索服务商</label>
+          <select id="sp-ws-prov" style="width:280px">
+            <option value="">— 未启用 —</option>
+            ${provs.map((p) => `<option value="${p.id}" ${ws.provider === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
+          </select>
+        </div>
+        <div id="sp-ws-cfg"></div>
+        <div class="set-row"><button type="button" class="btn" id="sp-ws-save">保存</button><span class="set-status" id="sp-ws-status"></span></div>
+      `)
+      const renderWsCfg = () => {
+        const pv = provs.find((x) => x.id === $('sp-ws-prov').value)
+        const box = $('sp-ws-cfg')
+        if (!pv) { box.innerHTML = ''; return }
+        box.innerHTML = pv.needs.map((k) => `<div class="set-field"><label>${k === 'apiKey' ? 'API Key（只存钥匙串）' : k}</label><input type="${k === 'apiKey' ? 'password' : 'text'}" id="sp-ws-${k}" value="${k !== 'apiKey' ? (ws.config?.[k] ?? '') : ''}" placeholder="${k === 'apiKey' ? (ws.config?.[k] ? '已配置，不回显' : '') : ''}" /></div>`).join('')
+      }
+      $('sp-ws-prov').onchange = renderWsCfg
+      renderWsCfg()
+      $('sp-ws-save').onclick = async () => {
+        const st = $('sp-ws-status'); st.className = 'set-status'; st.textContent = '保存中…'
+        const pv = provs.find((x) => x.id === $('sp-ws-prov').value)
+        const config = {}
+        for (const k of pv?.needs ?? []) {
+          const inp = $(`sp-ws-${k}`)
+          if (inp && inp.value) config[k] = k === 'apiKey' ? 'keychain:websearch' : inp.value
+        }
+        const r = await saveAppSettings({ websearch: { provider: $('sp-ws-prov').value, config } })
+        st.className = r.ok ? 'set-status ok' : 'set-status err'
+        st.textContent = r.ok ? '✓ 已保存（搜索工具接入 Agent 在后续迭代点亮）' : (r.error ?? '保存失败')
+      }
+    } else if (cat.id === 'urlextract') {
+      const g = await loadAppSettings()
+      const ue = g.urlextract ?? {}
+      panel('URL 提取', '收藏网页时正文提取方式：本地提取（内置）或服务商 API。', `
+        <div class="set-row"><label style="cursor:pointer"><input type="radio" name="sp-ue-mode" value="local" ${ue.mode !== 'provider' ? 'checked' : ''} /> 本地提取（内置 Readability，零成本）</label></div>
+        <div class="set-row"><label style="cursor:pointer"><input type="radio" name="sp-ue-mode" value="provider" ${ue.mode === 'provider' ? 'checked' : ''} /> 服务商 API（质量更高，需 Key）</label></div>
+        <div class="set-field"><label>服务商 API 地址</label><input id="sp-ue-url" value="${ue.config?.baseUrl ?? ''}" placeholder="https://…/extract" /></div>
+        <div class="set-field"><label>API Key（只存钥匙串）</label><input id="sp-ue-key" type="password" placeholder="${ue.config?.apiKey ? '已配置，不回显' : ''}" /></div>
+        <div class="set-row"><button type="button" class="btn" id="sp-ue-save">保存</button><span class="set-status" id="sp-ue-status"></span></div>
+      `)
+      $('sp-ue-save').onclick = async () => {
+        const st = $('sp-ue-status'); st.className = 'set-status'; st.textContent = '保存中…'
+        const mode = w.querySelector('input[name="sp-ue-mode"]:checked').value
+        const config = { baseUrl: $('sp-ue-url').value }
+        if ($('sp-ue-key').value) config.apiKey = 'keychain:urlextract'
+        const r = await saveAppSettings({ urlextract: { mode, config } })
+        st.className = r.ok ? 'set-status ok' : 'set-status err'
+        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
+      }
+    } else if (cat.id === 'docproc') {
+      const g = await loadAppSettings()
+      const dp = g.docproc ?? {}
+      panel('文档处理', 'PDF/Office 解析：本地处理（内置 OCR）或第三方服务。', `
+        <div class="set-row"><label style="cursor:pointer"><input type="radio" name="sp-dp-mode" value="local" ${dp.mode !== 'provider' ? 'checked' : ''} /> 本地处理（内置解析/OCR）</label></div>
+        <div class="set-row"><label style="cursor:pointer"><input type="radio" name="sp-dp-mode" value="provider" ${dp.mode === 'provider' ? 'checked' : ''} /> 第三方服务（参考 Cherry Studio：Doc2X / MinerU / Mathpix 等）</label></div>
+        <div class="set-field"><label>服务商 API 地址</label><input id="sp-dp-url" value="${dp.config?.baseUrl ?? ''}" placeholder="https://…" /></div>
+        <div class="set-field"><label>API Key（只存钥匙串）</label><input id="sp-dp-key" type="password" placeholder="${dp.config?.apiKey ? '已配置，不回显' : ''}" /></div>
+        <div class="set-row"><button type="button" class="btn" id="sp-dp-save">保存</button><span class="set-status" id="sp-dp-status"></span></div>
+      `)
+      $('sp-dp-save').onclick = async () => {
+        const st = $('sp-dp-status'); st.className = 'set-status'; st.textContent = '保存中…'
+        const mode = w.querySelector('input[name="sp-dp-mode"]:checked').value
+        const config = { baseUrl: $('sp-dp-url').value }
+        if ($('sp-dp-key').value) config.apiKey = 'keychain:docproc'
+        const r = await saveAppSettings({ docproc: { mode, config } })
+        st.className = r.ok ? 'set-status ok' : 'set-status err'
+        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
+      }
+    } else if (cat.id === 'memory') {
+      const g = await loadAppSettings()
+      const provs = APP_PROVIDERS?.memory ?? []
+      const mm = g.memory ?? {}
+      panel('记忆', '长期记忆：小月跨会话记住关键信息（参考 Hermes 记忆架构）。', `
+        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-mm-on" ${mm.enabled !== false ? 'checked' : ''} /> 启用长期记忆——对话中的关键事实自动沉淀，跨会话可 recall</label>
+        <div class="set-field"><label>记忆提供方</label>
+          <select id="sp-mm-prov" style="width:280px">
+            ${provs.map((p) => `<option value="${p.id}" ${(mm.provider ?? 'builtin') === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
+          </select>
+          <div class="set-desc" style="margin-top:4px" id="sp-mm-note"></div>
+        </div>
+        <div class="set-row"><button type="button" class="btn" id="sp-mm-save">保存</button><span class="set-status" id="sp-mm-status"></span></div>
+      `)
+      const noteSync = () => {
+        const pv = provs.find((x) => x.id === $('sp-mm-prov').value)
+        $('sp-mm-note').textContent = pv?.note ?? ''
+      }
+      $('sp-mm-prov').onchange = noteSync
+      noteSync()
+      $('sp-mm-save').onclick = async () => {
+        const st = $('sp-mm-status'); st.className = 'set-status'; st.textContent = '保存中…'
+        const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').checked, provider: $('sp-mm-prov').value } })
+        st.className = r.ok ? 'set-status ok' : 'set-status err'
+        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
     } else {
       const subLabel = currentSetSub ? ` · ${SET_SUB_LABELS[currentSetSub] ?? currentSetSub}` : ''
@@ -919,6 +1310,9 @@ async function showLoginDialog() {
 // ---------- 版本显示 + 首屏 ----------
 (async () => {
   const v = await window.moonlybox.versions()
+  // #256：设置先行加载——主题/缩放/语言首屏生效
+  await loadAppSettings()
+  applyThemeSettings()
   await refreshAvatar()
   // 首屏：未选 vault → 引导；否则进书房
   const vault = await window.moonlybox.vaultGet()

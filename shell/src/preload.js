@@ -32,4 +32,6 @@ contextBridge.exposeInMainWorld('moonlybox', {
   setClipboardWatch: (on) => ipcRenderer.invoke('shell:clipboardWatch', on),
   capture: (text) => ipcRenderer.invoke('shell:capture', text),
   protocolState: () => ipcRenderer.invoke('shell:protocolState'),
+  // #256：通用设置保存后同步 main 行为（托盘/唤醒/剪贴板/开机启动）
+  applyGeneral: (general) => ipcRenderer.invoke('shell:applyGeneral', general),
 })

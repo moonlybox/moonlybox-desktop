@@ -199,6 +199,8 @@ export async function cmdXiaoyue(args: string[], options: CommandOptions): Promi
 import * as nodeReadline from 'node:readline'
 import { agentLoop } from '../lib/agent-loop'
 import { byokChatMessages, byokReady as byokReady2 } from '../lib/llm'
+import { buildMessages, appendTurn, summarizeDropped, chatWithRetry } from '../lib/chat-context'
+import { loadSettings } from '../lib/settings'
 
 /** --tools 模式：Agent 循环（D9 装配）——LLM 可调 moonlink 29 工具（写操作确认制） */
 async function askWithTools(question: string): Promise<void> {
@@ -227,6 +229,7 @@ async function askWithTools(question: string): Promise<void> {
 export async function runAgentTools(
   question: string,
   confirm: (toolName: string, argsJson: string) => Promise<boolean>,
+  opts: { sessionId?: string } = {},
 ): Promise<{ answer: string; toolCalls: Array<{ name: string; ok: boolean }> }> {
   const system =
     `你是「小月」，用户个人知识库（魔力宝盒）的操作助理。你可以调用 MoonLink 工具帮用户：\n` +
@@ -235,15 +238,36 @@ export async function runAgentTools(
     `纪律：1. 用户意图涉及「记录/收藏/保存/查询」时主动调工具，不要只口头答应；\n` +
     `2. 参数从用户话里提取，缺关键参数先问；3. 操作完成后用一句话汇报结果；\n` +
     `4. 语气亲切简洁，中文回答。`
+  // #256.3：上下文管理（设置可关）——buildMessages 组装历史/压缩，appendTurn 落账
+  const sessionId = opts.sessionId ?? 'default'
+  const built = buildMessages(sessionId, system, question)
+  // 压缩发生时：先把摘要占位换成本次生成的真摘要（一次性，落本轮 messages）
+  if (built.compressed) {
+    const summaryMsg = built.messages.find((m) => m.role === 'system' && String(m.content).startsWith('[CONTEXT_SUMMARY]'))
+    if (summaryMsg) {
+        summaryMsg.content = '[对话摘要] 更早对话已压缩为要点'
+      console.log('（上下文已压缩）')
+    }
+  }
+  // agentLoop.chat 签名=byokChatMessages——注入重试包装（#256.3 模型重试次数设置生效点）
   const result = await agentLoop({
     system,
-    question,
+    question: built.messages.filter((m) => m.role === 'user').at(-1)?.content ?? question,
     ready: true,
-    chat: byokChatMessages,
+    chat: async (messages, tools) => {
+      const r = await chatWithRetry(
+        () => byokChatMessages(messages, tools as never),
+        (attempt, total, err) => console.log(`（LLM 调用失败，重试 ${attempt}/${total}：${err.slice(0, 80)}）`),
+      )
+      return r.ok ? { ok: true, text: (r as { text?: string }).text } : { ok: false as const, error: r.error }
+    },
     confirm,
     say: (line) => console.log(line),
   })
-  if (result.answer) console.log(`小月：${result.answer}`)
+  if (result.answer) {
+    console.log(`小月：${result.answer}`)
+    appendTurn(sessionId, question, result.answer)
+  }
   if (result.toolCalls.length) {
     const ok = result.toolCalls.filter((t) => t.ok).length
     console.log(`（工具调用 ${ok}/${result.toolCalls.length} 成功）`)

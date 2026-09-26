@@ -23,6 +23,34 @@ app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 let tray = null
 let win = null
 
+// ---------- #256 设置（main 侧轻量直读 ~/.config/moonlybox/settings.json——启动早期就要用，不经 daemon） ----------
+function readSettings() {
+  const cfgDir = process.env.MOONLYBOX_CONFIG_HOME || path.join(os.homedir(), '.config', 'moonlybox')
+  try {
+    return JSON.parse(fs.readFileSync(path.join(cfgDir, 'settings.json'), 'utf8'))
+  } catch { return {} }
+}
+// 开机启动（#256.1）：loginItemSettings 按 closeToTray/launchMinimized 语义统一 openAsHidden
+function applyLaunchAtLogin() {
+  try {
+    const s = (readSettings().general) || {}
+    if (app.isPackaged) {
+      app.setLoginItemSettings({ openAtLogin: !!s.launchAtLogin, openAsHidden: !!s.launchAtLogin })
+    }
+    return { launchAtLogin: !!s.launchAtLogin, applied: app.isPackaged ? 'loginItemSettings' : 'dev-跳过（仅打包态生效）' }
+  } catch (e) { return { error: String(e.message ?? e) } }
+}
+// 关闭行为（#256.1）：closeToTray=true → close 事件拦截为 hide（托盘常驻）；false → 真销毁（D12 默认）
+let closeToTrayOn = false
+// keepAwake（#256.1）：powerSaveBlocker 阻止系统休眠（运行任务期间）
+let psbId = null
+function setKeepAwake(on) {
+  const { powerSaveBlocker } = require('electron')
+  if (on && psbId === null) psbId = powerSaveBlocker.start('prevent-app-suspension')
+  else if (!on && psbId !== null) { powerSaveBlocker.stop(psbId); psbId = null }
+  return psbId !== null
+}
+
 // ---------- 内核定位：开发=仓根 bun 源；打包=resources/kernel/moonlybox 单文件 ----------
 function kernelCmd() {
   // 打包态判定用 app.isPackaged（dev 下 electron 也有 resourcesPath——指向 node_modules/electron/dist，
@@ -184,7 +212,13 @@ function createWindow() {
   win.on('unmaximize', pushWinState)
   // D12：关窗=真销毁 renderer（2026-09-24 T6 卡7 实测：hide 保活待命 368MB 超 D12 80-150MB 口径 2.5 倍，
   // 触发预埋的切换条件——destroy 换待命内存达标，代价=重开窗口 ~300ms 重建）
-  win.on('close', () => {
+  // #256.1：closeToTray=true 时 close 拦截为 hide（托盘常驻）——优先级高于 D12（用户显式选择保活）
+  win.on('close', (e) => {
+    if (closeToTrayOn && !app.isQuiting) {
+      e.preventDefault()
+      win.hide()
+      return
+    }
     win = null
   })
   win.once('ready-to-show', () => win.show())
@@ -375,6 +409,15 @@ app.whenReady().then(() => {
     return clipboardWatchOn
   })
   ipcMain.handle('shell:capture', (_e, text) => quickCapture(String(text ?? ''), 'renderer'))
+  // #256.1：设置保存后 main 侧行为同步（closeToTray/keepAwake/clipboardWatch/login 项）——daemon 管 settings.json，main 只收行为
+  ipcMain.handle('shell:applyGeneral', (_e, general) => {
+    const g = general || {}
+    closeToTrayOn = !!g.closeToTray
+    setKeepAwake(!!g.keepAwake)
+    if (g.clipboardWatch && !clipboardWatchOn) { clipboardWatchOn = true; startClipboardWatch() }
+    else if (!g.clipboardWatch && clipboardWatchOn) { clipboardWatchOn = false; stopClipboardWatch() }
+    return applyLaunchAtLogin()
+  })
   ipcMain.handle('shell:protocolState', () => ({
     isDefault: app.isDefaultProtocolClient('moonlybox'),
   }))
@@ -415,7 +458,18 @@ app.whenReady().then(() => {
   const launchUrl = process.argv.find((a) => a.startsWith('moonlybox://'))
   if (launchUrl) handleMoonlinkUrl(launchUrl)
 
-  createWindow()
+  // #256.1：应用通用设置（开机启动/关闭到托盘/保持唤醒/剪贴板监听）——createWindow 前定行为
+  try {
+    const st = readSettings()
+    const g = st.general || {}
+    applyLaunchAtLogin()
+    closeToTrayOn = !!g.closeToTray
+    if (g.keepAwake) setKeepAwake(true)
+    if (g.clipboardWatch) { clipboardWatchOn = true; startClipboardWatch() }
+    // 启动时最小化到托盘：命令行/协议唤起（带参数）除外，静默启动不弹窗
+    const silent = !!g.launchMinimized && !launchUrl && !process.argv.slice(1).some((a) => !a.startsWith('-'))
+    if (!silent) createWindow()
+  } catch { createWindow() }
 })
 
 app.on('will-quit', () => {

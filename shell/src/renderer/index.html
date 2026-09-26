@@ -15,10 +15,15 @@
       --active-bg: #e0e7ff; --active-fg: #3730a3; /* 选中态：实色不透明（#253.46 用户：半透明视觉模糊） */
       --ok: #059669; --warn: #d97706; --err: #dc2626;
     }
+    /* #256.2 主题：默认跟随系统（media），data-theme=dark/light 显式覆盖（跟随时间=JS 按钟点写 data-theme） */
     @media (prefers-color-scheme: dark) {
-      :root { --bg: #0f172a; --bg2: #1e293b; --fg: #e2e8f0; --muted: #94a3b8; --border: #334155; --hover: #1e293b;
+      :root:not([data-theme='light']) { --bg: #0f172a; --bg2: #1e293b; --fg: #e2e8f0; --muted: #94a3b8; --border: #334155; --hover: #1e293b;
         --active-bg: #3730a3; --active-fg: #ffffff; }
     }
+    html[data-theme='dark'] { --bg: #0f172a; --bg2: #1e293b; --fg: #e2e8f0; --muted: #94a3b8; --border: #334155; --hover: #1e293b;
+      --active-bg: #3730a3; --active-fg: #ffffff; }
+    html[data-theme='light'] { --bg: #f8fafc; --bg2: #ffffff; --fg: #0f172a; --muted: #64748b; --border: #e2e8f0; --hover: #eef2ff;
+      --active-bg: #e0e7ff; --active-fg: #3730a3; }
     * { box-sizing: border-box; margin: 0; }
     body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--fg); overflow: hidden; user-select: none; }
 

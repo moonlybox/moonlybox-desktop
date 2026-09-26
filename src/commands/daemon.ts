@@ -24,6 +24,7 @@ import { cmdSync } from '../commands/sync'
 import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
+import { loadSettings, saveSettings, PLATFORM_PROVIDERS, WEBSEARCH_PROVIDERS, MESSAGING_PROVIDERS, MEMORY_PROVIDERS } from '../lib/settings'
 import { apiGet, apiPost } from '../lib/api'
 import { loadCredentials, saveCredentials, clearCredentials } from '../lib/auth'
 import { ensureClient, requestDeviceCode, pollToken, refreshAccessToken } from '../lib/device-flow'
@@ -114,7 +115,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           } else {
             const confirm = (toolName: string, argsJson: string) =>
               requestUiConfirm(req.id, toolName, argsJson, emit)
-            await runAgentTools(q, confirm)
+            await runAgentTools(q, confirm, { sessionId: String(args.sessionId ?? 'default') })
           }
         } else {
           await cmdXiaoyue([q, ...(args.cloud ? ['--cloud'] : [])], { dir } as CommandOptions)
@@ -290,6 +291,63 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         } else {
           code = 2
           text = `未知 auth op：${op2}`
+        }
+      } catch (e: any) {
+        code = 1
+        text = String(e?.message ?? e)
+      }
+      break
+    }
+    case 'settings': {
+      // #256 设置中心：get=全量+提供商清单；save=分节合并（key 类字段只进钥匙串，不入 settings.json）
+      try {
+        const op1 = String(args.op ?? 'get')
+        if (op1 === 'get') {
+          const s = loadSettings()
+          text = JSON.stringify({
+            ok: true,
+            settings: s,
+            providers: { platform: PLATFORM_PROVIDERS, websearch: WEBSEARCH_PROVIDERS, messaging: MESSAGING_PROVIDERS, memory: MEMORY_PROVIDERS },
+          })
+        } else if (op1 === 'save') {
+          const patch = (args.patch ?? {}) as Record<string, unknown>
+          if (!patch || typeof patch !== 'object' || Array.isArray(patch) || Object.keys(patch).length === 0) {
+            code = 1
+            text = 'patch 不能为空'
+          } else {
+            // #256.4：模型平台API——provider 表单带 apiKey 时同步到 BYOK 通道（meta+钥匙串；key 绝不落 settings.json）
+            const mp = patch.model as Record<string, unknown> | undefined
+            if (mp && typeof mp === 'object') {
+              const apiKey = typeof mp.apiKey === 'string' ? mp.apiKey.trim() : ''
+              const providerId = typeof mp.provider === 'string' ? mp.provider : ''
+              const baseUrl = typeof mp.baseUrl === 'string' ? mp.baseUrl.trim() : ''
+              const model = typeof mp.model === 'string' ? mp.model.trim() : ''
+              if (apiKey) {
+                if (!baseUrl || !model) {
+                  code = 1
+                  text = '平台 API 保存需同时填写 API 地址与模型名'
+                  break
+                }
+                if (!/^https?:\/\//.test(baseUrl)) {
+                  code = 1
+                  text = 'API 地址需以 http(s):// 开头'
+                  break
+                }
+                saveByokMeta({ baseUrl, model })
+                saveByokKey(apiKey)
+              }
+              // 落 settings.json 的 model 节去掉 key/明文（只存选择状态）
+              const clean: Record<string, unknown> = { provider: providerId }
+              if (mp.custom && typeof mp.custom === 'object') clean.custom = mp.custom
+              if (baseUrl && model) { clean.baseUrl = baseUrl; clean.model = model }
+              patch.model = clean
+            }
+            const s = saveSettings(patch)
+            text = JSON.stringify({ ok: true, settings: s })
+          }
+        } else {
+          code = 2
+          text = `未知 settings op：${op1}`
         }
       } catch (e: any) {
         code = 1
