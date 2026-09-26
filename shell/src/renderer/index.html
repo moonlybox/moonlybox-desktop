@@ -67,8 +67,16 @@
     #rail .sep { width: 26px; height: 1px; background: var(--border); margin: 8px 0; }
     #rail .rail-btn {
       width: 40px; height: 40px; border: 0; background: transparent; border-radius: 9px;
-      font-size: 18px; cursor: pointer; color: var(--muted); display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--muted); display: flex; align-items: center; justify-content: center;
     }
+    #rail .rail-btn svg, #titlebar .win-controls svg {
+      width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    #titlebar .win-controls svg { width: 14px; height: 14px; }
+    #titlebar .win-controls #win-close:hover { background: #dc2626; color: #fff; }
+    /* 云端列表 manifest 图标同套描边 */
+    .cloud-ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
     #rail .rail-btn.active { background: var(--hover); color: var(--accent); }
     #rail .rail-btn:hover { background: var(--hover); }
     #rail .grow { flex: 1; }
@@ -117,24 +125,24 @@
     <span class="spacer"></span>
     <div class="win-controls">
       <button id="btn-upgrade" title="检查更新"><span id="upgrade-icon">⟳</span><span id="upgrade-text"></span><span class="dot"></span></button>
-      <button id="win-min" title="最小化">—</button>
-      <button id="win-max" title="最大化">□</button>
-      <button id="win-close" title="关闭">✕</button>
+      <button id="win-min" title="最小化"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+      <button id="win-max" title="最大化"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></button>
+      <button id="win-close" title="关闭"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>
   </div>
 
   <div id="body">
-    <!-- 第一列：图标栏 -->
+    <!-- 第一列：图标栏（SVG 描边图标系统——与云端 manifest 图标同一套，保证风格统一） -->
     <nav id="rail">
       <button class="avatar" id="btn-avatar" title="登录/账号">?</button>
       <div class="sep"></div>
-      <button class="rail-btn" data-nav="vault" title="书房（本地）">📚</button>
-      <button class="rail-btn" data-nav="cloud" title="云端">☁️</button>
-      <button class="rail-btn" data-nav="diagram" title="图示">📐</button>
-      <button class="rail-btn" data-nav="xiaoyue" title="小月">🌙</button>
+      <button class="rail-btn" data-nav="vault" title="书房（本地）"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></button>
+      <button class="rail-btn" data-nav="cloud" title="云端"><svg viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg></button>
+      <button class="rail-btn" data-nav="diagram" title="图示"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></button>
+      <button class="rail-btn" data-nav="xiaoyue" title="小月"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
       <span class="grow"></span>
-      <button class="rail-btn" data-nav="help" title="帮助">❓</button>
-      <button class="rail-btn" data-nav="settings" title="设置">⚙️</button>
+      <button class="rail-btn" data-nav="help" title="帮助"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+      <button class="rail-btn" data-nav="settings" title="设置"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
     </nav>
 
     <!-- 第二列：功能列表（内容由 JS 按 nav 填充） -->

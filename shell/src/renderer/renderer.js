@@ -45,6 +45,20 @@ document.querySelectorAll('.rail-btn[data-nav]').forEach((el) => {
 })
 
 // ---------- 第二列渲染 ----------
+// SVG 描边图标（lucide 风格 stroke=currentColor——与 rail/标题栏同一套，#253.16 用户需求 1）
+const CLOUD_ICONS = {
+  bookmark: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
+  tag: '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
+  sticky: '<path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/>',
+  todo: '<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  library: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  entity: '<path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><path d="M9 21h6"/>',
+  box: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>',
+}
+const cloudIconSvg = (name) => `<svg class="cloud-ico" viewBox="0 0 24 24">${CLOUD_ICONS[name] ?? CLOUD_ICONS.box}</svg>`
+// 云端隐藏项（服务端 manifest 与客户端白名单双保险；后续云端放开再删）
+const CLOUD_HIDDEN = new Set(['moments', 'square'])
+
 async function renderList(nav) {
   const head = $('list-head')
   const body = $('list-body')
@@ -67,11 +81,14 @@ async function renderList(nav) {
     }
     try {
       const { nav: items } = JSON.parse(r.text).data
-      const ICONS = { bookmark: '🔖', tag: '🏷️', sticky: '🗒️', todo: '✅', library: '📚', entity: '🧠', moments: '📣', square: '🏙️' }
       for (const it of items) {
+        if (CLOUD_HIDDEN.has(it.id)) continue // 云端隐藏的功能本地不同步出现
         const el = document.createElement('div')
         el.className = 'tree-item'
-        el.textContent = `${ICONS[it.icon] ?? '📦'} ${it.label}`
+        el.style.display = 'flex'
+        el.style.alignItems = 'center'
+        el.style.gap = '8px'
+        el.innerHTML = `${cloudIconSvg(it.icon)}<span>${it.label}</span>`
         el.onclick = () => renderWork('cloud', it)
         body.appendChild(el)
       }
@@ -450,8 +467,19 @@ async function refreshAvatar() {
   try {
     const d = JSON.parse(r.text)
     if (d.loggedIn && d.email) {
-      $('btn-avatar').textContent = (d.email[0] ?? '?').toUpperCase()
-      $('btn-avatar').title = `已登录：${d.email}`
+      // 登录后 rail 顶=用户头像（拉 profile 取 avatar URL；失败降级首字母）
+      let avatarUrl = ''
+      try {
+        const pr = await window.moonlybox.rpc('auth', { op: 'profile' }, 25_000)
+        avatarUrl = JSON.parse(pr.text).avatar || ''
+      } catch {}
+      const btn = $('btn-avatar')
+      if (avatarUrl) {
+        btn.innerHTML = `<img src="${avatarUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" referrerpolicy="no-referrer"/>`
+      } else {
+        btn.textContent = (d.email[0] ?? '?').toUpperCase()
+      }
+      btn.title = `已登录：${d.email}`
     } else {
       $('btn-avatar').textContent = '未'
       $('btn-avatar').title = '未登录（点击登录）'
