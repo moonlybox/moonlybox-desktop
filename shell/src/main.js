@@ -36,9 +36,18 @@ function kernelCmd() {
     app.quit()
     return { cmd: 'missing-kernel', base: [] }
   }
-  // 开发态：bun 直跑仓内内核源码（cwd=REPO_ROOT）。Windows 下 spawn('bun') 不解析
-  // PATHEXT（PATH 里有 bun.exe 仍可能 ENOENT），显式 bun.exe；缺失时 ensureDaemon 弹窗指引。
-  return { cmd: process.platform === 'win32' ? 'bun.exe' : 'bun', base: ['run', 'src/cli.ts'] }
+  // 开发态：bun 直跑仓内内核源码（cwd=REPO_ROOT）。
+  // Windows PATH 坑：改 PATH 后已有进程（explorer/终端/npm 链）不刷新——终端里 bun 可用
+  // 而 Electron spawn 仍 ENOENT（用户实测）。不依赖 PATH：先探测 Bun 官方默认安装路径，
+  // 再退 PATH 解析，最后 which/where。
+  // MOONLYBOX_BUN env 优先（bun 装在非默认位置时的逃生门）
+  if (process.env.MOONLYBOX_BUN && fs.existsSync(process.env.MOONLYBOX_BUN)) {
+    return { cmd: process.env.MOONLYBOX_BUN, base: ['run', 'src/cli.ts'] }
+  }
+  const bunExe = process.platform === 'win32' ? 'bun.exe' : 'bun'
+  const bunDefault = homeDir() ? path.join(homeDir(), '.bun', 'bin', bunExe) : null
+  if (bunDefault && fs.existsSync(bunDefault)) return { cmd: bunDefault, base: ['run', 'src/cli.ts'] }
+  return { cmd: bunExe, base: ['run', 'src/cli.ts'] }
 }
 
 // 跨平台用户目录：Windows=USERPROFILE，unix=HOME（Windows 无 HOME，反之亦然）
@@ -73,12 +82,12 @@ function ensureDaemon() {
       env: { ...process.env, MOONLYBOX_VAULT: configuredVault() },
     })
   } catch (e) {
-    dialog.showErrorBox('魔力宝盒', `内核启动失败（${cmd}）：${e.message}\n\n开发模式需要 Bun 运行时：\npowershell -c "irm bun.sh/install.ps1 | iex"\n安装后重开终端再 npm run dev`)
+    dialog.showErrorBox('魔力宝盒', `内核启动失败（${cmd}）：${e.message}\n\n开发模式需要 Bun 运行时：\n1) 确认已安装：dir $env:USERPROFILE\.bun\bin\bun.exe\n2) 装在别处时设环境变量 MOONLYBOX_BUN 指向 bun.exe 绝对路径\n3) 装完重开终端再 npm run dev`)
     app.quit()
     return null
   }
   daemon.on('error', (e) => {
-    dialog.showErrorBox('魔力宝盒', `内核启动失败（${cmd}）：${e.message}\n\n开发模式需要 Bun 运行时：\npowershell -c "irm bun.sh/install.ps1 | iex"\n安装后重开终端再 npm run dev`)
+    dialog.showErrorBox('魔力宝盒', `内核启动失败（${cmd}）：${e.message}\n\n开发模式需要 Bun 运行时：\n1) 确认已安装：dir $env:USERPROFILE\.bun\bin\bun.exe\n2) 装在别处时设环境变量 MOONLYBOX_BUN 指向 bun.exe 绝对路径\n3) 装完重开终端再 npm run dev`)
     app.quit()
   })
   let buf = ''
