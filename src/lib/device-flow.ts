@@ -44,6 +44,21 @@ export async function requestDeviceCode(clientId: string, baseUrl?: string): Pro
   return json as DeviceCodeResponse
 }
 
+// #253.32：access_token 过期自动续（refresh_token grant）——daemon 调用前统一走 ensureFreshToken
+export async function refreshAccessToken(clientId: string, refreshToken: string, baseUrl?: string): Promise<{ access_token: string; refresh_token?: string; expires_in: number }> {
+  const base = baseUrl ?? defaultBaseUrl()
+  const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId })
+  const res = await fetch(`${base}/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+    signal: AbortSignal.timeout(20_000),
+  })
+  const json = (await res.json().catch(() => null)) as any
+  if (!res.ok || !json?.access_token) throw new Error(`refresh 失败 (${res.status}): ${JSON.stringify(json?.error ?? json)}`)
+  return json
+}
+
 export type PollResult =
   | { status: 'pending'; error: string }
   | { status: 'slow_down'; error: string }
