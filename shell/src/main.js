@@ -47,10 +47,12 @@ function kernelCmd() {
   const bunExe = process.platform === 'win32' ? 'bun.exe' : 'bun'
   const bunDefault = homeDir() ? path.join(homeDir(), '.bun', 'bin', bunExe) : null
   const bun = bunDefault && fs.existsSync(bunDefault) ? bunDefault : bunExe
-  // dev 自愈：native-bindings.ts 是 gitignore 生成物（fresh clone 没有）——bun 静态 import 直接
-  // 模块解析失败 → daemon「daemon exited」无解释（用户实测）。缺则自动 --gen-only（幂等）。
+  // dev 自愈：native-bindings.ts 与 assets/ort-binding.blob 都是 gitignore 生成物（fresh clone 没有）
+  // ——bun 静态 import 失败 → daemon exit(1)。任一缺失即重跑 gen-only（幂等；只查 ts 会漏 blob——
+  // 旧版自愈先跑过时 ts 已在而 blob 缺，daemon 持续崩，用户实测踩坑）。
   const bindings = path.join(REPO_ROOT, 'src', 'lib', 'native-bindings.ts')
-  if (!fs.existsSync(bindings)) {
+  const blob = path.join(REPO_ROOT, 'assets', 'ort-binding.blob')
+  if (!fs.existsSync(bindings) || !fs.existsSync(blob)) {
     try {
       require('child_process').execFileSync(bun, ['run', 'scripts/build.ts', '--gen-only'], {
         cwd: REPO_ROOT, stdio: 'pipe', timeout: 120_000,
