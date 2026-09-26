@@ -341,6 +341,7 @@ $('btn-avatar').onclick = async () => {
     const extSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.55"><path d="M7 17L17 7M9 7h8v8"/></svg>`
     const dlg = document.createElement('dialog')
     dlg.innerHTML = `
+      <div class="dlg-body">
       <div style="display:flex;align-items:center;gap:14px">
         ${avatarUrl
           ? `<img src="${avatarUrl}" style="width:52px;height:52px;border-radius:50%;object-fit:cover" referrerpolicy="no-referrer"/>`
@@ -353,7 +354,8 @@ $('btn-avatar').onclick = async () => {
       <div style="border-top:1px solid var(--border);margin:14px 0 6px"></div>
       <div id="ac-feedback" style="display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px">问题反馈 ${extSvg}</div>
       <div id="ac-settings" style="display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px">个人设置 ${extSvg}</div>
-      <div id="ac-logout" style="display:flex;align-items:center;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#f87171">退出登录</div>`
+      <div id="ac-logout" style="display:flex;align-items:center;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#f87171">退出登录</div>
+      </div>`
     document.body.appendChild(dlg)
     dlg.showModal()
     const rows = dlg.querySelectorAll('#ac-feedback,#ac-settings,#ac-logout')
@@ -364,6 +366,7 @@ $('btn-avatar').onclick = async () => {
     dlg.querySelector('#ac-feedback').onclick = () => { dlg.close(); window.moonlybox.openExternal('https://moonlybox.cn/feedback') }
     dlg.querySelector('#ac-settings').onclick = () => { dlg.close(); window.moonlybox.openExternal('https://moonlybox.cn/settings') }
     dlg.addEventListener('close', () => dlg.remove())
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close() }) // 点击 backdrop 关闭
     dlg.querySelector('#ac-logout').onclick = async () => {
       await window.moonlybox.rpc('auth', { op: 'logout' }, 15_000)
       dlg.close()
@@ -485,6 +488,7 @@ async function showLoginDialog() {
   }
   $('lg-cancel').onclick = () => { closed = true; dlg.close(); dlg.remove() }
   dlg.addEventListener('close', () => { closed = true })
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close() }) // 点击 backdrop 关闭
   // 手动复制兜底（IPC 打开失败/浏览器未响应时）
   const det = document.createElement('details')
   det.style.cssText = 'margin-top:6px'
