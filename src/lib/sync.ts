@@ -106,16 +106,95 @@ function safeName(title: string): string {
   return title.replace(/[/\\:*?"<>|]/g, '_').slice(0, 80) || 'untitled'
 }
 
+/** #253.50：云端目录树（嵌套 children，服务端递归形态）→ 相对路径段（根→叶）。环防御=路径段去重（脏数据不产生 a/a/a 无限层） */
+function dirTrail(directories: any[], id: string | null): string[] {
+  const findNode = (nodes: any[], target: string): any => {
+    for (const n of nodes ?? []) {
+      if (n.id === target) return n
+      const hit = findNode(n.children ?? [], target)
+      if (hit) return hit
+    }
+    return null
+  }
+  const trail: string[] = []
+  const seen = new Set<string>()
+  let cur = id ? findNode(directories ?? [], id) : null
+  while (cur?.name && !seen.has(cur.id)) {
+    seen.add(cur.id)
+    trail.unshift(safeName(cur.name))
+    cur = cur.parentId ? findNode(directories ?? [], cur.parentId) : null
+  }
+  return trail
+}
+
 function docDir(doc: any, directories: any[], base: string): string {
   if (doc.kind === 'diagram') return base // 图示平铺（图示/ 镜像区，由调用方传 d.diagrams）
   if (doc.kind === 'wiki') return base // 知识页平铺
-  const dir = directories.find((x: any) => x.id === doc.directoryId)
-  if (!dir?.name) return base
-  return path.join(base, safeName(dir.name))
+  const trail = dirTrail(directories, doc.directoryId ?? null)
+  if (!trail.length) return base
+  return path.join(base, ...trail)
 }
 
 function cursorPath(root: string): string {
   return path.join(root, META, 'sync-cursor.json')
+}
+
+/**
+ * #253.50 目录结构对齐（增量/全量共用）：
+ * ① 空目录也镜像——有文档的目录不算孤儿；云端空目录（children 递归）也建出来（结构完整投影）
+ * ② 孤儿清理——云端目录已改名/删除时，本地旧路径残留整枝移除（镜像区=云端权威；只动文档/ 镜像区，用户文件不入回收站语义=云端还在）
+ */
+function syncDirTree(root: string, docsBase: string, directories: any[], manifest: VaultManifest, report: SyncReport): void {
+  const wantDirs = new Set<string>()
+  const build = (nodes: any[], base: string) => {
+    for (const n of nodes) {
+      const p = path.join(base, safeName(n.name))
+      wantDirs.add(p)
+      fs.mkdirSync(p, { recursive: true })
+      if (Array.isArray(n.children)) build(n.children, p)
+    }
+  }
+  build(directories ?? [], docsBase)
+
+  const docsRoot = docsBase
+  // #253.50 孤儿对账：manifest 只存每个 id 的当前 path——云端归属变更后旧位置文件不在任何 id 的 path 上 → 扫除
+  const knownFiles = new Set(Object.values(manifest).map((e: any) => e?.path).filter(Boolean) as string[])
+  const scanOrphans = (dir: string) => {
+    let entries: fs.Dirent[] = []
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) { scanOrphans(p); continue }
+      if (!e.name.toLowerCase().endsWith('.md')) continue
+      const rel = path.relative(root, p).split(path.sep).join('/')
+      if (!knownFiles.has(rel)) {
+        fs.unlinkSync(p)
+        report.skipped.push(`removed ${rel} (云端归属已变更/已删除)`)
+        log(root, { op: 'remove-orphan', path: rel })
+      }
+    }
+  }
+  scanOrphans(docsRoot)
+  const prune = (dir: string): boolean => {
+    // 空目录（含只含空子目录）→ 删除。wantDirs 里的是云端目录（哪怕空也保留）
+    let hasContent = false
+    let entries: fs.Dirent[] = []
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return false }
+    for (const e of entries) {
+      const p = path.join(dir, e.name)
+      if (e.isDirectory()) {
+        if (!prune(p)) hasContent = true
+      } else {
+        hasContent = true // 文件（含非 .md）一律视为内容，不删
+      }
+    }
+    if (hasContent || wantDirs.has(dir) || dir === docsRoot) return false
+    fs.rmdirSync(dir)
+    report.skipped.push(`removed dir ${path.relative(root, dir)} (云端目录已不存在)`)
+    log(root, { op: 'remove-dir', path: path.relative(root, dir).split(path.sep).join('/') })
+    return true
+  }
+  prune(docsRoot)
 }
 
 function loadCursor(root: string): string | null {
@@ -201,6 +280,8 @@ export async function syncDown(root: string, report: SyncReport): Promise<void> 
           }
           delete manifest[del.id]
         }
+        // #253.50：目录改名/删除随 changes 下行 → 每页对齐一次（目录全量随行，终页即终态）
+        syncDirTree(root, d.docs, directories, manifest, report)
         hasMore = Boolean(res.data?.hasMore)
         if (res.data?.cursor) cursor = res.data.cursor
       }
@@ -292,6 +373,8 @@ export async function syncDownFull(root: string, report: SyncReport): Promise<vo
     // D6 断点续传兜底：任何路径退出（含异常/中断）都把已处理进度持久化
     saveManifest(root, manifest)
   }
+  // #253.50：目录结构对齐（空目录投影+孤儿整枝清理）——manifest 已定稿后跑，wantDirs 与 livePaths 都取终态
+  syncDirTree(root, d.docs, directories, manifest, report)
   // 全量成功 → cursor 重置为全量集最大 updatedAt（下轮走增量）
   const maxUpdated = documents
     .filter((x) => x.status === 'active' && !x.isArchived)
