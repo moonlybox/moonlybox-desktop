@@ -7,16 +7,32 @@ $('win-max').onclick = () => window.moonlybox.winMax()
 $('win-close').onclick = () => window.moonlybox.winClose()
 
 // ---------- MDI 页帧（标题栏 tab ↔ 图标栏联动） ----------
+// 图标单一源：path 数据（lucide 风格描边）——rail/页帧 tab/云端列共用（index.html rail 由 JS 注入，杜绝两处漂移）
+const ICON_PATHS = {
+  vault: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+  diagram: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+  xiaoyue: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+}
+const navIconSvg = (nav, size = 18) => `<svg viewBox="0 0 24 24" style="width:${size}px;height:${size}px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">${ICON_PATHS[nav] ?? ''}</svg>`
 const NAVS = {
-  vault: { icon: '📚', label: '书房（本地）' },
-  cloud: { icon: '☁️', label: '云端' },
-  diagram: { icon: '📐', label: '图示' },
-  xiaoyue: { icon: '🌙', label: '小月' },
-  help: { icon: '❓', label: '帮助' },
-  settings: { icon: '⚙️', label: '设置' },
+  vault: { label: '书房（本地）' },
+  cloud: { label: '云端' },
+  diagram: { label: '图示' },
+  xiaoyue: { label: '小月' },
+  help: { label: '帮助' },
+  settings: { label: '设置' },
 }
 let currentNav = null
 const openFrames = new Set()
+
+// rail 图标注入（单一源——index.html 的按钮内容由此填充）
+for (const b of document.querySelectorAll('#rail .rail-btn')) {
+  const nav = b.dataset.nav
+  if (nav && ICON_PATHS[nav]) b.innerHTML = navIconSvg(nav)
+}
 
 function renderFrameTabs() {
   const box = $('frame-tabs')
@@ -24,7 +40,7 @@ function renderFrameTabs() {
   for (const nav of openFrames) {
     const b = document.createElement('button')
     b.className = 'frame-tab' + (nav === currentNav ? ' active' : '')
-    b.textContent = `${NAVS[nav].icon} ${NAVS[nav].label}`
+    b.innerHTML = `${navIconSvg(nav, 13)}<span style="vertical-align:middle;margin-left:5px">${NAVS[nav].label}</span>`
     b.onclick = () => switchNav(nav)
     box.appendChild(b)
   }
