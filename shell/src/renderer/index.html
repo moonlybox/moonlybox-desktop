@@ -95,7 +95,17 @@
     .tree-item.active { background: var(--hover); color: var(--accent); }
     .tree-item .dir { font-weight: 600; }
     .row { display: flex; gap: 8px; align-items: center; }
-  </style>
+    /* 全局弹窗规范（用户反馈：所有弹窗需界面居中）——UA 的 dialog::backdrop modal 已固定定位
+     margin:auto 居中，这里只统一外观，不抢定位 */
+  dialog {
+    margin: auto !important;
+    border: 1px solid var(--border); border-radius: 12px;
+    background: var(--bg2); color: var(--fg);
+    padding: 24px; max-width: min(560px, 92vw);
+    box-shadow: 0 12px 48px rgba(0,0,0,.45);
+  }
+  dialog::backdrop { background: rgba(2,6,23,.55); }
+</style>
 </head>
 <body>
   <!-- 标题栏：MDI 页帧 + 升级灯 + 窗口控制 -->

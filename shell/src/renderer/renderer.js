@@ -443,10 +443,18 @@ async function showLoginDialog() {
   }
   const d = JSON.parse(r.text)
   $('lg-code').textContent = d.userCode
-  let closed = false
-  $('lg-open').onclick = () => window.moonlybox.openExternal(d.url)
+  // 授权页双通道：按钮打开+链接兜底（IPC openExternal 偶发无效时可右键复制/手动打开）
+  const url = d.url || `https://moonlybox.cn/oauth/device?user_code=${d.userCode}`
+  $('lg-open').onclick = async () => {
+    try { await window.moonlybox.openExternal(url) } catch (e) { $('lg-status').textContent = '打开失败，请手动访问：' + url }
+  }
   $('lg-cancel').onclick = () => { closed = true; dlg.close(); dlg.remove() }
   dlg.addEventListener('close', () => { closed = true })
+  // 手动复制兜底（IPC 打开失败/浏览器未响应时）
+  const det = document.createElement('details')
+  det.style.cssText = 'margin-top:6px'
+  det.innerHTML = `<summary class="muted" style="font-size:11px;cursor:pointer">手动复制授权链接</summary><div class="mono" style="font-size:11px;user-select:all;word-break:break-all">${url}</div>`
+  dlg.appendChild(det)
   // 轮询授权结果（5s 间隔，快调用不阻塞 daemon worker）
   const deadline = Date.now() + (d.expiresIn ?? 900) * 1000
   while (!closed && Date.now() < deadline) {
@@ -462,6 +470,7 @@ async function showLoginDialog() {
         setTimeout(() => { closed = true; dlg.close(); dlg.remove(); if (currentNav === 'cloud') renderList('cloud') }, 1200)
         return
       }
+      if (pd.status === 'pending' || pd.status === 'slow_down') $('lg-status').textContent = '等待你在浏览器/手机确认…'
       if (pd.status === 'denied') { $('lg-status').textContent = '已在网页拒绝'; break }
       if (pd.status === 'expired') { $('lg-status').textContent = '用户码过期，重新点击头像'; break }
       // pending/slow_down → 继续等
