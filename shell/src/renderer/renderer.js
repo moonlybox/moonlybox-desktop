@@ -63,6 +63,21 @@ let currentNav = null
 const openFrames = new Set();  // 下一 IIFE 以 ( 开头，无分号会被解析为跨行调用（ASI 陷阱 #253.20）
 // 设置中心（#253.48）：设置走 3 列 UI（第二列=分类，第三列=面板），不用弹窗。
 // 分类=用户定稿 11 项；v1 实现面板：通用/文档库/模型（平台API=BYOK 表单、本地模型）/外观；其余占位空态（后续迭代逐个点亮）。
+// #256.1 分类图标（lucide 风格 stroke path，与 rail 同套）
+const SET_ICONS = {
+  general: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  appearance: '<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>',
+  library: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  model: '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>',
+  messaging: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  mcp: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z"/>',
+  skills: '<path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>',
+  websearch: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  docproc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/>',
+  memory: '<path d="M6 21v-8"/><path d="M18 21v-8"/><path d="M6 13V8a6 6 0 0 1 12 0v5"/><path d="M3 13h18"/>',
+}
+const setIconSvg = (id, size = 15) => `<svg viewBox="0 0 24 24" style="width:${size}px;height:${size}px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">${SET_ICONS[id] ?? SET_ICONS.general}</svg>`
 const SETTINGS_CATS = [
   { id: 'general', label: '通用' },
   { id: 'appearance', label: '外观' },
@@ -211,7 +226,7 @@ async function renderList(nav) {
       const active = cat.id === currentSetCat
       el.className = 'set-cat' + (active ? ' active' : '')
       const subText = cat.subs ? (currentSetSub ? (SET_SUB_LABELS[currentSetSub] ?? '') : '平台 API · 本地模型 · 自定义') : ''
-      el.innerHTML = `<span>${cat.label}</span>${subText ? `<span class="sub">${subText}</span>` : ''}`
+      el.innerHTML = `${setIconSvg(cat.id)}<span>${cat.label}</span>${subText ? `<span class="sub">${subText}</span>` : ''}`
       el.onclick = () => {
         currentSetCat = cat.id
         currentSetSub = null
@@ -469,53 +484,52 @@ async function renderWork(nav, arg, label2) {
     if (cat.id === 'general') {
       const g = await loadAppSettings()
       const gv = g.general ?? {}
-      const sw = (id, label, desc, checked) => `
-        <label class="set-row" style="cursor:pointer;align-items:flex-start">
-          <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} style="margin-top:3px" />
-          <span><div>${label}</div><div class="set-desc" style="margin:2px 0 0">${desc}</div></span>
-        </label>`
+      // #256.2：开关类=按钮开关（toggle）行卡片布局
+      const card = (id, label, desc, on) => `
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${label}</div><div class="sc-desc">${desc}</div></div>
+          <button type="button" class="toggle ${on ? 'on' : ''}" id="${id}" aria-label="${label}"></button></div>`
       panel('通用', '基础行为设置。更改即时生效。', `
-        ${sw('sp-launch', '开机启动', '登录系统后自动启动魔力宝盒（打包版生效）', !!gv.launchAtLogin)}
-        ${sw('sp-min', '启动时最小化到托盘', '开机/启动后不弹主窗口，仅在托盘待命', !!gv.launchMinimized)}
-        ${sw('sp-tray', '关闭时最小化到托盘', '点关闭按钮时隐藏到托盘而非退出（托盘图标可退出）', !!gv.closeToTray)}
-        ${sw('sp-awake', '运行任务时保持电脑唤醒', '小月执行任务期间阻止系统休眠', !!gv.keepAwake)}
-        ${sw('sp-tools', '工具（管家模式）', '小月可调用工具代你执行写操作（写操作仍需确认）', toolsEnabled)}
-        ${sw('sp-watch', '剪贴板自动采集', '监听复制的文本/链接，存入收集箱', clipboardWatch)}
+        ${card('sp-launch', '开机启动', '登录系统后自动启动魔力宝盒（打包版生效）', !!gv.launchAtLogin)}
+        ${card('sp-min', '启动时最小化到托盘', '开机/启动后不弹主窗口，仅在托盘待命', !!gv.launchMinimized)}
+        ${card('sp-tray', '关闭时最小化到托盘', '点关闭按钮时隐藏到托盘而非退出（托盘图标可退出）', !!gv.closeToTray)}
+        ${card('sp-awake', '运行任务时保持电脑唤醒', '小月执行任务期间阻止系统休眠', !!gv.keepAwake)}
+        ${card('sp-tools', '工具（管家模式）', '小月可调用工具代你执行写操作（写操作仍需确认）', toolsEnabled)}
+        ${card('sp-watch', '剪贴板自动采集', '监听复制的文本/链接，存入收集箱', clipboardWatch)}
       `)
       const saveGeneral = async () => {
         const patch = {
           general: {
-            launchAtLogin: $('sp-launch').checked,
-            launchMinimized: $('sp-min').checked,
-            closeToTray: $('sp-tray').checked,
-            keepAwake: $('sp-awake').checked,
+            launchAtLogin: $('sp-launch').classList.contains('on'),
+            launchMinimized: $('sp-min').classList.contains('on'),
+            closeToTray: $('sp-tray').classList.contains('on'),
+            keepAwake: $('sp-awake').classList.contains('on'),
           },
         }
         const r = await saveAppSettings(patch)
-        toolsEnabled = $('sp-tools').checked
-        clipboardWatch = $('sp-watch').checked
+        toolsEnabled = $('sp-tools').classList.contains('on')
+        clipboardWatch = $('sp-watch').classList.contains('on')
         window.moonlybox.setClipboardWatch(clipboardWatch)
         // main 侧行为同步（托盘/唤醒/开机启动）
         try { await window.moonlybox.applyGeneral(patch.general) } catch {}
         return r
       }
-      for (const id of ['sp-launch', 'sp-min', 'sp-tray', 'sp-awake']) $(id).onchange = saveGeneral
-      $('sp-tools').onchange = (e) => { toolsEnabled = e.target.checked }
-      $('sp-watch').onchange = (e) => { clipboardWatch = e.target.checked; window.moonlybox.setClipboardWatch(e.target.checked) }
+      for (const id of ['sp-launch', 'sp-min', 'sp-tray', 'sp-awake', 'sp-tools', 'sp-watch']) {
+        $(id).onclick = (e) => { e.currentTarget.classList.toggle('on'); saveGeneral() }
+      }
     } else if (cat.id === 'appearance') {
       const g = await loadAppSettings()
       const av = g.appearance ?? {}
       panel('外观', '主题、语言与缩放。', `
-        <div class="set-field"><label>色彩风格</label>
-          <select id="sp-theme" style="width:220px">
+        <div class="set-field" style="max-width:320px"><label>色彩风格</label>
+          <select id="sp-theme" class="set-select">
             <option value="system" ${av.theme === 'system' || !av.theme ? 'selected' : ''}>跟随系统</option>
             <option value="light" ${av.theme === 'light' ? 'selected' : ''}>浅色</option>
             <option value="dark" ${av.theme === 'dark' ? 'selected' : ''}>深色</option>
             <option value="time" ${av.theme === 'time' ? 'selected' : ''}>跟随时间（18:00-06:00 深色）</option>
           </select>
         </div>
-        <div class="set-field"><label>语言 / Language</label>
-          <select id="sp-lang" style="width:220px">
+        <div class="set-field" style="max-width:320px"><label>语言 / Language</label>
+          <select id="sp-lang" class="set-select">
             <option value="zh-CN" ${av.lang === 'zh-CN' || !av.lang ? 'selected' : ''}>中文简体</option>
             <option value="en" ${av.lang === 'en' ? 'selected' : ''}>English</option>
           </select>
@@ -545,8 +559,10 @@ async function renderWork(nav, arg, label2) {
       const g = await loadAppSettings()
       const cv = g.chat ?? {}
       panel('对话', '小月的上下文与重试行为。上下文仅存内存（本机），不落盘。', `
-        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-ctx" ${cv.contextEnabled !== false ? 'checked' : ''} /> 启用上下文管理——小月记住本次会话中的对话</label>
-        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-compress" ${cv.autoCompress !== false ? 'checked' : ''} ${cv.contextEnabled === false ? 'disabled' : ''} /> 上下文自动压缩——历史过长时自动摘要，节省 token</label>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">启用上下文管理</div><div class="sc-desc">小月记住本次会话中的对话</div></div>
+          <button type="button" class="toggle ${cv.contextEnabled !== false ? 'on' : ''}" id="sp-ctx"></button></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">上下文自动压缩</div><div class="sc-desc">历史过长时自动摘要，节省 token</div></div>
+          <button type="button" class="toggle ${cv.autoCompress !== false ? 'on' : ''}" id="sp-compress" ${cv.contextEnabled === false ? 'disabled' : ''}></button></div>
         <div class="set-field"><label>压缩阈值（历史达到容量的比例时触发）：<span id="sp-ct-v">${cv.compressThreshold ?? 80}%</span></label>
           <input type="range" id="sp-ct" min="50" max="100" step="5" value="${cv.compressThreshold ?? 80}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
         <div class="set-field"><label>压缩目标（压缩后保留的容量）：<span id="sp-cg-v">${cv.compressTarget ?? 20}%</span></label>
@@ -556,21 +572,21 @@ async function renderWork(nav, arg, label2) {
         <div class="set-status" id="sp-chat-status"></div>
       `)
       const syncDisabled = () => {
-        const ctx = $('sp-ctx').checked, ac = $('sp-compress').checked
+        const ctx = $('sp-ctx').classList.contains('on'), ac = $('sp-compress').classList.contains('on')
         $('sp-compress').disabled = !ctx
         $('sp-ct').disabled = !ctx || !ac
         $('sp-cg').disabled = !ctx || !ac
       }
-      $('sp-ctx').onchange = syncDisabled
-      $('sp-compress').onchange = syncDisabled
+      $('sp-ctx').onclick = (e) => { e.currentTarget.classList.toggle('on'); syncDisabled(); saveChat() }
+      $('sp-compress').onclick = (e) => { e.currentTarget.classList.toggle('on'); saveChat() }
       $('sp-ct').oninput = (e) => { $('sp-ct-v').textContent = `${e.target.value}%` }
       $('sp-cg').oninput = (e) => { $('sp-cg-v').textContent = `${e.target.value}%` }
       const saveChat = async () => {
         const st = $('sp-chat-status')
         st.className = 'set-status'; st.textContent = '保存中…'
         const r = await saveAppSettings({ chat: {
-          contextEnabled: $('sp-ctx').checked,
-          autoCompress: $('sp-compress').checked,
+          contextEnabled: $('sp-ctx').classList.contains('on'),
+          autoCompress: $('sp-compress').classList.contains('on'),
           compressThreshold: Number($('sp-ct').value),
           compressTarget: Number($('sp-cg').value),
           maxRetries: Number($('sp-retry').value) || 10,
@@ -603,7 +619,7 @@ async function renderWork(nav, arg, label2) {
       const curUrl = mp.baseUrl ?? ''
       panel('模型 · 平台 API（BYOK）', '按平台提供商列出——选商、填 Key 即成。Key 只存本机钥匙串，永不上传、不落明文文件。', `
         <div class="set-field"><label>平台提供商</label>
-          <select id="sp-prov" style="width:280px">
+          <select id="sp-prov" class="set-select set-select-sm">
             <option value="">— 选择提供商 —</option>
             ${provs.map((p) => `<option value="${p.id}" ${mp.provider === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
           </select>
@@ -611,7 +627,7 @@ async function renderWork(nav, arg, label2) {
         </div>
         <div class="set-field"><label>模型名（选商后可从推荐列表选或手填）</label>
           <div class="set-row" style="margin:0 0 6px"><input id="sp-byok-model" placeholder="glm-4.5" style="flex:1" />
-            <select id="sp-prov-models" style="width:220px"><option value="">— 推荐模型 —</option></select></div>
+            <select id="sp-prov-models" class="set-select set-select-sm"><option value="">— 推荐模型 —</option></select></div>
         </div>
         <div class="set-field"><label>API 地址（选商自动填）</label><input id="sp-byok-url" placeholder="https://api.bigmodel.cn/api/paas/v4" /></div>
         <div class="set-field"><label>模型名</label><input id="sp-byok-model" placeholder="glm-4.7-flash" /></div>
@@ -734,33 +750,31 @@ async function renderWork(nav, arg, label2) {
       panel('消息平台', '对接 IM 平台收发消息（参考 Hermes 多平台架构）。Secret/Token 只存本机钥匙串。', `
         ${provs.map((p) => {
           const cur = enabled[p.id] ?? { enabled: false }
-          return `<div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px">
-            <label class="set-row" style="cursor:pointer;margin:0 0 8px"><input type="checkbox" data-msg="${p.id}" ${cur.enabled ? 'checked' : ''} />
-              <b>${p.label}</b><span class="set-desc" style="margin:0">${p.enabled ? '已连接' : ''}</span></label>
-            <div data-msgcfg="${p.id}" style="display:${cur.enabled ? 'block' : 'none'}">
-              ${p.needs.map((n) => `<div class="set-field"><label>${n.label}${n.secret ? '（只存钥匙串）' : ''}</label><input type="${n.secret ? 'password' : 'text'}" data-msgkey="${p.id}.${n.key}" value="${(cur.config ?? {})[n.key] && !n.secret ? (cur.config ?? {})[n.key] : ''}" placeholder="${n.secret ? '已配置时不回显' : ''}" /></div>`).join('')}
-            </div>
+          return `<div class="set-card"><div class="sc-main"><div class="sc-title">${p.label}</div><div class="sc-desc">${cur.enabled ? '已开启（通道连接在后续迭代点亮）' : '对接后可在此平台收发消息'}</div></div>
+            <button type="button" class="toggle ${cur.enabled ? 'on' : ''}" data-msg="${p.id}"></button></div>
+          <div data-msgcfg="${p.id}" style="display:${cur.enabled ? 'block' : 'none'};margin:0 0 10px">
+            ${p.needs.map((n) => `<div class="set-field" style="max-width:340px"><label>${n.label}${n.secret ? '（只存钥匙串）' : ''}</label><input type="${n.secret ? 'password' : 'text'}" data-msgkey="${p.id}.${n.key}" value="${(cur.config ?? {})[n.key] && !n.secret ? (cur.config ?? {})[n.key] : ''}" placeholder="${n.secret ? '已配置时不回显' : ''}" /></div>`).join('')}
           </div>`
         }).join('')}
         <div class="set-status" id="sp-msg-status"></div>
       `)
-      w.querySelectorAll('[data-msg]').forEach((cb) => {
-        cb.onchange = () => { const box = w.querySelector(`[data-msgcfg="${cb.dataset.msg}"]`); if (box) box.style.display = cb.checked ? 'block' : 'none' }
+      w.querySelectorAll('[data-msg]').forEach((tg) => {
+        tg.onclick = () => { tg.classList.toggle('on'); const box = w.querySelector(`[data-msgcfg="${tg.dataset.msg}"]`); if (box) box.style.display = tg.classList.contains('on') ? 'block' : 'none'; saveMessaging() }
       })
       w.querySelectorAll('[data-msgkey]').forEach((inp) => { inp.onchange = saveMessaging })
-      w.querySelectorAll('[data-msg]').forEach((cb) => { const old = cb.onchange; cb.onchange = async (e) => { old(e); await saveMessaging() } })
       async function saveMessaging() {
         const st = $('sp-msg-status'); st.className = 'set-status'; st.textContent = '保存中…'
         const providers = {}
         for (const p of provs) {
           const cb = w.querySelector(`[data-msg="${p.id}"]`)
+          const on = cb?.classList.contains('on') ?? false
           const cfg = {}
           for (const n of p.needs) {
             const inp = w.querySelector(`[data-msgkey="${p.id}.${n.key}"]`)
             if (inp && inp.value) cfg[n.key] = n.secret ? `keychain:${p.id}.${n.key}` : inp.value // secret 占位标记（实际入钥匙串待接线）
             else if (!n.secret && (enabled[p.id]?.config ?? {})[n.key]) cfg[n.key] = (enabled[p.id]?.config ?? {})[n.key]
           }
-          providers[p.id] = { enabled: cb?.checked ?? false, config: cfg }
+          providers[p.id] = { enabled: on, config: cfg }
         }
         const r = await saveAppSettings({ messaging: { providers } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
@@ -768,12 +782,15 @@ async function renderWork(nav, arg, label2) {
       }
     } else if (cat.id === 'mcp' && currentSetSub === 'builtin') {
       const g = await loadAppSettings()
-      panel('MCP · 内置', '内置 MoonLink MCP（即「工具/管家模式」）——小月工具调用的单一来源。', `
-        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-mcp-builtin" ${g.mcp?.builtinEnabled !== false ? 'checked' : ''} /> 启用内置 MoonLink MCP（29 工具：收藏/便签/待办/书房检索/记忆）</label>
+      panel('MCP · 内置', 'Model Context Protocol 服务器——给小月接入外部工具与数据源的标准协议。内置服务器为魔力宝盒自带的 MoonLink（书房/收藏/便签/待办/记忆等 29 个工具）。', `
+        <div class="set-card"><div class="sc-main"><div class="sc-title">MoonLink（魔力宝盒内置）</div>
+          <div class="sc-desc">内置的唯一 MCP 服务器：把书房检索、收藏、便签、待办、记忆等能力以标准 MCP 工具暴露给小月（即「工具/管家模式」）</div></div>
+          <button type="button" class="toggle ${g.mcp?.builtinEnabled !== false ? 'on' : ''}" id="sp-mcp-builtin"></button></div>
         <div class="set-status" id="sp-mcp-status"></div>
       `)
-      $('sp-mcp-builtin').onchange = async (e) => {
-        const r = await saveAppSettings({ mcp: { builtinEnabled: e.target.checked } })
+      $('sp-mcp-builtin').onclick = async (e) => {
+        e.currentTarget.classList.toggle('on')
+        const r = await saveAppSettings({ mcp: { builtinEnabled: $('sp-mcp-builtin').classList.contains('on') } })
         const st = $('sp-mcp-status'); st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
@@ -814,24 +831,38 @@ async function renderWork(nav, arg, label2) {
         <div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px"><b>PDF 处理</b><div class="set-desc" style="margin:4px 0 0">PDF 拆分/合并/提取（规划中）</div></div>
       `)
     } else if (cat.id === 'websearch') {
+      // #256.2 用户 5 点：URL 提取并入网络搜索分类（分组块）；选项类=自定义下拉
       const g = await loadAppSettings()
       const provs = APP_PROVIDERS?.websearch ?? []
       const ws = g.websearch ?? {}
-      panel('网络搜索', '给小月接上搜索能力（本质=搜索服务商暴露给 Agent 的工具）。', `
-        <div class="set-field"><label>搜索服务商</label>
-          <select id="sp-ws-prov" style="width:280px">
+      const ue = g.urlextract ?? {}
+      panel('网络搜索', '给小月接上搜索与网页提取能力（本质=服务商能力暴露给 Agent 的工具）。', `
+        <div class="sc-title" style="font-size:13.5px;font-weight:600;margin:0 0 10px">搜索服务商</div>
+        <div class="set-field" style="max-width:340px"><label>服务商</label>
+          <select id="sp-ws-prov" class="set-select">
             <option value="">— 未启用 —</option>
-            ${provs.map((p) => `<option value="${p.id}" ${ws.provider === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
+            ${provs.filter((p) => p.id !== 'custom').map((p) => `<option value="${p.id}" ${ws.provider === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
           </select>
         </div>
         <div id="sp-ws-cfg"></div>
         <div class="set-row"><button type="button" class="btn" id="sp-ws-save">保存</button><span class="set-status" id="sp-ws-status"></span></div>
+        <div class="sc-title" style="font-size:13.5px;font-weight:600;margin:26px 0 10px">URL 提取（收藏网页正文）</div>
+        <div class="set-field" style="max-width:340px"><label>提取方式</label>
+          <select id="sp-ue-mode" class="set-select">
+            <option value="local" ${ue.mode !== 'provider' ? 'selected' : ''}>本地提取（内置 Readability，零成本）</option>
+            <option value="provider" ${ue.mode === 'provider' ? 'selected' : ''}>服务商 API（质量更高）</option>
+          </select>
+        </div>
+        <div id="sp-ue-cfg"></div>
+        <div class="set-row"><button type="button" class="btn" id="sp-ue-save">保存</button><span class="set-status" id="sp-ue-status"></span></div>
       `)
       const renderWsCfg = () => {
         const pv = provs.find((x) => x.id === $('sp-ws-prov').value)
         const box = $('sp-ws-cfg')
         if (!pv) { box.innerHTML = ''; return }
-        box.innerHTML = pv.needs.map((k) => `<div class="set-field"><label>${k === 'apiKey' ? 'API Key（只存钥匙串）' : k}</label><input type="${k === 'apiKey' ? 'password' : 'text'}" id="sp-ws-${k}" value="${k !== 'apiKey' ? (ws.config?.[k] ?? '') : ''}" placeholder="${k === 'apiKey' ? (ws.config?.[k] ? '已配置，不回显' : '') : ''}" /></div>`).join('')
+        if (pv.baseUrl) box.innerHTML = `<div class="set-field" style="max-width:340px"><label>API 地址（自动填入）</label><input id="sp-ws-baseUrl" value="${pv.baseUrl}" readonly /></div>`
+        else box.innerHTML = `<div class="set-field" style="max-width:340px"><label>API 地址</label><input id="sp-ws-baseUrl" value="${ws.config?.baseUrl ?? ''}" placeholder="https://…" /></div>`
+        box.innerHTML += `<div class="set-field" style="max-width:340px"><label>API Key（只存钥匙串）</label><input type="password" id="sp-ws-apiKey" placeholder="${ws.config?.apiKey ? '已配置，不回显' : ''}" /></div>`
       }
       $('sp-ws-prov').onchange = renderWsCfg
       renderWsCfg()
@@ -839,49 +870,101 @@ async function renderWork(nav, arg, label2) {
         const st = $('sp-ws-status'); st.className = 'set-status'; st.textContent = '保存中…'
         const pv = provs.find((x) => x.id === $('sp-ws-prov').value)
         const config = {}
-        for (const k of pv?.needs ?? []) {
-          const inp = $(`sp-ws-${k}`)
-          if (inp && inp.value) config[k] = k === 'apiKey' ? 'keychain:websearch' : inp.value
-        }
-        const r = await saveAppSettings({ websearch: { provider: $('sp-ws-prov').value, config } })
+        const b = $('sp-ws-baseUrl')
+        if (b && b.value) config.baseUrl = b.value
+        const k = $('sp-ws-apiKey')
+        if (k && k.value) config.apiKey = 'keychain:websearch'
+        const r = await saveAppSettings({ websearch: { provider: $('sp-ws-prov').value, config: { ...config, ...(k && !k.value && ws.config?.apiKey ? { apiKey: ws.config.apiKey } : {}) } } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存（搜索工具接入 Agent 在后续迭代点亮）' : (r.error ?? '保存失败')
       }
-    } else if (cat.id === 'urlextract') {
-      const g = await loadAppSettings()
-      const ue = g.urlextract ?? {}
-      panel('URL 提取', '收藏网页时正文提取方式：本地提取（内置）或服务商 API。', `
-        <div class="set-row"><label style="cursor:pointer"><input type="radio" name="sp-ue-mode" value="local" ${ue.mode !== 'provider' ? 'checked' : ''} /> 本地提取（内置 Readability，零成本）</label></div>
-        <div class="set-row"><label style="cursor:pointer"><input type="radio" name="sp-ue-mode" value="provider" ${ue.mode === 'provider' ? 'checked' : ''} /> 服务商 API（质量更高，需 Key）</label></div>
-        <div class="set-field"><label>服务商 API 地址</label><input id="sp-ue-url" value="${ue.config?.baseUrl ?? ''}" placeholder="https://…/extract" /></div>
-        <div class="set-field"><label>API Key（只存钥匙串）</label><input id="sp-ue-key" type="password" placeholder="${ue.config?.apiKey ? '已配置，不回显' : ''}" /></div>
-        <div class="set-row"><button type="button" class="btn" id="sp-ue-save">保存</button><span class="set-status" id="sp-ue-status"></span></div>
-      `)
+      // URL 提取服务商（Jina Reader 免 key；Firecrawl/自定义需 key）
+      const UE_PROVIDERS = [
+        { id: 'jina', label: 'Jina Reader', baseUrl: 'https://r.jina.ai', needsKey: false },
+        { id: 'firecrawl', label: 'Firecrawl', baseUrl: 'https://api.firecrawl.dev/v1/scrape', needsKey: true },
+        { id: 'custom', label: '自定义', baseUrl: '', needsKey: true },
+      ]
+      const renderUeCfg = () => {
+        const mode = $('sp-ue-mode').value
+        const box = $('sp-ue-cfg')
+        if (mode !== 'provider') { box.innerHTML = '<div class="set-desc" style="margin:0">本地提取：内置 Readability 算法在本机解析正文，零流量零成本。</div>'; return }
+        const cur = UE_PROVIDERS.find((x) => x.id === (ue.provider ?? 'jina')) ?? UE_PROVIDERS[0]
+        box.innerHTML = `
+          <div class="set-field" style="max-width:340px"><label>服务商</label>
+            <select id="sp-ue-prov" class="set-select">${UE_PROVIDERS.map((x) => `<option value="${x.id}" ${x.id === cur.id ? 'selected' : ''}>${x.label}</option>`).join('')}</select>
+          </div>
+          <div class="set-field" style="max-width:340px"><label>API 地址（选商自动填）</label><input id="sp-ue-url" value="${ue.config?.baseUrl ?? cur.baseUrl}" placeholder="https://…" /></div>
+          <div class="set-field" style="max-width:340px"><label>API Key（只存钥匙串）</label><input type="password" id="sp-ue-key" placeholder="${ue.config?.apiKey ? '已配置，不回显' : ''}" /></div>`
+        $('sp-ue-prov').onchange = () => {
+          const pv = UE_PROVIDERS.find((x) => x.id === $('sp-ue-prov').value)
+          $('sp-ue-url').value = pv.baseUrl
+        }
+      }
+      $('sp-ue-mode').onchange = renderUeCfg
+      renderUeCfg()
       $('sp-ue-save').onclick = async () => {
         const st = $('sp-ue-status'); st.className = 'set-status'; st.textContent = '保存中…'
-        const mode = w.querySelector('input[name="sp-ue-mode"]:checked').value
-        const config = { baseUrl: $('sp-ue-url').value }
-        if ($('sp-ue-key').value) config.apiKey = 'keychain:urlextract'
-        const r = await saveAppSettings({ urlextract: { mode, config } })
+        const mode = $('sp-ue-mode').value
+        let patch
+        if (mode === 'provider') {
+          const config = { baseUrl: $('sp-ue-url')?.value ?? '' }
+          if ($('sp-ue-key')?.value) config.apiKey = 'keychain:urlextract'
+          else if (ue.config?.apiKey) config.apiKey = ue.config.apiKey
+          patch = { urlextract: { mode, provider: $('sp-ue-prov')?.value ?? 'jina', config } }
+        } else {
+          patch = { urlextract: { mode, provider: '', config: {} } }
+        }
+        const r = await saveAppSettings(patch)
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
     } else if (cat.id === 'docproc') {
+      // #256.2 用户 6 点：本地处理=具体服务商下拉（选商自动填 API 地址，不手填）
       const g = await loadAppSettings()
       const dp = g.docproc ?? {}
-      panel('文档处理', 'PDF/Office 解析：本地处理（内置 OCR）或第三方服务。', `
-        <div class="set-row"><label style="cursor:pointer"><input type="radio" name="sp-dp-mode" value="local" ${dp.mode !== 'provider' ? 'checked' : ''} /> 本地处理（内置解析/OCR）</label></div>
-        <div class="set-row"><label style="cursor:pointer"><input type="radio" name="sp-dp-mode" value="provider" ${dp.mode === 'provider' ? 'checked' : ''} /> 第三方服务（参考 Cherry Studio：Doc2X / MinerU / Mathpix 等）</label></div>
-        <div class="set-field"><label>服务商 API 地址</label><input id="sp-dp-url" value="${dp.config?.baseUrl ?? ''}" placeholder="https://…" /></div>
-        <div class="set-field"><label>API Key（只存钥匙串）</label><input id="sp-dp-key" type="password" placeholder="${dp.config?.apiKey ? '已配置，不回显' : ''}" /></div>
+      const DP_PROVIDERS = [
+        { id: 'builtin', label: '内置解析（纯文本/PDF 文本层，无需网络）', baseUrl: '', local: true, needsKey: false },
+        { id: 'winocr', label: 'Windows OCR（系统自带，离线）', baseUrl: '', local: true, needsKey: false },
+        { id: 'paddle', label: 'PaddleOCR（本地服务）', baseUrl: 'http://127.0.0.1:8866', local: true, needsKey: false },
+        { id: 'doc2x', label: 'Doc2X', baseUrl: 'https://v2.doc2x.noedgeai.com', local: false, needsKey: true },
+        { id: 'mineru', label: 'MinerU', baseUrl: 'https://mineru.net/api/v4', local: false, needsKey: true },
+        { id: 'mathpix', label: 'Mathpix', baseUrl: 'https://api.mathpix.com', local: false, needsKey: true },
+        { id: 'textin', label: 'TextIn（合合信息）', baseUrl: 'https://api.textin.com', local: false, needsKey: true },
+      ]
+      const cur = DP_PROVIDERS.find((x) => x.id === (dp.provider ?? 'builtin')) ?? DP_PROVIDERS[0]
+      const mode = dp.mode ?? (cur.local ? 'local' : 'provider')
+      panel('文档处理', 'PDF/Office/图片解析为文本：本地处理（离线引擎）或第三方云服务。', `
+        <div class="set-field" style="max-width:400px"><label>处理方式与服务商</label>
+          <select id="sp-dp-prov" class="set-select">
+            <optgroup label="本地处理">${DP_PROVIDERS.filter((x) => x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${x.label}</option>`).join('')}</optgroup>
+            <optgroup label="第三方服务">${DP_PROVIDERS.filter((x) => !x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${x.label}</option>`).join('')}</optgroup>
+          </select>
+        </div>
+        <div id="sp-dp-cfg"></div>
         <div class="set-row"><button type="button" class="btn" id="sp-dp-save">保存</button><span class="set-status" id="sp-dp-status"></span></div>
       `)
+      const renderDpCfg = () => {
+        const pv = DP_PROVIDERS.find((x) => x.id === $('sp-dp-prov').value)
+        const box = $('sp-dp-cfg')
+        if (!pv) { box.innerHTML = ''; return }
+        let html = ''
+        if (pv.baseUrl) html += `<div class="set-field" style="max-width:400px"><label>API 地址（选商自动填）</label><input id="sp-dp-url" value="${pv.baseUrl}" ${pv.local ? 'readonly' : ''} /></div>`
+        else html += `<div class="set-field" style="max-width:400px"><label>API 地址</label><input id="sp-dp-url" value="${dp.config?.baseUrl && dp.provider === pv.id ? dp.config.baseUrl : ''}" placeholder="本地引擎无需地址" ${pv.local && !pv.baseUrl ? 'readonly' : ''} /></div>`
+        if (pv.needsKey) html += `<div class="set-field" style="max-width:400px"><label>API Key（只存钥匙串）</label><input type="password" id="sp-dp-key" placeholder="${dp.config?.apiKey ? '已配置，不回显' : ''}" /></div>`
+        box.innerHTML = html
+      }
+      $('sp-dp-prov').onchange = renderDpCfg
+      renderDpCfg()
       $('sp-dp-save').onclick = async () => {
         const st = $('sp-dp-status'); st.className = 'set-status'; st.textContent = '保存中…'
-        const mode = w.querySelector('input[name="sp-dp-mode"]:checked').value
-        const config = { baseUrl: $('sp-dp-url').value }
-        if ($('sp-dp-key').value) config.apiKey = 'keychain:docproc'
-        const r = await saveAppSettings({ docproc: { mode, config } })
+        const pv = DP_PROVIDERS.find((x) => x.id === $('sp-dp-prov').value)
+        const config = {}
+        const b = $('sp-dp-url')
+        if (b && b.value) config.baseUrl = b.value
+        const k = $('sp-dp-key')
+        if (k && k.value) config.apiKey = 'keychain:docproc'
+        else if (dp.config?.apiKey && dp.provider === pv.id) config.apiKey = dp.config.apiKey
+        const r = await saveAppSettings({ docproc: { mode: pv.local ? 'local' : 'provider', provider: pv.id, config } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
@@ -890,9 +973,10 @@ async function renderWork(nav, arg, label2) {
       const provs = APP_PROVIDERS?.memory ?? []
       const mm = g.memory ?? {}
       panel('记忆', '长期记忆：小月跨会话记住关键信息（参考 Hermes 记忆架构）。', `
-        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-mm-on" ${mm.enabled !== false ? 'checked' : ''} /> 启用长期记忆——对话中的关键事实自动沉淀，跨会话可 recall</label>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">启用长期记忆</div><div class="sc-desc">对话中的关键事实自动沉淀，跨会话可 recall</div></div>
+          <button type="button" class="toggle ${mm.enabled !== false ? 'on' : ''}" id="sp-mm-on"></button></div>
         <div class="set-field"><label>记忆提供方</label>
-          <select id="sp-mm-prov" style="width:280px">
+          <select id="sp-mm-prov" class="set-select set-select-sm">
             ${provs.map((p) => `<option value="${p.id}" ${(mm.provider ?? 'builtin') === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
           </select>
           <div class="set-desc" style="margin-top:4px" id="sp-mm-note"></div>
@@ -905,9 +989,10 @@ async function renderWork(nav, arg, label2) {
       }
       $('sp-mm-prov').onchange = noteSync
       noteSync()
+      $('sp-mm-on').onclick = (e) => { e.currentTarget.classList.toggle('on'); $('sp-mm-save').click() }
       $('sp-mm-save').onclick = async () => {
         const st = $('sp-mm-status'); st.className = 'set-status'; st.textContent = '保存中…'
-        const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').checked, provider: $('sp-mm-prov').value } })
+        const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').classList.contains('on'), provider: $('sp-mm-prov').value } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
