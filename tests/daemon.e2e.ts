@@ -119,6 +119,27 @@ assert('auth logout ok', auOut.at(-1)?.event === 'done' && auOut.at(-1)?.code ==
 const pingAu = await rpc('ping', {})
 assert('auth 调用后 daemon 存活', pingAu.at(-1)?.text === 'pong')
 
+// #253.48：auth byok——壳端 BYOK 设置（XDG 隔离环境：无 keychain 服务时 save 到钥匙串可能失败，
+// 因此只断言「协议可达+校验逻辑+get/clear 幂等」，不强断 save 成功）
+const byGet0 = await rpc('auth', { op: 'byok', sub: 'get' }, 15_000)
+const byGet0Ok = byGet0.at(-1)?.event === 'done' && (() => { try { const d = JSON.parse(String(byGet0.at(-1)?.text ?? '{}')); return typeof d.hasKey === 'boolean' } catch { return false } })()
+assert('byok get 形态（hasKey 布尔）', byGet0Ok, JSON.stringify(byGet0.at(-1))?.slice(0, 100))
+const bySaveBad = await rpc('auth', { op: 'byok', sub: 'save', baseUrl: '', model: '' }, 4000)
+assert('byok save 缺参拒绝', bySaveBad.at(-1)?.event === 'done' && bySaveBad.at(-1)?.code === 1)
+const bySaveBad2 = await rpc('auth', { op: 'byok', sub: 'save', baseUrl: 'ftp://x', model: 'm' }, 4000)
+assert('byok save 非法 baseUrl 拒绝', bySaveBad2.at(-1)?.event === 'done' && bySaveBad2.at(-1)?.code === 1)
+const byTestNo = await rpc('auth', { op: 'byok', sub: 'test' }, 15_000)
+assert('byok test 未配置优雅拒绝', byTestNo.at(-1)?.event === 'done' && byTestNo.at(-1)?.code === 1)
+const byClear = await rpc('auth', { op: 'byok', sub: 'clear' }, 4000)
+assert('byok clear ok', byClear.at(-1)?.event === 'done' && byClear.at(-1)?.code === 0)
+const byBad = await rpc('auth', { op: 'byok', sub: 'nope' }, 4000)
+assert('byok 未知 sub 拒绝', byBad.at(-1)?.event === 'done' && byBad.at(-1)?.code === 2)
+const byGet1 = await rpc('auth', { op: 'byok', sub: 'get' }, 15_000)
+const byGet1Ok = byGet1.at(-1)?.event === 'done' && (() => { try { const d = JSON.parse(String(byGet1.at(-1)?.text ?? '{}')); return d.hasKey === false && d.baseUrl === '' } catch { return false } })()
+assert('byok clear 后 get 回空态', byGet1Ok)
+const pingBy = await rpc('ping', {})
+assert('byok 调用后 daemon 存活', pingBy.at(-1)?.text === 'pong')
+
 proc.kill()
 console.log(`\n${results.length - failed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

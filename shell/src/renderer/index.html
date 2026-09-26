@@ -108,6 +108,32 @@
     #work { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
     /* 滚动条：云端网页端同款（细圆角半透明 slate） */
+
+    /* ===== 设置中心（#253.48：3 列化，复用主布局；不再弹窗） ===== */
+    #settings-cat { padding: 6px; }
+    .set-cat {
+      padding: 7px 10px; margin: 1px 0; border-radius: 8px; cursor: pointer;
+      font-size: 13px; line-height: 1.5; display: flex; align-items: center; gap: 8px;
+      color: var(--fg); transition: background .12s; white-space: nowrap; overflow: hidden;
+    }
+    .set-cat:hover { background: var(--hover); }
+    .set-cat.active { background: var(--active-bg); color: var(--active-fg); font-weight: 600; }
+    .set-cat .sub { font-size: 11px; color: var(--muted); margin-left: auto; padding-left: 6px; }
+    .set-cat.active .sub { color: var(--active-fg); opacity: .75; }
+    .set-panel { padding: 24px 32px; max-width: 760px; user-select: text; }
+    .set-panel h3 { font-size: 15px; margin: 0 0 4px; }
+    .set-desc { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 0 0 18px; }
+    .set-field { margin: 0 0 14px; }
+    .set-field > label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 5px; }
+    .set-field input { width: 100%; }
+    .set-row { display: flex; gap: 8px; align-items: center; margin: 14px 0; flex-wrap: wrap; }
+    .set-hint { font-size: 12px; line-height: 1.6; }
+    .set-hint.ok { color: var(--ok); }
+    .set-hint.err { color: var(--err); }
+    .set-status { min-height: 18px; font-size: 12px; }
+    .set-status.ok { color: var(--ok); }
+    .set-status.err { color: var(--err); }
+
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { border-radius: 9999px; background: rgba(148,163,184,.45); }
@@ -195,26 +221,6 @@
     <!-- 第三列：工作台（各页帧共用容器，JS 按 nav+selection 渲染） -->
     <section id="work"></section>
   </div>
-
-  <dialog id="dlg-settings" style="border:1px solid var(--border);border-radius:12px;background:var(--bg2);color:var(--fg);min-width:520px">
-    <form method="dialog" style="padding:20px;display:flex;flex-direction:column;gap:14px">
-      <strong style="font-size:15px">设置</strong>
-      <label class="row" style="justify-content:space-between">⚙ 工具（管家模式） <input type="checkbox" id="set-tools" checked /></label>
-      <label class="row" style="justify-content:space-between">📋 剪贴板自动采集 <input type="checkbox" id="set-watch" /></label>
-      <div class="row">
-        <span style="min-width:120px">Vault 目录</span>
-        <input id="set-vault" style="flex:1" readonly placeholder="未选择" />
-        <button type="button" class="btn ghost" id="set-vault-pick">选择…</button>
-      </div>
-      <div class="row">
-        <span style="min-width:120px">BYOK 直连</span>
-        <button type="button" class="btn ghost" id="set-byok">配置…</button>
-      </div>
-      <div class="row" style="justify-content:flex-end;gap:8px;margin-top:6px">
-        <button type="button" class="btn ghost" id="set-close">关闭</button>
-      </div>
-    </form>
-  </dialog>
 
   <script src="vendor/mermaid.min.js"></script>
   <script src="renderer.js"></script>

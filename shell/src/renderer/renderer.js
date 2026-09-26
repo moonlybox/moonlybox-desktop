@@ -61,6 +61,26 @@ const NAVS = {
 };  // 对象字面量后接 IIFE 必须分号（ASI 陷阱 #253.20）
 let currentNav = null
 const openFrames = new Set();  // 下一 IIFE 以 ( 开头，无分号会被解析为跨行调用（ASI 陷阱 #253.20）
+// 设置中心（#253.48）：设置走 3 列 UI（第二列=分类，第三列=面板），不用弹窗。
+// 分类=用户定稿 11 项；v1 实现面板：通用/文档库/模型（平台API=BYOK 表单、本地模型）/外观；其余占位空态（后续迭代逐个点亮）。
+const SETTINGS_CATS = [
+  { id: 'general', label: '通用' },
+  { id: 'appearance', label: '外观' },
+  { id: 'library', label: '文档库' },
+  { id: 'chat', label: '对话' },
+  { id: 'model', label: '模型', subs: ['platform', 'local', 'custom'] },
+  { id: 'messaging', label: '消息平台' },
+  { id: 'mcp', label: 'MCP', subs: ['builtin', 'market', 'custom'] },
+  { id: 'skills', label: '技能' },
+  { id: 'websearch', label: '网络搜索' },
+  { id: 'docproc', label: '文档处理' },
+  { id: 'memory', label: '记忆' },
+]
+const SET_SUB_LABELS = { platform: '平台 API', local: '本地模型', custom: '自定义', builtin: '内置', market: '市场' }
+let currentSetCat = 'general'
+let currentSetSub = null
+let toolsEnabled = true // 工具（管家模式）开关——原 set-tools checkbox 迁入通用面板
+let clipboardWatch = false; // 剪贴板自动采集（启动默认关，与 T3 行为一致；面板开关即时生效）——分号必须：下行 IIFE 以 ( 开头（ASI 陷阱 #253.20）
 
 // ---- 第二列拖宽（#253.18：限幅 180-420px，持久化；防误操作比例失调） ----
 (() => {
@@ -116,7 +136,6 @@ function switchNav(nav) {
   renderFrameTabs()
   renderList(nav)
   renderWork(nav)
-  if (nav === 'settings') $('dlg-settings').showModal()
 }
 
 document.querySelectorAll('.rail-btn[data-nav]').forEach((el) => {
@@ -142,6 +161,27 @@ let currentCloudId = null // 云端列当前浏览项（active 高亮恢复用�
 async function renderList(nav) {
   const head = $('list-head')
   const body = $('list-body')
+
+  // 设置中心：第二列=分类列表（#253.48）
+  if (nav === 'settings') {
+    head.textContent = '设置'
+    body.innerHTML = ''
+    for (const cat of SETTINGS_CATS) {
+      const el = document.createElement('div')
+      const active = cat.id === currentSetCat
+      el.className = 'set-cat' + (active ? ' active' : '')
+      const subText = cat.subs ? (currentSetSub ? (SET_SUB_LABELS[currentSetSub] ?? '') : '平台 API · 本地模型 · 自定义') : ''
+      el.innerHTML = `<span>${cat.label}</span>${subText ? `<span class="sub">${subText}</span>` : ''}`
+      el.onclick = () => {
+        currentSetCat = cat.id
+        currentSetSub = null
+        renderList('settings')
+        renderWork('settings')
+      }
+      body.appendChild(el)
+    }
+    return
+  }
   head.textContent = NAVS[nav].label
   body.innerHTML = ''
 
@@ -316,7 +356,120 @@ async function renderWork(nav, arg, label2) {
     return
   }
   if (nav === 'vault' && arg?.dir) {
-    w.innerHTML = `<div style="padding:20px" class="muted">📁 ${arg.rel}<br/><br/>目录操作（新建/移动）接 v0.6</div>`
+    w.innerHTML = `<div style="padding:20px" class="muted">📁 ${arg.rel}</div>`
+    return
+  }
+  // ---------- 设置中心：第三列面板（#253.48） ----------
+  if (nav === 'settings') {
+    const cat = SETTINGS_CATS.find((c) => c.id === currentSetCat) ?? SETTINGS_CATS[0]
+    if (cat.subs && !currentSetSub) currentSetSub = cat.subs[0] // 有二级分类默认进第一个（模型→平台 API）
+    const panel = (title, desc, inner) => {
+      const tabs = cat.subs
+        ? `<div class="set-row" style="gap:6px;margin:0 0 18px">${cat.subs.map((s) => `<button type="button" class="btn ${s === currentSetSub ? '' : 'ghost'}" data-setsub="${s}">${SET_SUB_LABELS[s] ?? s}</button>`).join('')}</div>`
+        : ''
+      w.innerHTML = `<div class="set-panel"><h3>${title}</h3><p class="set-desc">${desc}</p>${tabs}${inner}</div>`
+      w.querySelectorAll('[data-setsub]').forEach((b) => {
+        b.onclick = () => { currentSetSub = b.dataset.setsub; renderWork('settings') }
+      })
+    }
+    if (cat.id === 'general') {
+      panel('通用', '基础行为设置。', `
+        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-tools" ${toolsEnabled ? 'checked' : ''} /> 工具（管家模式）——小月可调用工具代你执行写操作（写操作仍需确认）</label>
+        <label class="set-row" style="cursor:pointer"><input type="checkbox" id="sp-watch" ${clipboardWatch ? 'checked' : ''} /> 剪贴板自动采集——监听复制的文本/链接，存入收集箱</label>
+      `)
+      $('sp-tools').onchange = (e) => { toolsEnabled = e.target.checked }
+      $('sp-watch').onchange = (e) => { clipboardWatch = e.target.checked; window.moonlybox.setClipboardWatch(e.target.checked) }
+    } else if (cat.id === 'library') {
+      panel('文档库（书房）', '本地书房目录与同步内核。目录是同步、检索、小月的单一数据源。', `
+        <div class="set-field">
+          <label>书房目录（Vault）</label>
+          <div class="set-row" style="margin:0"><input id="sp-vault" readonly placeholder="未选择" style="flex:1" /><button type="button" class="btn ghost" id="sp-vault-pick">选择…</button></div>
+        </div>
+        <div class="set-status" id="sp-vault-status"></div>
+      `)
+      $('sp-vault').value = (await window.moonlybox.vaultGet()) ?? ''
+      $('sp-vault-pick').onclick = async () => {
+        const r = await window.moonlybox.vaultPick()
+        if (r.ok) {
+          $('sp-vault').value = r.root
+          $('sp-vault-status').className = 'set-status ok'
+          $('sp-vault-status').textContent = '✓ 已保存（内核重启后生效）'
+        }
+      }
+    } else if (cat.id === 'model' && currentSetSub === 'platform') {
+      panel('模型 · 平台 API（BYOK）', '自带 API Key 直连大模型平台。Key 只存本机钥匙串，永不上传、不落明文文件。', `
+        <div class="set-field"><label>API BaseUrl</label><input id="sp-byok-url" placeholder="https://api.bigmodel.cn/api/paas/v4" /></div>
+        <div class="set-field"><label>模型名</label><input id="sp-byok-model" placeholder="glm-4.7-flash" /></div>
+        <div class="set-field"><label>API Key（本地端点可留空；已配置时不回显）</label><input id="sp-byok-key" type="password" placeholder="sk-…" /></div>
+        <div class="set-row">
+          <button type="button" class="btn" id="sp-byok-save">保存</button>
+          <button type="button" class="btn ghost" id="sp-byok-test">测试连接</button>
+          <button type="button" class="btn ghost" id="sp-byok-clear">清除</button>
+          <span class="set-status" id="sp-byok-status"></span>
+        </div>
+      `)
+      try {
+        const g = JSON.parse((await window.moonlybox.rpc('auth', { op: 'byok', sub: 'get' }, 10_000)).text)
+        $('sp-byok-url').value = g.baseUrl ?? ''
+        $('sp-byok-model').value = g.model ?? ''
+        $('sp-byok-status').textContent = g.hasKey ? 'Key 已入钥匙串' : ''
+      } catch {}
+      $('sp-byok-save').onclick = async () => {
+        const st = $('sp-byok-status')
+        st.className = 'set-status'; st.textContent = '保存中…'
+        const args = { sub: 'save', baseUrl: $('sp-byok-url').value, model: $('sp-byok-model').value, apiKey: $('sp-byok-key').value }
+        const r = await window.moonlybox.rpc('auth', { op: 'byok', ...args }, 15_000)
+        if (r.event === 'done' && r.code === 0) {
+          st.className = 'set-status ok'; st.textContent = '✓ 已保存'
+          $('sp-byok-key').value = ''
+        } else { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '保存失败' }
+      }
+      $('sp-byok-test').onclick = async () => {
+        const st = $('sp-byok-status')
+        st.className = 'set-status'; st.textContent = '测试中…'
+        const r = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'test' }, 30_000)
+        if (r.event === 'done' && r.code === 0) { st.className = 'set-status ok'; st.textContent = '✓ 连接成功' }
+        else { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '连接失败' }
+      }
+      $('sp-byok-clear').onclick = async () => {
+        await window.moonlybox.rpc('auth', { op: 'byok', sub: 'clear' }, 10_000)
+        $('sp-byok-url').value = ''; $('sp-byok-model').value = ''; $('sp-byok-key').value = ''
+        const st = $('sp-byok-status'); st.className = 'set-status ok'; st.textContent = '已清除'
+      }
+    } else if (cat.id === 'model' && currentSetSub === 'local') {
+      panel('模型 · 本地模型', '本地推理端点（Ollama / LM Studio 等）。无需 API Key，只需端点地址与模型名。', `
+        <div class="set-field"><label>端点地址</label><input id="sp-local-url" placeholder="http://127.0.0.1:11434/v1" /></div>
+        <div class="set-field"><label>模型名</label><input id="sp-local-model" placeholder="qwen2.5:7b" /></div>
+        <div class="set-row">
+          <button type="button" class="btn" id="sp-local-save">保存</button>
+          <button type="button" class="btn ghost" id="sp-local-test">测试连接</button>
+          <span class="set-status" id="sp-local-status"></span>
+        </div>
+      `)
+      try {
+        const g = JSON.parse((await window.moonlybox.rpc('auth', { op: 'byok', sub: 'get' }, 10_000)).text)
+        $('sp-local-url').value = g.baseUrl ?? ''
+        $('sp-local-model').value = g.model ?? ''
+        $('sp-local-status').textContent = g.hasKey ? '已配置（含 Key）' : '已配置（无 Key，本地端点模式）'
+      } catch {}
+      $('sp-local-save').onclick = async () => {
+        const st = $('sp-local-status')
+        st.className = 'set-status'; st.textContent = '保存中…'
+        const r = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'save', baseUrl: $('sp-local-url').value, model: $('sp-local-model').value }, 15_000)
+        if (r.event === 'done' && r.code === 0) { st.className = 'set-status ok'; st.textContent = '✓ 已保存' }
+        else { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '保存失败' }
+      }
+      $('sp-local-test').onclick = async () => {
+        const st = $('sp-local-status')
+        st.className = 'set-status'; st.textContent = '测试中…'
+        const r = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'test' }, 30_000)
+        if (r.event === 'done' && r.code === 0) { st.className = 'set-status ok'; st.textContent = '✓ 连接成功' }
+        else { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '连接失败' }
+      }
+    } else {
+      const subLabel = currentSetSub ? ` · ${SET_SUB_LABELS[currentSetSub] ?? currentSetSub}` : ''
+      panel(`${cat.label}${subLabel}`, '该分类的功能在后续迭代中逐步开放。', '')
+    }
     return
   }
   if (nav === 'cloud' && !arg && currentCloudId) {
@@ -497,7 +650,7 @@ function bindChat() {
     $('q').value = ''
     $('btn-ask').disabled = true
     log(`\n你> ${q}`)
-    const tools = $('set-tools')?.checked ?? true
+    const tools = toolsEnabled
     const r = await window.moonlybox.rpc('xiaoyue', tools ? { q, tools: true } : { q }, 300_000)
     $('btn-ask').disabled = false
     log(r.event === 'done' && r.code === 0 ? `小月> ${r.text}` : `⚠ ${r.message ?? r.text}`)
@@ -572,25 +725,7 @@ $('btn-avatar').onclick = async () => {
     showLoginDialog()
   }
 }
-document.querySelectorAll('.rail-btn[data-nav="settings"]')[0].onclick = async () => {
-  const v = await window.moonlybox.vaultGet()
-  $('set-vault').value = v ?? ''
-  $('dlg-settings').showModal()
-}
-$('set-watch').addEventListener('change', (e) => window.moonlybox.setClipboardWatch(e.target.checked))
-$('set-close').onclick = () => $('dlg-settings').close()
-$('set-vault-pick').onclick = async () => {
-  const r = await window.moonlybox.vaultPick()
-  if (r.ok) {
-    $('set-vault').value = r.root
-    // 全链生效：daemon 用新 env 需重启（exit 后下轮自动 spawn 读新 env）
-    $('set-vault').after(Object.assign(document.createElement('span'), { textContent: '✓ 已保存（内核重启后生效）', className: 'muted', style: 'font-size:11px' }))
-  }
-}
-$('set-byok').onclick = () => {
-  // BYOK 三步（setup 走 CLI 交互，壳端 v0.6 做 IPC 表单；此处引导）
-  window.alert('在终端运行：moonlybox xiaoyue --setup（三项：BaseUrl/Model/Key，key 只存本机钥匙串）')
-}
+// （#253.48：设置已迁 3 列 UI——rail settings 按钮走全局 switchNav 委托，旧弹窗逻辑移除）
 
 // ---------- 升级灯（需求 4：有更新=黄点；就绪=绿点闪烁；点击确认安装） ----------
 function setUpgradeState(state, version) {
@@ -734,8 +869,9 @@ async function showLoginDialog() {
   // 首屏：未选 vault → 引导；否则进书房
   const vault = await window.moonlybox.vaultGet()
   if (!vault) {
+    // 未选书房：直接进设置中心（文档库面板）引导选择（#253.48：设置走 3 列 UI）
+    currentSetCat = 'library'
     switchNav('settings')
-    $('dlg-settings').showModal()
   } else {
     switchNav('vault')
   }

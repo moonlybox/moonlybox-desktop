@@ -19,7 +19,7 @@
  */
 import { cmdXiaoyue } from '../commands/xiaoyue'
 import { runAgentTools } from '../commands/xiaoyue'
-import { byokReady, byokChat } from '../lib/llm'
+import { byokReady, byokChat, loadByokMeta, saveByokMeta, saveByokKey, clearByok, loadByokKey } from '../lib/llm'
 import { cmdSync } from '../commands/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
@@ -109,7 +109,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           // P2：桌面壳工具模式（Agent 循环进 UI）——确认制走 confirm_request/confirm_response IPC 双向
           if (!byokReady()) {
             code = 1
-            parts.push('工具模式需要 BYOK：先运行 `moonlybox xiaoyue --setup`')
+            parts.push('工具模式需要 BYOK：在 设置 → 模型 → 平台 API 配置')
           } else {
             const confirm = (toolName: string, argsJson: string) =>
               requestUiConfirm(req.id, toolName, argsJson, emit)
@@ -219,6 +219,59 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         } else if (op2 === 'logout') {
           clearCredentials()
           text = JSON.stringify({ ok: true })
+        } else if (op2 === 'byok') {
+          // #253.48：BYOK 壳端设置（key 只经 daemon 入钥匙串，绝不回传本体/落 renderer）
+          const sub = String(args.sub ?? '')
+          if (sub === 'get') {
+            const meta = loadByokMeta()
+            text = JSON.stringify({ ok: true, baseUrl: meta?.baseUrl ?? '', model: meta?.model ?? '', hasKey: loadByokKey() !== null })
+          } else if (sub === 'save') {
+            const baseUrl = String(args.baseUrl ?? '').trim().replace(/\/+$/, '')
+            const model = String(args.model ?? '').trim()
+            const apiKey = typeof args.apiKey === 'string' ? args.apiKey.trim() : ''
+                       if (!baseUrl || !model) {
+              code = 1
+              text = 'BaseUrl 与模型名必填'
+            } else if (!/^https?:\/\//.test(baseUrl)) {
+              code = 1
+              text = 'BaseUrl 需以 http(s):// 开头（如 https://api.bigmodel.cn/api/paas/v4）'
+            } else if (apiKey && apiKey.length < 8) {
+              code = 1
+              text = 'API Key 格式不对（至少 8 位；本地端点留空即可）'
+            } else {
+              saveByokMeta({ baseUrl, model })
+              if (apiKey) saveByokKey(apiKey)
+              text = JSON.stringify({ ok: true, hasKey: apiKey ? true : loadByokKey() !== null })
+            }
+          } else if (sub === 'test') {
+            // 最小补全验证连通（20s 超时）；不落盘任何东西，仅验
+            const meta = loadByokMeta()
+            const apiKey = loadByokKey()
+            if (!meta || !apiKey) {
+              code = 1
+              text = 'BYOK 未配置完整（BaseUrl/模型名/Key）'
+            } else {
+              const res = await fetch(`${meta.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+                body: JSON.stringify({ model: meta.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+                signal: AbortSignal.timeout(20_000),
+              })
+              if (res.ok) {
+                text = JSON.stringify({ ok: true })
+              } else {
+                code = 1
+                const body = await res.text().catch(() => '')
+                text = `连通失败 HTTP ${res.status}${body ? `：${body.slice(0, 160)}` : ''}`
+              }
+          }
+          } else if (sub === 'clear') {
+            clearByok()
+            text = JSON.stringify({ ok: true })
+          } else {
+            code = 2
+            text = `未知 byok sub：${sub}`
+          }
         } else {
           code = 2
           text = `未知 auth op：${op2}`
@@ -265,7 +318,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           // T4：AI 生成/修复图示（§8.2 AI 生成=小月 BYOK 通道，错误回喂重试闭环）
           if (!byokReady()) {
             code = 1
-            text = 'AI 生成需要 BYOK：先运行 `moonlybox xiaoyue --setup`'
+            text = 'AI 生成需要 BYOK：在 设置 → 模型 → 平台 API 配置'
             break
           }
           const prompt = String(args.prompt ?? '').trim()

@@ -54,7 +54,8 @@ export function saveByokKey(apiKey: string): void {
   new Entry(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).setPassword(apiKey)
 }
 
-function loadByokKey(): string | null {
+/** 读取 key 本体（仅 daemon 内部使用——响应用只回 hasKey 布尔，key 绝不出内核） */
+export function loadByokKey(): string | null {
   try {
     const { Entry } = require('@napi-rs/keyring') as typeof import('@napi-rs/keyring')
     return new Entry(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).getPassword() || null
