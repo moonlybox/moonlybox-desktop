@@ -146,8 +146,10 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             expiresIn: dc.expires_in,
           })
         } else if (op2 === 'poll') {
-          const creds = loadCredentials() ?? { clientId: '' }
-          const result = await pollToken(creds.clientId, String(args.deviceCode ?? ''), undefined)
+          // clientId 从 start 响应透传（args.clientId）——不从 creds 读：退出登录后 creds 已清，
+          // 读空 clientId 会导致 client_id 与 device_code 不匹配 → 服务器误判 expired（用户实测死循环根因）
+          const clientIdForPoll = String(args.clientId ?? '') || (loadCredentials() ?? { clientId: '' }).clientId
+          const result = await pollToken(clientIdForPoll, String(args.deviceCode ?? ''), undefined)
           if (result.status === 'done') {
             const tokens = result.tokens
             const me = await fetch(`https://moonlybox.cn/api/auth/me`, { headers: { Authorization: `Bearer ${tokens.access_token}` } })

@@ -498,7 +498,7 @@ async function showLoginDialog() {
     await new Promise((r2) => setTimeout(r2, 5000))
     if (closed) break
     try {
-      const pr = await window.moonlybox.rpc('auth', { op: 'poll', deviceCode: d.deviceCode }, 30_000)
+      const pr = await window.moonlybox.rpc('auth', { op: 'poll', deviceCode: d.deviceCode, clientId: d.clientId }, 30_000)
       if (pr.event !== 'done') continue
       const pd = JSON.parse(pr.text)
       if (pd.status === 'done') {
