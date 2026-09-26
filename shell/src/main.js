@@ -339,6 +339,12 @@ app.whenReady().then(() => {
   ipcMain.handle('upgrade:click', () => { /* renderer 点升级灯：触发检查更新 */ try { require('./updater').checkNow?.() } catch {} return win?.webContents.send('shell:updateReady', {}) })
 
   ipcMain.handle('vault:get', () => configuredVault())
+  // #257 通用目录选择（不落 vault 配置——备份目录等场景）
+  ipcMain.handle('shell:pickFolder', async () => {
+    const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: '选择目录' })
+    if (r.canceled || !r.filePaths?.[0]) return { ok: false }
+    return { ok: true, path: r.filePaths[0] }
+  })
   ipcMain.handle('vault:pick', async () => {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: '选择书房（本地 vault）目录' })
     if (r.canceled || !r.filePaths?.[0]) return { ok: false }

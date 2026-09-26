@@ -44,6 +44,7 @@ $('win-close').onclick = () => window.moonlybox.winClose()
 // 图标单一源：path 数据（lucide 风格描边）——rail/页帧 tab/云端列共用（index.html rail 由 JS 注入，杜绝两处漂移）
 const ICON_PATHS = {
   vault: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  backup: '<path d="M12 2v8"/><path d="m8 6 4 4 4-4"/><rect x="4" y="13" width="16" height="8" rx="2"/><path d="M4 17h16"/>',
   cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
   diagram: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
   xiaoyue: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
@@ -53,8 +54,9 @@ const ICON_PATHS = {
 const navIconSvg = (nav, size = 18) => `<svg viewBox="0 0 24 24" style="width:${size}px;height:${size}px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">${ICON_PATHS[nav] ?? ''}</svg>`
 const NAVS = {
   vault: { label: '书房（本地）' },
-  cloud: { label: '云端' },
   diagram: { label: '图示' },
+  cloud: { label: '云端' },
+  backup: { label: '备份' },
   xiaoyue: { label: '小月' },
   help: { label: '帮助' },
   settings: { label: '设置' },
@@ -242,6 +244,7 @@ const cloudIconSvg = (name) => `<svg class="cloud-ico" viewBox="0 0 24 24">${CLO
 // 云端隐藏项（服务端 manifest 与客户端白名单双保险；后续云端放开再删）
 const CLOUD_HIDDEN = new Set(['moments', 'square'])
 let currentCloudId = null // 云端列当前浏览项（active 高亮恢复用，#253.45）
+let currentBkId = null // 备份列当前选中项（#257）
 
 async function renderList(nav) {
   const head = $('list-head')
@@ -295,6 +298,31 @@ async function renderList(nav) {
       if (exp) exp.textContent = expanding ? '全部收起' : '全部展开'
     }
     await renderTree(body, '', 0)
+  } else if (nav === 'backup') {
+    // #257 备份：第二列=注册的备份目录列表
+    head.innerHTML = `备份 <span id="bk-add" style="float:right;font-weight:400;font-size:12px;color:var(--accent);cursor:pointer">＋ 新建</span>`
+    $('bk-add').onclick = () => renderWork('backup', { create: true })
+    body.innerHTML = '<div class="muted" style="padding:10px">加载中…</div>'
+    try {
+      const r = await window.moonlybox.rpc('backup', { op: 'list' }, 10_000)
+      const d = JSON.parse(r.text)
+      if (!d.entries?.length) {
+        body.innerHTML = '<div class="muted" style="padding:10px">还没有备份目录<br/>点右上「＋ 新建」注册一个本地目录，<br/>把它同步到云端书房的指定目录下。</div>'
+        return
+      }
+      body.innerHTML = ''
+      for (const e of d.entries) {
+        const el = document.createElement('div')
+        el.className = 'tree-item' + (currentBkId === e.id ? ' active' : '')
+        el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${e.localPath.split(/[\\/]/).pop()}</span>
+          <span class="muted" style="font-size:10.5px;flex:none">${e.enabled ? '启用' : '停用'}</span>`
+        el.onclick = () => { currentBkId = e.id; renderList('backup'); renderWork('backup', { id: e.id }) }
+        body.appendChild(el)
+      }
+    } catch (e) {
+      body.innerHTML = '<div class="muted" style="padding:10px">加载失败</div>'
+    }
+    return
   } else if (nav === 'cloud') {
     // #254：云端功能=服务端下发 manifest（功能升级/新增零客户端发版）
     const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
@@ -1030,6 +1058,111 @@ async function renderWork(nav, arg, label2) {
       const subLabel = currentSetSub ? ` · ${SET_SUB_LABELS[currentSetSub] ?? currentSetSub}` : ''
       panel(`${cat.label}${subLabel}`, '该分类的功能在后续迭代中逐步开放。', '')
     }
+    return
+  }
+  // ---------- 备份（#257）：新建向导 + 详情面板 ----------
+  if (nav === 'backup') {
+    if (arg?.create) {
+      // 新建界面：本地目录选择 + 归属目录下拉 + 格式说明
+      let dirs = [{ id: null, label: '书房根目录' }]
+      w.innerHTML = `
+        <div class="set-panel">
+          <h3>新建备份目录</h3>
+          <p class="set-desc">把一个本地文件夹持续备份到云端书房的指定目录（归属目录）下。<br/>
+          <b>可识别的文件格式：.md、.txt 文本文件</b>（其它格式自动跳过）；备份只上传、不改动本地文件；
+          文件内容未变化时自动跳过；同一目录可注册多次同步到不同归属目录。</p>
+          <div class="set-field">
+            <label>本地目录</label>
+            <div class="set-row" style="margin:0"><input id="bk-path" readonly placeholder="未选择" style="flex:1" />
+              <button type="button" class="btn ghost" id="bk-pick">选择…</button></div>
+          </div>
+          <div class="set-field">
+            <label>云端归属目录（同步目标）</label>
+            <select id="bk-dir" class="set-select" style="max-width:340px"><option>加载中…</option></select>
+          </div>
+          <div class="set-row">
+            <button type="button" class="btn" id="bk-save">注册并立即同步</button>
+            <span class="set-status" id="bk-status"></span>
+          </div>
+        </div>`
+      $('bk-pick').onclick = async () => {
+        const r = await window.moonlybox.pickFolder()
+        if (r.ok) $('bk-path').value = r.path
+      }
+      try {
+        const rd = await window.moonlybox.rpc('backup', { op: 'dirs' }, 15_000)
+        dirs = JSON.parse(rd.text).dirs ?? dirs
+      } catch {}
+      const sel = $('bk-dir')
+      sel.innerHTML = dirs.map((d) => `<option value="${d.id ?? ''}">${d.label}</option>`).join('')
+      $('bk-save').onclick = async () => {
+        const st = $('bk-status')
+        st.className = 'set-status'; st.textContent = '注册中…'
+        const localPath = $('bk-path').value
+        if (!localPath) { st.className = 'set-status err'; st.textContent = '先选择本地目录'; return }
+        const dirId = sel.value || null
+        const dirName = sel.options[sel.selectedIndex]?.text ?? '书房根目录'
+        const r = await window.moonlybox.rpc('backup', { op: 'add', localPath, directoryId: dirId, directoryName: dirName }, 15_000)
+        if (r.event !== 'done' || r.code !== 0) { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '注册失败'; return }
+        const entry = JSON.parse(r.text).entry
+        st.textContent = '已注册，首次同步中…'
+        const rs = await window.moonlybox.rpc('backup', { op: 'sync', id: entry.id }, 120_000)
+        currentBkId = entry.id
+        renderList('backup')
+        renderWork('backup', { id: entry.id, justSynced: rs.event === 'done' && rs.code === 0 ? JSON.parse(rs.text).report : null })
+      }
+      return
+    }
+    if (arg?.id) {
+      // 详情面板
+      const r = await window.moonlybox.rpc('backup', { op: 'list' }, 10_000)
+      const d = JSON.parse(r.text)
+      const e = d.entries.find((x) => x.id === arg.id)
+      if (!e) { w.innerHTML = '<div class="set-panel"><p class="set-desc">备份目录不存在</p></div>'; return }
+      w.innerHTML = `
+        <div class="set-panel">
+          <h3>${e.localPath.split(/[\\/]/).pop()}</h3>
+          <p class="set-desc">${e.localPath}</p>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">云端归属目录</div><div class="sc-desc">${e.directoryName}</div></div></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">启用备份</div><div class="sc-desc">停用后此目录不再参与同步（已上传内容保留在云端）</div></div>
+            <button type="button" class="toggle ${e.enabled ? 'on' : ''}" id="bk-toggle"></button></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">上次同步</div><div class="sc-desc">${e.lastSyncAt ? new Date(e.lastSyncAt).toLocaleString() : '从未'}</div></div>
+            <button type="button" class="btn" id="bk-sync">立即同步</button></div>
+          <div class="set-row" style="margin-top:20px"><button type="button" class="btn ghost" id="bk-del" style="color:var(--err)">删除此备份目录</button></div>
+          <div class="set-status" id="bk-detail-status"></div>
+        </div>`
+      if (arg.justSynced) {
+        const rep = arg.justSynced
+        const st = $('bk-detail-status')
+        st.className = 'set-status ok'
+        st.textContent = `首次同步完成：上传 ${rep.uploaded.length}，跳过 ${rep.skipped.length}${rep.conflicts.length ? `，失败 ${rep.conflicts.length}` : ''}`
+      }
+      $('bk-toggle').onclick = async (ev) => {
+        ev.currentTarget.classList.toggle('on')
+        await window.moonlybox.rpc('backup', { op: 'toggle', id: e.id, enabled: $('bk-toggle').classList.contains('on') }, 10_000)
+        renderList('backup')
+      }
+      $('bk-sync').onclick = async (ev) => {
+        const st = $('bk-detail-status')
+        st.className = 'set-status'; st.textContent = '同步中…'
+        const rs = await window.moonlybox.rpc('backup', { op: 'sync', id: e.id }, 120_000)
+        if (rs.event === 'done' && rs.code === 0) {
+          const rep = JSON.parse(rs.text).report
+          st.className = 'set-status ok'
+          st.textContent = `完成：上传 ${rep.uploaded.length}，跳过 ${rep.skipped.length}${rep.conflicts.length ? `，失败 ${rep.conflicts.length}（${rep.conflicts[0].reason.slice(0, 60)}）` : ''}`
+        } else { st.className = 'set-status err'; st.textContent = rs.message ?? rs.text ?? '同步失败' }
+        renderList('backup')
+      }
+      $('bk-del').onclick = async () => {
+        await window.moonlybox.rpc('backup', { op: 'remove', id: e.id }, 10_000)
+        currentBkId = null
+        renderList('backup')
+        renderWork('backup')
+      }
+      return
+    }
+    // 无选中：占位
+    w.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center" class="muted">选择左侧备份目录，或点「＋ 新建」注册一个</div>'
     return
   }
   if (nav === 'cloud' && !arg && currentCloudId) {

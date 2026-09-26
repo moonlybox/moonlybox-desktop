@@ -25,6 +25,7 @@ import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
 import { loadSettings, saveSettings, PLATFORM_PROVIDERS, WEBSEARCH_PROVIDERS, MESSAGING_PROVIDERS, MEMORY_PROVIDERS } from '../lib/settings'
+import { loadRegistry, addEntry, removeEntry, setEnabled, listCloudDirs, backupSync, BACKUP_EXTS } from '../lib/backup'
 import { apiGet, apiPost } from '../lib/api'
 import { loadCredentials, saveCredentials, clearCredentials } from '../lib/auth'
 import { ensureClient, requestDeviceCode, pollToken, refreshAccessToken } from '../lib/device-flow'
@@ -291,6 +292,42 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         } else {
           code = 2
           text = `未知 auth op：${op2}`
+        }
+      } catch (e: any) {
+        code = 1
+        text = String(e?.message ?? e)
+      }
+      break
+    }
+    case 'backup': {
+      // #257 备份目录：list/add/remove/toggle/dirs（云端目录树平铺）/sync（上行到归属目录）
+      try {
+        const op1 = String(args.op ?? 'list')
+        if (op1 === 'list') {
+          text = JSON.stringify({ ok: true, entries: loadRegistry().entries, exts: BACKUP_EXTS })
+        } else if (op1 === 'add') {
+          const localPath = String(args.localPath ?? '').trim()
+          const directoryId = args.directoryId ? String(args.directoryId) : null
+          const directoryName = String(args.directoryName ?? '书房根目录')
+          if (!localPath) { code = 1; text = '本地目录必填' } else {
+            const entry = addEntry(localPath, directoryId, directoryName)
+            text = JSON.stringify({ ok: true, entry })
+          }
+        } else if (op1 === 'remove') {
+          removeEntry(String(args.id ?? ''))
+          text = JSON.stringify({ ok: true })
+        } else if (op1 === 'toggle') {
+          setEnabled(String(args.id ?? ''), args.enabled === true)
+          text = JSON.stringify({ ok: true })
+        } else if (op1 === 'dirs') {
+          const dirs = await listCloudDirs()
+          text = JSON.stringify({ ok: true, dirs })
+        } else if (op1 === 'sync') {
+          const rep = await backupSync(String(args.id ?? ''))
+          text = JSON.stringify({ ok: true, report: rep })
+        } else {
+          code = 2
+          text = `未知 backup op：${op1}`
         }
       } catch (e: any) {
         code = 1

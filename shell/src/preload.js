@@ -34,4 +34,6 @@ contextBridge.exposeInMainWorld('moonlybox', {
   protocolState: () => ipcRenderer.invoke('shell:protocolState'),
   // #256：通用设置保存后同步 main 行为（托盘/唤醒/剪贴板/开机启动）
   applyGeneral: (general) => ipcRenderer.invoke('shell:applyGeneral', general),
+  // #257：通用目录选择（备份目录场景——不落 vault 配置）
+  pickFolder: () => ipcRenderer.invoke('shell:pickFolder'),
 })

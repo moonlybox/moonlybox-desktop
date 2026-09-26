@@ -166,6 +166,19 @@ assert('settings 未知 op 拒绝', stBad.at(-1)?.event === 'done' && stBad.at(-
 const pingSt = await rpc('ping', {})
 assert('settings 调用后 daemon 存活', pingSt.at(-1)?.text === 'pong')
 
+// #257：backup 通道——list/校验/dirs 未登录优雅/未知 op
+const bkList = await rpc('backup', { op: 'list' }, 15_000)
+const bkListOk = bkList.at(-1)?.event === 'done' && (() => { try { const d = JSON.parse(String(bkList.at(-1)?.text ?? '{}')); return Array.isArray(d.entries) && Array.isArray(d.exts) } catch { return false } })()
+assert('backup list 注册表形态', bkListOk)
+const bkAddBad = await rpc('backup', { op: 'add', localPath: '' }, 4000)
+assert('backup add 空路径拒绝', bkAddBad.at(-1)?.event === 'done' && bkAddBad.at(-1)?.code === 1)
+const bkAddBad2 = await rpc('backup', { op: 'add', localPath: '/nonexistent-dir-xyz' }, 4000)
+assert('backup add 目录不存在拒绝', bkAddBad2.at(-1)?.event === 'done' && bkAddBad2.at(-1)?.code === 1)
+const bkBad = await rpc('backup', { op: 'nope' }, 4000)
+assert('backup 未知 op 拒绝', bkBad.at(-1)?.event === 'done' && bkBad.at(-1)?.code === 2)
+const pingBk = await rpc('ping', {})
+assert('backup 调用后 daemon 存活', pingBk.at(-1)?.text === 'pong')
+
 proc.kill()
 console.log(`\n${results.length - failed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)
