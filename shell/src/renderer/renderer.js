@@ -319,6 +319,17 @@ async function renderWork(nav, arg, label2) {
     w.innerHTML = `<div style="padding:20px" class="muted">📁 ${arg.rel}<br/><br/>目录操作（新建/移动）接 v0.6</div>`
     return
   }
+  if (nav === 'cloud' && !arg && currentCloudId) {
+    // 切走再切回：恢复上次浏览的云端功能（高亮已恢复，工作台同步恢复——#253.47）
+    try {
+      const r0 = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
+      if (r0.event === 'done' && r0.code === 0) {
+        const items = (JSON.parse(r0.text).data?.nav ?? []).filter((x) => !CLOUD_HIDDEN.has(x.id))
+        const it = items.find((x) => x.id === currentCloudId)
+        if (it) return renderWork('cloud', it)
+      }
+    } catch {}
+  }
   if (nav === 'cloud' && arg && typeof arg === 'object') {
     // #254：云端功能页=WebView 承载 web SPA（布局/交互/多视图=web 端现成；升级零客户端发版）
     // #253.41/#253.42：防闪烁+加载动画——webview 初始透明+spinner 覆盖层，目标页 did-finish-load 后淡入并移除 spinner（无调试文字）
