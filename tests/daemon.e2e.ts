@@ -108,6 +108,15 @@ assert('diagram ai BYOK 引导', dgAiDone?.event === 'done' && String(dgAiDone?.
 const pingAi = await rpc('ping', {})
 assert('diagram ai 调用后 daemon 存活', pingAi.at(-1)?.text === 'pong')
 
+// #253：auth RPC——whoami 形态+坏 op 拒绝（沙箱环境无登录态/网络，断言优雅终止不崩）
+const auBad = await rpc('auth', { op: 'nope' })
+assert('auth 未知 op 拒绝', auBad.at(-1)?.event === 'done' && auBad.at(-1)?.code === 2)
+const auWho = await rpc('auth', { op: 'whoami' }, 15_000)
+const auDone = auWho.at(-1)
+assert('auth whoami 终止（loggedIn 字段在）', auDone?.event === 'done' && String(auDone?.text ?? '').includes('loggedIn'), JSON.stringify(auDone)?.slice(0, 100))
+const pingAu = await rpc('ping', {})
+assert('auth 调用后 daemon 存活', pingAu.at(-1)?.text === 'pong')
+
 proc.kill()
 console.log(`\n${results.length - failed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

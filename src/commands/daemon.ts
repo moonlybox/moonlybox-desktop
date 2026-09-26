@@ -24,7 +24,8 @@ import { cmdSync } from '../commands/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
 import { apiGet, apiPost } from '../lib/api'
-import { loadCredentials } from '../lib/auth'
+import { loadCredentials, saveCredentials } from '../lib/auth'
+import { ensureClient, requestDeviceCode, pollToken } from '../lib/device-flow'
 import type { CommandOptions } from '../lib/runner'
 
 type Json = Record<string, unknown>
@@ -39,6 +40,8 @@ interface Request {
 // 壳对同一 rpcId 发第二条请求 {id, cmd:'confirm_response', args:{value:bool}}，
 // 主循环收到后 resolve 这里挂起的 Promise——agent 循环继续。
 const pendingConfirms = new Map<number, (v: boolean) => void>()
+// #253 登录会话（Device Flow 两段式：start 领码 → 壳轮询 poll；不阻塞 daemon worker）
+const loginSession: { clientId: string; deviceCode: string; userCode: string; url: string; interval: number } | null = null
 
 function requestUiConfirm(
   rpcId: number,
@@ -123,6 +126,57 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         await cmdMemory([sub, ...tail], {} as CommandOptions)
       }, (t) => { parts.push(t); emit(t) })
       text = parts.join('\n')
+      break
+    }
+    case 'auth': {
+      // #253：壳端登录（Device Flow 两段式，快调用不阻塞）
+      const op2 = String(args.op ?? '')
+      try {
+        if (op2 === 'start') {
+          const creds = loadCredentials() ?? { clientId: '' }
+          let clientId = creds.clientId
+          if (!clientId) clientId = await ensureClient(undefined)
+          const dc = await requestDeviceCode(clientId, undefined)
+          text = JSON.stringify({
+            ok: true,
+            clientId,
+            deviceCode: dc.device_code,
+            url: dc.verification_uri_complete ?? `${dc.verification_uri ?? 'https://moonlybox.cn/oauth/device'}?user_code=${dc.user_code}`,
+            userCode: dc.user_code,
+            expiresIn: dc.expires_in,
+          })
+        } else if (op2 === 'poll') {
+          const creds = loadCredentials() ?? { clientId: '' }
+          const result = await pollToken(creds.clientId, String(args.deviceCode ?? ''), undefined)
+          if (result.status === 'done') {
+            const tokens = result.tokens
+            const me = await fetch(`https://moonlybox.cn/api/auth/me`, { headers: { Authorization: `Bearer ${tokens.access_token}` } })
+            const meBody = (await me.json().catch(() => null)) as any
+            const email = meBody?.data?.user?.email ?? meBody?.data?.email
+            const userId = meBody?.data?.user?.id ?? meBody?.data?.id
+            saveCredentials({
+              clientId: creds.clientId,
+              accessToken: tokens.access_token,
+              accessTokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+              refreshToken: tokens.refresh_token,
+              accountEmail: email,
+              userId,
+            })
+            text = JSON.stringify({ ok: true, status: 'done', email: email ?? userId ?? 'user' })
+          } else {
+            text = JSON.stringify({ ok: true, status: result.status })
+          }
+        } else if (op2 === 'whoami') {
+          const creds = loadCredentials()
+          text = JSON.stringify({ ok: true, email: creds?.accountEmail ?? null, userId: creds?.userId ?? null, loggedIn: !!creds?.accessToken })
+        } else {
+          code = 2
+          text = `未知 auth op：${op2}`
+        }
+      } catch (e: any) {
+        code = 1
+        text = String(e?.message ?? e)
+      }
       break
     }
     case 'diagram': {

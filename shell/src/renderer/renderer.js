@@ -327,7 +327,18 @@ function renderConfirmBar(rpcId, payload) {
 }
 
 // ---------- 设置弹窗（需求 5：集中设置） ----------
-$('btn-avatar').onclick = () => switchNav('help')
+$('btn-avatar').onclick = async () => {
+  const r = await window.moonlybox.rpc('auth', { op: 'whoami' }, 15_000)
+  let loggedIn = false
+  try { loggedIn = !!JSON.parse(r.text).loggedIn } catch {}
+  if (loggedIn) {
+    // 已登录：账号信息小面板
+    const d = JSON.parse(r.text)
+    window.alert(`已登录：${d.email ?? d.userId}\n\n（退出登录接 v0.5 续：moonlybox logout）`)
+  } else {
+    showLoginDialog()
+  }
+}
 document.querySelectorAll('.rail-btn[data-nav="settings"]')[0].onclick = async () => {
   const v = await window.moonlybox.vaultGet()
   $('set-vault').value = v ?? ''
@@ -394,11 +405,74 @@ $('btn-upgrade').onclick = async () => {
   }
 }
 
+// ---------- 账号（头像点击=登录/账号面板） ----------
+let loginPolling = false
+
+async function refreshAvatar() {
+  const r = await window.moonlybox.rpc('auth', { op: 'whoami' }, 15_000)
+  try {
+    const d = JSON.parse(r.text)
+    if (d.loggedIn && d.email) {
+      $('btn-avatar').textContent = (d.email[0] ?? '?').toUpperCase()
+      $('btn-avatar').title = `已登录：${d.email}`
+    } else {
+      $('btn-avatar').textContent = '未'
+      $('btn-avatar').title = '未登录（点击登录）'
+    }
+  } catch {}
+}
+
+async function showLoginDialog() {
+  const dlg = document.createElement('dialog')
+  dlg.style.cssText = 'border:1px solid var(--border);border-radius:12px;background:var(--bg2);color:var(--fg);padding:24px;min-width:460px'
+  dlg.innerHTML = `
+    <strong style="font-size:15px">登录魔力宝盒</strong>
+    <p class="muted" style="font-size:12.5px;margin:10px 0">1. 点击下方按钮在浏览器打开授权页（手机也可以）<br/>2. 输入用户码确认 → 回到本窗口等待</p>
+    <div class="mono" style="background:var(--hover);border-radius:8px;padding:10px;font-size:18px;letter-spacing:2px;text-align:center;margin:10px 0" id="lg-code">获取中…</div>
+    <div class="row" style="justify-content:center;gap:8px">
+      <button class="btn" id="lg-open">打开授权页</button>
+      <button class="btn ghost" id="lg-cancel">取消</button>
+    </div>
+    <p class="muted mono" id="lg-status" style="margin-top:10px;font-size:12px">等待授权…</p>`
+  document.body.appendChild(dlg)
+  dlg.showModal()
+  const r = await window.moonlybox.rpc('auth', { op: 'start' }, 30_000)
+  if (r.event !== 'done' || r.code !== 0) {
+    $('lg-status').textContent = '发起失败：' + (r.text || r.message)
+    return
+  }
+  const d = JSON.parse(r.text)
+  $('lg-code').textContent = d.userCode
+  let closed = false
+  $('lg-open').onclick = () => window.moonlybox.openExternal(d.url)
+  $('lg-cancel').onclick = () => { closed = true; dlg.close(); dlg.remove() }
+  dlg.addEventListener('close', () => { closed = true })
+  // 轮询授权结果（5s 间隔，快调用不阻塞 daemon worker）
+  const deadline = Date.now() + (d.expiresIn ?? 900) * 1000
+  while (!closed && Date.now() < deadline) {
+    await new Promise((r2) => setTimeout(r2, 5000))
+    if (closed) break
+    try {
+      const pr = await window.moonlybox.rpc('auth', { op: 'poll', deviceCode: d.deviceCode }, 30_000)
+      if (pr.event !== 'done') continue
+      const pd = JSON.parse(pr.text)
+      if (pd.status === 'done') {
+        $('lg-status').textContent = `✓ 已登录：${pd.email}`
+        await refreshAvatar()
+        setTimeout(() => { closed = true; dlg.close(); dlg.remove(); if (currentNav === 'cloud') renderList('cloud') }, 1200)
+        return
+      }
+      if (pd.status === 'denied') { $('lg-status').textContent = '已在网页拒绝'; break }
+      if (pd.status === 'expired') { $('lg-status').textContent = '用户码过期，重新点击头像'; break }
+      // pending/slow_down → 继续等
+    } catch {}
+  }
+}
+
 // ---------- 版本显示 + 首屏 ----------
 (async () => {
   const v = await window.moonlybox.versions()
-  $('btn-avatar').textContent = '未'
-  $('btn-avatar').title = '未登录（点击了解账号）'
+  await refreshAvatar()
   // 首屏：未选 vault → 引导；否则进书房
   const vault = await window.moonlybox.vaultGet()
   if (!vault) {
