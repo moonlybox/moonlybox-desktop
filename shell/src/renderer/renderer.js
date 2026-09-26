@@ -328,7 +328,9 @@ async function renderWork(nav, arg, label2) {
     w.innerHTML = `<webview id="cloud-wv" style="flex:1;width:100%;height:100%" src="about:blank"></webview>`
     const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
     if (r.event !== 'done' || r.code !== 0) { w.innerHTML = `<div style="padding:16px" class="muted">加载失败：${r.text ?? ''}</div>`; return }
-    const { webBase, token } = JSON.parse(r.text)
+    const parsed = JSON.parse(r.text)
+    const webBase = parsed.data?.webBase ?? parsed.webBase ?? 'https://moonlybox.cn'  // webBase 在 data 里（daemon nav: {ok,data,token}），兜底官方域
+    const token = parsed.token
     const wv = $('cloud-wv')
     let injected = false
     wv.addEventListener('dom-ready', async () => {
