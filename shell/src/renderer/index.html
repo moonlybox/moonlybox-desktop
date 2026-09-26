@@ -29,15 +29,15 @@
     #titlebar .brand { font-size: 13px; font-weight: 700; }
     /* 页帧 tab（#253.25 用户）：active 图标/文字同色；inactive 常驻底色（页帧占位感），与 active 亮底成差 */
     #titlebar .tabs { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+    /* #253.27 用户：深色下原 inactive 底更亮眼——两底对调（active=亮调 mix 底，inactive=bg2 底），文字色不换 */
     #titlebar .frame-tab {
-      border: 0; background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--muted); font-size: 12.5px;
+      border: 0; background: var(--bg2); color: var(--muted); font-size: 12.5px;
       padding: 5px 12px; border-radius: 7px; cursor: pointer;
       display: flex; align-items: center;
     }
     #titlebar .frame-tab:hover { color: var(--fg); }
     #titlebar .frame-tab.active {
-      background: var(--bg2); color: var(--fg); font-weight: 600;
-      box-shadow: 0 1px 4px rgba(0,0,0,.18); /* 纯色扁平（用户 #253.26：去底部描边），仅留投影表达浮起 */
+      background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--fg); font-weight: 600;
     }
     #titlebar .spacer { flex: 1; }
     #titlebar .win-controls { display: flex; gap: 2px; -webkit-app-region: no-drag; }
