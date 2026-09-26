@@ -332,20 +332,37 @@ $('btn-avatar').onclick = async () => {
   let d = null
   try { d = JSON.parse(r.text) } catch {}
   if (d?.loggedIn) {
-    // 已登录：账号面板（退出=清本机凭据，云端登录态不受影响）
+    // 已登录：账号面板（个人信息+功能菜单；profile 拉全量资料，失败降级 whoami 字段）
+    let p = null
+    try { p = JSON.parse((await window.moonlybox.rpc('auth', { op: 'profile' }, 25_000)).text) } catch {}
+    const nickname = p?.nickname || d.email || '用户'
+    const signature = p?.signature || ''
+    const avatarUrl = p?.avatar || ''
+    const extSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.55"><path d="M7 17L17 7M9 7h8v8"/></svg>`
     const dlg = document.createElement('dialog')
     dlg.innerHTML = `
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-        <div style="width:40px;height:40px;border-radius:50%;background:var(--accent,#3b82f6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px">${(d.email?.[0] ?? '?').toUpperCase()}</div>
-        <div><div style="font-size:14px">${d.email ?? d.userId ?? ''}</div><div class="muted" style="font-size:12px">已登录</div></div>
+      <div style="display:flex;align-items:center;gap:14px">
+        ${avatarUrl
+          ? `<img src="${avatarUrl}" style="width:52px;height:52px;border-radius:50%;object-fit:cover" referrerpolicy="no-referrer"/>`
+          : `<div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px">${(nickname[0] ?? '?').toUpperCase()}</div>`}
+        <div style="min-width:0">
+          <div style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nickname}</div>
+          <div class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px">${signature || (d.email ?? '')}</div>
+        </div>
       </div>
-      <div class="row" style="justify-content:flex-end;gap:8px">
-        <button class="btn ghost" id="ac-cancel">关闭</button>
-        <button class="btn" id="ac-logout">退出登录</button>
-      </div>`
+      <div style="border-top:1px solid var(--border);margin:14px 0 6px"></div>
+      <div id="ac-feedback" style="display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px">问题反馈 ${extSvg}</div>
+      <div id="ac-settings" style="display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px">个人设置 ${extSvg}</div>
+      <div id="ac-logout" style="display:flex;align-items:center;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#f87171">退出登录</div>`
     document.body.appendChild(dlg)
     dlg.showModal()
-    dlg.querySelector('#ac-cancel').onclick = () => dlg.close()
+    const rows = dlg.querySelectorAll('#ac-feedback,#ac-settings,#ac-logout')
+    rows.forEach((el) => {
+      el.onmouseenter = () => { el.style.background = 'var(--hover)' }
+      el.onmouseleave = () => { el.style.background = 'transparent' }
+    })
+    dlg.querySelector('#ac-feedback').onclick = () => { dlg.close(); window.moonlybox.openExternal('https://moonlybox.cn/feedback') }
+    dlg.querySelector('#ac-settings').onclick = () => { dlg.close(); window.moonlybox.openExternal('https://moonlybox.cn/settings') }
     dlg.addEventListener('close', () => dlg.remove())
     dlg.querySelector('#ac-logout').onclick = async () => {
       await window.moonlybox.rpc('auth', { op: 'logout' }, 15_000)

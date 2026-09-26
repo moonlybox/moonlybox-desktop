@@ -169,6 +169,29 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         } else if (op2 === 'whoami') {
           const creds = loadCredentials()
           text = JSON.stringify({ ok: true, email: creds?.accountEmail ?? null, userId: creds?.userId ?? null, loggedIn: !!creds?.accessToken })
+        } else if (op2 === 'profile') {
+          // 头像浮窗数据：/auth/me 全量（昵称/签名/头像 URL）——20s 超时
+          const creds = loadCredentials()
+          if (!creds?.accessToken) {
+            code = 1
+            text = '未登录'
+          } else {
+            const meRes = await fetch(`https://moonlybox.cn/api/auth/me`, {
+              headers: { Authorization: `Bearer ${creds.accessToken}` },
+              signal: AbortSignal.timeout(20_000),
+            })
+            const meBody = (await meRes.json().catch(() => null)) as any
+            const u = meBody?.data?.user
+            text = JSON.stringify({
+              ok: meRes.ok && !!u,
+              email: u?.email ?? creds.accountEmail,
+              nickname: u?.nickname ?? null,
+              signature: u?.signature ?? null,
+              avatar: u?.avatar ?? null,
+              level: u?.level ?? null,
+              premiumExpiresAt: u?.premiumExpiresAt ?? null,
+            })
+          }
         } else if (op2 === 'logout') {
           clearCredentials()
           text = JSON.stringify({ ok: true })
