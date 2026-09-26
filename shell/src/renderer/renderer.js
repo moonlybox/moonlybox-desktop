@@ -317,18 +317,19 @@ async function renderWork(nav, arg, label2) {
   }
   if (nav === 'cloud' && arg && typeof arg === 'object') {
     // #254：云端功能页=WebView 承载 web SPA（布局/交互/多视图=web 端现成；升级零客户端发版）
-    // #253.41：防闪烁——webview 初始透明，目标页加载完再淡入（先导页/中间态用户不可见）
-    w.innerHTML = `<div style="flex:1;display:flex;background:var(--bg)"><webview id="cloud-wv" style="flex:1;width:100%;height:100%;opacity:0;transition:opacity .25s" src="about:blank"></webview></div>`
+    // #253.41/#253.42：防闪烁+加载动画——webview 初始透明+spinner 覆盖层，目标页 did-finish-load 后淡入并移除 spinner（无调试文字）
+    w.innerHTML = `<div style="flex:1;display:flex;position:relative;background:var(--bg)">
+      <webview id="cloud-wv" style="flex:1;width:100%;height:100%;opacity:0;transition:opacity .25s" src="about:blank"></webview>
+      <div id="cloud-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+        <div style="width:34px;height:34px;border:3px solid color-mix(in srgb, var(--accent) 25%, transparent);border-top-color:var(--accent);border-radius:50%;animation:cloudspin .8s linear infinite"></div>
+      </div>
+    </div>`
     const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
     if (r.event !== 'done' || r.code !== 0) { w.innerHTML = `<div style="padding:16px" class="muted">加载失败：${r.text ?? ''}</div>`; return }
     const parsed = JSON.parse(r.text)
     const webBase = parsed.data?.webBase ?? parsed.webBase ?? 'https://moonlybox.cn'  // webBase 在 data 里（daemon nav: {ok,data,token}），兜底官方域
     const token = parsed.token
     const wv = $('cloud-wv')
-    const stateBar = document.createElement('div')
-    stateBar.style.cssText = 'padding:4px 12px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)'
-    stateBar.textContent = '云端加载中…'
-    wv.before(stateBar)
     let injected = false
     wv.addEventListener('dom-ready', async () => {
       // 只处理目标域的首次 ready（about:blank 阶段不注入）
@@ -337,29 +338,18 @@ async function renderWork(nav, arg, label2) {
       if (!cur.startsWith(webBase)) return
       injected = true
       try {
-        if (token) {
-          await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
-          // 回读验证（注入不可见失败太坑——253.33 用户实测营销页=注入没生效）
-          const back = await wv.executeJavaScript(`localStorage.getItem('mf_token')?.slice(0,10) ?? 'NULL'`)
-          stateBar.textContent = `登录态注入：${back === 'NULL' ? '失败' : 'ok（' + back + '…）'}`
-        } else {
-          stateBar.textContent = '无 token（未登录）——返回壳重新登录'
-        }
-      } catch (e) {
+        if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
+      } catch {
+        // 注入失败重试一次（guest 页偶发未就绪）
         await new Promise((r2) => setTimeout(r2, 600))
-        try {
-          if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
-          stateBar.textContent = '登录态注入：ok（重试）'
-        } catch (e2) {
-          stateBar.textContent = '登录态注入失败：' + String(e2?.message ?? e2).slice(0, 80)
-        }
+        try { if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`) } catch {}
       }
       // 路由跳转（#253.35）：web=BrowserRouter（path 路由）——manifest url 归一化去 '#'
       const path = arg.url.replace(/^\/#/, '/')
       // 目标页就绪后淡入（#253.41）：did-finish-load 只对目标导航触发一次
       const reveal = () => {
         wv.style.opacity = '1'
-        stateBar.remove()
+        $('cloud-loading')?.remove()
         wv.removeEventListener('did-finish-load', reveal)
       }
       wv.addEventListener('did-finish-load', reveal)
