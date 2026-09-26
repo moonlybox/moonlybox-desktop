@@ -178,6 +178,10 @@ function createWindow() {
   })
   Menu.setApplicationMenu(null)
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'))
+  // #253.28：窗口状态变化推 renderer（最大化按钮切「最大化/还原」图标）——绑定在 createWindow 内（win 就绪）
+  const pushWinState = () => { try { win?.webContents.send('shell:winState', { maximized: win.isMaximized() }) } catch {} }
+  win.on('maximize', pushWinState)
+  win.on('unmaximize', pushWinState)
   // D12：关窗=真销毁 renderer（2026-09-24 T6 卡7 实测：hide 保活待命 368MB 超 D12 80-150MB 口径 2.5 倍，
   // 触发预埋的切换条件——destroy 换待命内存达标，代价=重开窗口 ~300ms 重建）
   win.on('close', () => {
@@ -297,10 +301,6 @@ app.whenReady().then(() => {
   // ---------- #253：自绘标题栏窗口控制 + vault 目录选择 + vault 文件树（沙箱内） ----------
   ipcMain.handle('win:min', () => win?.minimize())
   ipcMain.handle('win:max', () => { if (!win) return; win.isMaximized() ? win.unmaximize() : win.maximize() })
-  // #253.28：窗口状态变化推 renderer（最大化按钮切「最大化/还原」图标）
-  const pushWinState = () => { try { win?.webContents.send('shell:winState', { maximized: win.isMaximized() }) } catch {} }
-  win?.on('maximize', pushWinState)
-  win?.on('unmaximize', pushWinState)
   ipcMain.handle('win:close', () => win?.close())
   ipcMain.handle('upgrade:click', () => { /* renderer 点升级灯：触发检查更新 */ try { require('./updater').checkNow?.() } catch {} return win?.webContents.send('shell:updateReady', {}) })
 
