@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>MoonlyBox 品牌资产包 · 总览</title>
+<style>
+:root{--bg:#0F0B26;--card:#191342;--line:rgba(191,212,255,.15);--txt:#EAF1FF;--sub:#9C93C9;--acc:#9A78FF}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);font-family:'Microsoft YaHei','PingFang SC',sans-serif;line-height:1.7;padding:44px 22px 64px}
+.wrap{max-width:1020px;margin:0 auto}
+.kicker{font-family:Consolas,monospace;letter-spacing:.3em;color:var(--acc);font-size:12px}
+h1{font-size:28px;font-weight:600;margin:8px 0 4px}
+.lead{color:var(--sub);font-size:14px}
+h2{font-size:17px;font-weight:600;margin:44px 0 16px;padding-left:12px;border-left:3px solid var(--acc)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}
+.grid{display:grid;gap:16px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:1fr 1fr}
+@media(max-width:720px){.g4,.g3,.g2{grid-template-columns:1fr 1fr}}
+.tile{background:radial-gradient(circle at 50% 40%,#251D5E,#161040);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:10px;min-height:150px}
+.tile img{display:block}
+.tile .nm{color:var(--sub);font-size:12px;font-family:Consolas,monospace;text-align:center}
+.row{display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap}
+.checker{background:repeating-conic-gradient(#1B1548 0 25%,#221B56 0 50%) 0 0/20px 20px}
+img.cover{width:100%;border-radius:10px;display:block}
+pre{background:#120D33;border:1px solid var(--line);border-radius:12px;padding:16px;font-family:Consolas,monospace;font-size:12.5px;color:#C9BFE8;overflow-x:auto}
+.tile-light{background:#F1EFFA;border:1px solid rgba(32,26,77,.12)}
+.tile-light .nm{color:#5A5470}
+.tree{font-family:Consolas,monospace;font-size:12.5px;color:var(--sub);white-space:pre-line}
+.tree b{color:var(--txt);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">MOONLYBOX BRAND PACK · PNG/ICO + SVG</div>
+  <h1>品牌资产包总览 · 涌月漩（定稿）</h1>
+  <p class="lead">favicon 全套 · Apple/Android 图标 · 分享封面 · Logo 导出（徽章稿+透明底稿）· Windows/macOS/Linux 客户端图标 · 共 72 文件</p>
+
+  <h2>Favicon（网页标签页）</h2>
+  <div class="card">
+    <div class="row">
+      <div class="tile"><img src="favicon/favicon-48x48.png" width="48"/><div class="nm">favicon-48.png</div></div>
+      <div class="tile"><img src="favicon/favicon-32x32.png" width="32"/><div class="nm">favicon-32.png</div></div>
+      <div class="tile"><img src="favicon/favicon-16x16.png" width="16"/><div class="nm">favicon-16.png（减法版）</div></div>
+      <div class="tile"><img src="svg/favicon.svg" width="72"/><div class="nm">favicon.svg（矢量）</div></div>
+    </div>
+  </div>
+
+  <h2>收藏 / 主屏 / PWA</h2>
+  <div class="grid g4">
+    <div class="tile"><img src="apple/apple-touch-icon-180x180.png" width="110"/><div class="nm">apple-touch-icon-180<br/>iOS 收藏/主屏</div></div>
+    <div class="tile"><img src="android/android-chrome-512x512.png" width="110"/><div class="nm">android-chrome-512</div></div>
+    <div class="tile"><img src="android/maskable-512x512.png" width="110"/><div class="nm">maskable-512<br/>安全区 75.5%</div></div>
+    <div class="tile"><img src="apple/apple-touch-icon-1024x1024.png" width="110"/><div class="nm">apple-touch-icon-1024<br/>App Store</div></div>
+  </div>
+
+  <h2>分享封面（og:image · 苹果 iMessage / 微信 / Twitter 卡片）</h2>
+  <div class="card">
+    <img class="cover" src="share/og-image-1200x630.png" alt="og-image"/>
+    <div class="grid g3" style="margin-top:16px">
+      <div class="tile"><img src="share/og-image-square-1200x1200.png" width="120" style="border-radius:8px"/><div class="nm">方版 1200×1200</div></div>
+      <div class="tile"><img src="svg/mask-icon.svg" width="100"/><div class="nm">mask-icon.svg<br/>Safari 钉选剪影</div></div>
+      <div class="tile"><img src="svg/maskable.svg" width="100"/><div class="nm">maskable.svg</div></div>
+    </div>
+  </div>
+
+  <h2>Logo 导出 · 徽章组合稿（icon 性质）</h2>
+  <div class="grid g2">
+    <div class="tile" style="min-height:220px"><img src="logo/logo-horizontal.png" style="width:100%"/><div class="nm">logo-horizontal.png 1420×512</div></div>
+    <div class="tile" style="min-height:220px;flex-direction:row;justify-content:center"><img src="logo/logo-vertical.png" height="190"/><div class="nm" style="align-self:flex-end">logo-vertical.png 640×800</div></div>
+  </div>
+
+  <h2>Logo · 透明底裸图形（LOGO 用途 · 深底色版）</h2>
+  <div class="grid g2">
+    <div class="tile" style="min-height:200px"><img src="logo/logo-horizontal-transparent.png" style="width:100%"/><div class="nm">logo-horizontal-transparent.png 1240×512</div></div>
+    <div class="tile" style="min-height:200px;flex-direction:row;justify-content:center"><img src="logo/logo-vertical-transparent.png" height="180"/><div class="nm" style="align-self:flex-end">logo-vertical-transparent.png 640×800</div></div>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="tile"><img src="logo/logo-mark-transparent-512.png" height="130"/><div class="nm">logo-mark-transparent-512<br/>352×512 · 深底用</div></div>
+    <div class="tile"><img src="logo/logo-mark-transparent-1024.png" height="130"/><div class="nm">logo-mark-transparent-1024<br/>704×1024 · 深底用</div></div>
+    <div class="tile"><img src="svg/icon-32.svg" width="110"/><div class="nm">icon-32.svg（减法版母版）</div></div>
+  </div>
+
+  <h2>Logo · 透明底裸图形（浅底反色版）</h2>
+  <div class="grid g2">
+    <div class="tile tile-light" style="min-height:200px"><img src="logo/logo-horizontal-light.png" style="width:100%"/><div class="nm">logo-horizontal-light.png 1240×512</div></div>
+    <div class="tile tile-light" style="min-height:200px;flex-direction:row;justify-content:center"><img src="logo/logo-vertical-light.png" height="180"/><div class="nm" style="align-self:flex-end">logo-vertical-light.png 640×800</div></div>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="tile tile-light"><img src="logo/logo-mark-transparent-light-512.png" height="130"/><div class="nm">logo-mark-transparent-light-512<br/>352×512 · 浅底用</div></div>
+    <div class="tile tile-light"><img src="logo/logo-mark-transparent-light-1024.png" height="130"/><div class="nm">logo-mark-transparent-light-1024<br/>704×1024 · 浅底用</div></div>
+  </div>
+
+  <h2>客户端图标</h2>
+  <div class="grid g3">
+    <div class="tile"><img src="client/windows/moonlybox-256x256.png" width="110"/><div class="nm">Windows icon.ico（16–256 八档）</div></div>
+    <div class="tile checker"><img src="client/macos/icon_512x512@2x.png" width="110"/><div class="nm">macOS iconset（82% 留边 → iconutil 转 icns）</div></div>
+    <div class="tile"><img src="client/linux/256x256.png" width="110"/><div class="nm">Linux hicolor 16–512</div></div>
+  </div>
+
+  <h2>`&lt;head&gt;` 引用片段</h2>
+<pre>&lt;link rel="icon" href="/favicon.ico" sizes="48x48"&gt;
+&lt;link rel="icon" href="/favicon.svg" type="image/svg+xml"&gt;
+&lt;link rel="apple-touch-icon" href="/apple-touch-icon.png"&gt;
+&lt;link rel="manifest" href="/site.webmanifest"&gt;
+&lt;link rel="mask-icon" href="/mask-icon.svg" color="#9A78FF"&gt;
+&lt;meta name="theme-color" content="#201A4D"&gt;
+&lt;meta property="og:image" content="/og-image-1200x630.png"&gt;</pre>
+
+  <h2>目录结构</h2>
+  <div class="card tree"><b>moonlybox_brand_pack/</b>
+├── favicon/    favicon.ico · favicon-16/32/48.png
+├── apple/      apple-touch-icon{,-57…180,1024}.png
+├── android/    android-chrome-192/512 · maskable-192/512
+├── share/      og-image-1200x630 · og-image-square-1200x1200
+├── logo/       徽章组合稿 + 透明底裸图形稿（深底版 /-light 浅底版；mark/水平/垂直）
+├── client/     windows(icon.ico+png) · macos(iconset) · linux(16–512)
+├── svg/        favicon · logo-primary/horizontal/vertical · maskable · mask-icon · icon-32/16
+├── site.webmanifest
+├── README.md   ← 完整用法与设计规格速查
+└── _build/     build_pack.py（重建脚本）</div>
+
+  <p class="lead" style="margin-top:28px">设计规格：MoonlyBox Design（美术方向）· 汇编渲染：MoonlyBox（主理人）· 2026-09-26 定稿</p>
+</div>
+</body>
+</html>

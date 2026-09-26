@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="MoonlyBox LOGO 主标志 · 涌月漩">
+  <defs>
+    <linearGradient id="pBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A2360"/>
+      <stop offset="1" stop-color="#201A4D"/>
+    </linearGradient>
+    <radialGradient id="pGlow">
+      <stop offset="0" stop-color="#9A78FF" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#9A78FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pSwirl" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#BFD4FF"/>
+      <stop offset="1" stop-color="#9A78FF"/>
+    </linearGradient>
+    <mask id="pMoonMask">
+      <rect width="512" height="512" fill="#ffffff"/>
+      <circle cx="271" cy="185" r="36" fill="#000000"/>
+    </mask>
+    <path id="pStar4" d="M0 -22 C3.5 -7 7 -3.5 22 0 C7 3.5 3.5 7 0 22 C-3.5 7 -7 3.5 -22 0 C-7 -3.5 -3.5 -7 0 -22 Z"/>
+  </defs>
+
+  <!-- L1 背景徽章 -->
+  <rect width="512" height="512" rx="112" fill="url(#pBg)"/>
+  <!-- L2 辉光（单层） -->
+  <circle cx="256" cy="196" r="130" fill="url(#pGlow)"/>
+  <!-- L3 宝盒：开口 U 形，负空间盒身 -->
+  <path d="M163 308 L163 368 Q163 389 184 389 L328 389 Q349 389 349 368 L349 308"
+        fill="none" stroke="#BFD4FF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- L4 魔力漩涡：1.25 圈渐细螺旋，银蓝(月光)→紫(魔力) -->
+  <path d="M256 288 C205 288 166 246 166 196 C166 146 213 118 256 118 C299 118 322 159 322 196 C322 233 288 254 256 254 C224 254 198 228 198 196"
+        fill="none" stroke="url(#pSwirl)" stroke-width="14" stroke-linecap="round"/>
+  <!-- L5 月牙（涡心，双圆相减，开口朝右上） -->
+  <circle cx="256" cy="196" r="40" fill="#EAF1FF" mask="url(#pMoonMask)"/>
+  <!-- L6 星芒：金星仅此一处 -->
+  <use xlink:href="#pStar4" href="#pStar4" transform="translate(168 106)" fill="#F2E4BE"/>
+  <use xlink:href="#pStar4" href="#pStar4" transform="translate(338 116) scale(0.68)" fill="#EAF1FF"/>
+  <circle cx="150" cy="240" r="6" fill="#EAF1FF"/>
+</svg>

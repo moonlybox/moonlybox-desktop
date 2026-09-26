@@ -1,0 +1,15 @@
+{
+  "name": "MoonlyBox · 魔力宝盒",
+  "short_name": "MoonlyBox",
+  "description": "属于你的、在月色下静静发光的私人 AI 知识收藏空间",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#201A4D",
+  "theme_color": "#201A4D",
+  "icons": [
+    { "src": "android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "maskable-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

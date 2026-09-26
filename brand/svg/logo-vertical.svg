@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 640 800" width="640" height="800" role="img" aria-label="MoonlyBox 垂直标志">
+  <defs>
+    <linearGradient id="vBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A2360"/>
+      <stop offset="1" stop-color="#201A4D"/>
+    </linearGradient>
+    <radialGradient id="vGlow">
+      <stop offset="0" stop-color="#9A78FF" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#9A78FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="vSwirl" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#BFD4FF"/>
+      <stop offset="1" stop-color="#9A78FF"/>
+    </linearGradient>
+    <mask id="vMoonMask">
+      <rect x="-64" y="-40" width="768" height="880" fill="#ffffff"/>
+      <circle cx="271" cy="185" r="36" fill="#000000"/>
+    </mask>
+    <path id="vStar4" d="M0 -22 C3.5 -7 7 -3.5 22 0 C7 3.5 3.5 7 0 22 C-3.5 7 -7 3.5 -22 0 C-7 -3.5 -3.5 -7 0 -22 Z"/>
+  </defs>
+
+  <g transform="translate(64 40)">
+    <rect width="512" height="512" rx="112" fill="url(#vBg)"/>
+    <circle cx="256" cy="196" r="130" fill="url(#vGlow)"/>
+    <path d="M163 308 L163 368 Q163 389 184 389 L328 389 Q349 389 349 368 L349 308"
+          fill="none" stroke="#BFD4FF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M256 288 C205 288 166 246 166 196 C166 146 213 118 256 118 C299 118 322 159 322 196 C322 233 288 254 256 254 C224 254 198 228 198 196"
+          fill="none" stroke="url(#vSwirl)" stroke-width="14" stroke-linecap="round"/>
+    <circle cx="256" cy="196" r="40" fill="#EAF1FF" mask="url(#vMoonMask)"/>
+    <use xlink:href="#vStar4" href="#vStar4" transform="translate(168 106)" fill="#F2E4BE"/>
+    <use xlink:href="#vStar4" href="#vStar4" transform="translate(338 116) scale(0.68)" fill="#EAF1FF"/>
+    <circle cx="150" cy="240" r="6" fill="#EAF1FF"/>
+  </g>
+
+  <!-- 英文主标 -->
+  <text x="320" y="648" text-anchor="middle" font-family="Quicksand, Nunito, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="76" font-weight="400" letter-spacing="4.5" fill="#EAF1FF">Moonly<tspan fill="#BFD4FF">Box</tspan></text>
+  <!-- 中文副标：思源黑体 Light，字距 +0.25em -->
+  <text x="324" y="731" text-anchor="middle" font-family="'Source Han Sans SC', 'Noto Sans SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', sans-serif" font-size="33" font-weight="300" letter-spacing="8.5" fill="#BFD4FF">魔力宝盒</text>
+</svg>
