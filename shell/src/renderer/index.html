@@ -12,10 +12,12 @@
       --list-w: 230px;         /* 第二列 */
       --bg: #f8fafc; --bg2: #ffffff; --fg: #0f172a; --muted: #64748b;
       --border: #e2e8f0; --accent: #4f46e5; --hover: #eef2ff;
+      --active-bg: #e0e7ff; --active-fg: #3730a3; /* 选中态：实色不透明（#253.46 用户：半透明视觉模糊） */
       --ok: #059669; --warn: #d97706; --err: #dc2626;
     }
     @media (prefers-color-scheme: dark) {
-      :root { --bg: #0f172a; --bg2: #1e293b; --fg: #e2e8f0; --muted: #94a3b8; --border: #334155; --hover: #1e293b; }
+      :root { --bg: #0f172a; --bg2: #1e293b; --fg: #e2e8f0; --muted: #94a3b8; --border: #334155; --hover: #1e293b;
+        --active-bg: #3730a3; --active-fg: #ffffff; }
     }
     * { box-sizing: border-box; margin: 0; }
     body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--fg); overflow: hidden; user-select: none; }
@@ -37,7 +39,8 @@
     }
     #titlebar .frame-tab:hover { color: var(--fg); }
     #titlebar .frame-tab.active {
-      background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--fg); font-weight: 600;
+      background: var(--bg); color: var(--fg); font-weight: 600;
+      box-shadow: 0 1px 4px rgba(0,0,0,.18);
     }
     #titlebar .spacer { flex: 1; }
     #titlebar .win-controls { display: flex; gap: 2px; -webkit-app-region: no-drag; }
@@ -88,7 +91,7 @@
     /* 选中=accent 实底白图标（窄栏强对比，参考网页端 primary 选中态的强化版） */
     #rail .rail-btn.active {
       background: var(--accent); color: #fff;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 45%, transparent);
+      box-shadow: 0 2px 8px rgba(79,70,229,.45);
     }
     #rail .rail-btn.active svg { stroke-width: 2.2; }
     #rail .rail-btn:hover { background: var(--hover); }
@@ -131,10 +134,9 @@
     }
     .tree-item:hover { background: var(--hover); }
     .tree-item.active {
-      background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-weight: 600;
-      box-shadow: inset 3px 0 0 0 var(--accent); /* 左侧指示条（网页端侧栏同款） */
+      background: var(--active-bg); color: var(--active-fg); font-weight: 600;
     }
-    .tree-item.active .cloud-ico { color: var(--accent); }
+    .tree-item.active .cloud-ico { color: var(--active-fg); }
     #list-body { display: flex; flex-direction: column; gap: 2px; }
     .tree-item .dir { font-weight: 600; }
     .row { display: flex; gap: 8px; align-items: center; }
