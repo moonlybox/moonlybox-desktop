@@ -36,9 +36,9 @@ function kernelCmd() {
     app.quit()
     return { cmd: 'missing-kernel', base: [] }
   }
-  // 开发态：bun 直跑仓内内核源码（cwd=REPO_ROOT；bun 不在 PATH 时 spawn ENOENT，
-  // daemon exit 事件会以「daemon exited」暴露——命令卡已含 bun install 前置）
-  return { cmd: 'bun', base: ['run', 'src/cli.ts'] }
+  // 开发态：bun 直跑仓内内核源码（cwd=REPO_ROOT）。Windows 下 spawn('bun') 不解析
+  // PATHEXT（PATH 里有 bun.exe 仍可能 ENOENT），显式 bun.exe；缺失时 ensureDaemon 弹窗指引。
+  return { cmd: process.platform === 'win32' ? 'bun.exe' : 'bun', base: ['run', 'src/cli.ts'] }
 }
 
 // 跨平台用户目录：Windows=USERPROFILE，unix=HOME（Windows 无 HOME，反之亦然）
@@ -66,10 +66,20 @@ function configuredVault() {
 function ensureDaemon() {
   if (daemon && daemon.exitCode === null) return daemon
   const { cmd, base } = kernelCmd()
-  daemon = spawn(cmd, [...base, 'daemon'], {
-    cwd: REPO_ROOT,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, MOONLYBOX_VAULT: configuredVault() },
+  try {
+    daemon = spawn(cmd, [...base, 'daemon'], {
+      cwd: REPO_ROOT,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, MOONLYBOX_VAULT: configuredVault() },
+    })
+  } catch (e) {
+    dialog.showErrorBox('魔力宝盒', `内核启动失败（${cmd}）：${e.message}\n\n开发模式需要 Bun 运行时：\npowershell -c "irm bun.sh/install.ps1 | iex"\n安装后重开终端再 npm run dev`)
+    app.quit()
+    return null
+  }
+  daemon.on('error', (e) => {
+    dialog.showErrorBox('魔力宝盒', `内核启动失败（${cmd}）：${e.message}\n\n开发模式需要 Bun 运行时：\npowershell -c "irm bun.sh/install.ps1 | iex"\n安装后重开终端再 npm run dev`)
+    app.quit()
   })
   let buf = ''
   daemon.stdout.on('data', (d) => {
