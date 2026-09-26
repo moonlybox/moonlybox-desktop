@@ -46,8 +46,18 @@ function kernelCmd() {
   }
   const bunExe = process.platform === 'win32' ? 'bun.exe' : 'bun'
   const bunDefault = homeDir() ? path.join(homeDir(), '.bun', 'bin', bunExe) : null
-  if (bunDefault && fs.existsSync(bunDefault)) return { cmd: bunDefault, base: ['run', 'src/cli.ts'] }
-  return { cmd: bunExe, base: ['run', 'src/cli.ts'] }
+  const bun = bunDefault && fs.existsSync(bunDefault) ? bunDefault : bunExe
+  // dev 自愈：native-bindings.ts 是 gitignore 生成物（fresh clone 没有）——bun 静态 import 直接
+  // 模块解析失败 → daemon「daemon exited」无解释（用户实测）。缺则自动 --gen-only（幂等）。
+  const bindings = path.join(REPO_ROOT, 'src', 'lib', 'native-bindings.ts')
+  if (!fs.existsSync(bindings)) {
+    try {
+      require('child_process').execFileSync(bun, ['run', 'scripts/build.ts', '--gen-only'], {
+        cwd: REPO_ROOT, stdio: 'pipe', timeout: 120_000,
+      })
+    } catch {}
+  }
+  return { cmd: bun, base: ['run', 'src/cli.ts'] }
 }
 
 // 跨平台用户目录：Windows=USERPROFILE，unix=HOME（Windows 无 HOME，反之亦然）
