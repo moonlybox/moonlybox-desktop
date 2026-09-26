@@ -329,12 +329,29 @@ function renderConfirmBar(rpcId, payload) {
 // ---------- 设置弹窗（需求 5：集中设置） ----------
 $('btn-avatar').onclick = async () => {
   const r = await window.moonlybox.rpc('auth', { op: 'whoami' }, 15_000)
-  let loggedIn = false
-  try { loggedIn = !!JSON.parse(r.text).loggedIn } catch {}
-  if (loggedIn) {
-    // 已登录：账号信息小面板
-    const d = JSON.parse(r.text)
-    window.alert(`已登录：${d.email ?? d.userId}\n\n（退出登录接 v0.5 续：moonlybox logout）`)
+  let d = null
+  try { d = JSON.parse(r.text) } catch {}
+  if (d?.loggedIn) {
+    // 已登录：账号面板（退出=清本机凭据，云端登录态不受影响）
+    const dlg = document.createElement('dialog')
+    dlg.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--accent,#3b82f6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px">${(d.email?.[0] ?? '?').toUpperCase()}</div>
+        <div><div style="font-size:14px">${d.email ?? d.userId ?? ''}</div><div class="muted" style="font-size:12px">已登录</div></div>
+      </div>
+      <div class="row" style="justify-content:flex-end;gap:8px">
+        <button class="btn ghost" id="ac-cancel">关闭</button>
+        <button class="btn" id="ac-logout">退出登录</button>
+      </div>`
+    document.body.appendChild(dlg)
+    dlg.showModal()
+    dlg.querySelector('#ac-cancel').onclick = () => dlg.close()
+    dlg.addEventListener('close', () => dlg.remove())
+    dlg.querySelector('#ac-logout').onclick = async () => {
+      await window.moonlybox.rpc('auth', { op: 'logout' }, 15_000)
+      dlg.close()
+      await refreshAvatar()
+    }
   } else {
     showLoginDialog()
   }

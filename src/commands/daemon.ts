@@ -24,7 +24,7 @@ import { cmdSync } from '../commands/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
 import { apiGet, apiPost } from '../lib/api'
-import { loadCredentials, saveCredentials } from '../lib/auth'
+import { loadCredentials, saveCredentials, clearCredentials } from '../lib/auth'
 import { ensureClient, requestDeviceCode, pollToken } from '../lib/device-flow'
 import type { CommandOptions } from '../lib/runner'
 
@@ -169,6 +169,9 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         } else if (op2 === 'whoami') {
           const creds = loadCredentials()
           text = JSON.stringify({ ok: true, email: creds?.accountEmail ?? null, userId: creds?.userId ?? null, loggedIn: !!creds?.accessToken })
+        } else if (op2 === 'logout') {
+          clearCredentials()
+          text = JSON.stringify({ ok: true })
         } else {
           code = 2
           text = `未知 auth op：${op2}`

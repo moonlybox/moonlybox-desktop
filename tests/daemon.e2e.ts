@@ -114,6 +114,8 @@ assert('auth 未知 op 拒绝', auBad.at(-1)?.event === 'done' && auBad.at(-1)?.
 const auWho = await rpc('auth', { op: 'whoami' }, 15_000)
 const auDone = auWho.at(-1)
 assert('auth whoami 终止（loggedIn 字段在）', auDone?.event === 'done' && String(auDone?.text ?? '').includes('loggedIn'), JSON.stringify(auDone)?.slice(0, 100))
+const auOut = await rpc('auth', { op: 'logout' })
+assert('auth logout ok', auOut.at(-1)?.event === 'done' && auOut.at(-1)?.code === 0, JSON.stringify(auOut.at(-1)))
 const pingAu = await rpc('ping', {})
 assert('auth 调用后 daemon 存活', pingAu.at(-1)?.text === 'pong')
 
