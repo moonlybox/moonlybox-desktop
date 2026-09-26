@@ -150,6 +150,24 @@ async function renderList(nav) {
       body.innerHTML = '<div class="muted" style="padding:10px">未选择书房目录<br/>请到 设置 → Vault 目录 选择</div>'
       return
     }
+    // 全展开/全收起（#253.29）
+    head.innerHTML = `${NAVS[nav].label} <span id="tree-exp" style="float:right;font-weight:400;font-size:11px;color:var(--muted);cursor:pointer">全部展开</span>`
+    $('tree-exp').onclick = async () => {
+      const expanding = $('tree-exp').textContent === '全部展开'
+      if (expanding) treeCollapsed.clear()
+      else {
+        // 收起全部：收集当前 DOM 里所有目录 rel（含子层——重渲染前抓全量）
+        const collect = (box) => {
+          box.querySelectorAll('.tree-item.dir').forEach((d) => { if (d.dataset.rel) treeCollapsed.add(d.dataset.rel) })
+        }
+        collect(body)
+      }
+      const label = $('tree-exp')
+      await renderList('vault')
+      // renderList 重建了 head——按目标态写文案
+      const exp = $('tree-exp')
+      if (exp) exp.textContent = expanding ? '全部收起' : '全部展开'
+    }
     await renderTree(body, '', 0)
   } else if (nav === 'cloud') {
     // #254：云端功能=服务端下发 manifest（功能升级/新增零客户端发版）
@@ -204,6 +222,9 @@ async function renderList(nav) {
 
 function require_exists(v) { return typeof v === 'string' && v.length > 0 }
 
+// 书房树（#253.29）：目录可展开/收起；list-head 提供全展开/全收起
+const treeCollapsed = new Set() // 折叠目录 rel 集合（会话内记忆）
+
 async function renderTree(container, rel, depth) {
   const r = await window.moonlybox.fsList(rel)
   if (!r.ok) { container.innerHTML = `<div class="muted" style="padding:10px">${r.message}</div>`; return }
@@ -212,16 +233,59 @@ async function renderTree(container, rel, depth) {
     const el = document.createElement('div')
     el.className = 'tree-item' + (item.dir ? ' dir' : '')
     el.style.paddingLeft = `${8 + depth * 14}px`
-    el.textContent = `${item.dir ? '📁' : '📄'} ${item.name}`
-    el.onclick = async () => {
-      container.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
-      el.classList.add('active')
-      if (item.dir) await renderWork('vault', { rel: relPath, dir: true })
-      else await renderWork('vault', { rel: relPath, dir: false })
+    el.dataset.rel = relPath
+    if (item.dir) {
+      const collapsed = treeCollapsed.has(relPath)
+      el.innerHTML = `<span class="tw" style="display:inline-block;width:14px;cursor:pointer;text-align:center;color:var(--muted)">${collapsed ? '▸' : '▾'}</span><span style="margin-left:2px">${item.name}</span>`
+      // 子容器（未折叠时挂载）
+      if (!collapsed) {
+        const box = document.createElement('div')
+        box.className = 'tree-children'
+        container.appendChild(box)
+        el.onclick = async () => {
+          container.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
+          el.classList.add('active')
+          await renderWork('vault', { rel: relPath, dir: true })
+        }
+        el.querySelector('.tw').onclick = async (e) => {
+          e.stopPropagation()
+          treeCollapsed.add(relPath)
+          box.remove()
+          el.querySelector('.tw').textContent = '▸'
+        }
+        el.querySelector('.tw').onmouseenter = () => { el.querySelector('.tw').style.color = 'var(--fg)' }
+        el.querySelector('.tw').onmouseleave = () => { el.querySelector('.tw').style.color = 'var(--muted)' }
+      } else {
+        el.onclick = async () => {
+          container.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
+          el.classList.add('active')
+          await renderWork('vault', { rel: relPath, dir: true })
+        }
+        el.querySelector('.tw').onclick = async (e) => {
+          e.stopPropagation()
+          treeCollapsed.delete(relPath)
+          const box = document.createElement('div')
+          box.className = 'tree-children'
+          el.after(box)
+          el.querySelector('.tw').textContent = '▾'
+          await renderTree(box, relPath, depth + 1)
+        }
+      }
+      container.appendChild(el)
+      // 默认展开一层（.moonlybox 跳过）
+      if (depth < 1 && item.name !== '.moonlybox' && !collapsed) {
+        const box = container.lastElementChild
+        await renderTree(box, relPath, depth + 1)
+      }
+    } else {
+      el.textContent = `📄 ${item.name}`
+      el.onclick = async () => {
+        container.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
+        el.classList.add('active')
+        await renderWork('vault', { rel: relPath, dir: false })
+      }
+      container.appendChild(el)
     }
-    container.appendChild(el)
-    // 目录默认展开一层（.moonlybox 跳过）
-    if (item.dir && depth < 1 && item.name !== '.moonlybox') await renderTree(container, relPath, depth + 1)
   }
 }
 
@@ -266,10 +330,19 @@ async function renderWork(nav, arg, label2) {
     if (r.event !== 'done' || r.code !== 0) { w.innerHTML = `<div style="padding:16px" class="muted">加载失败：${r.text ?? ''}</div>`; return }
     const { webBase, token } = JSON.parse(r.text)
     const wv = $('cloud-wv')
+    let injected = false
     wv.addEventListener('dom-ready', async () => {
-      // 登录态注入：OAuth access token → web SPA localStorage（mf_token）
-      if (token) {
-        await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
+      // 只处理目标域的首次 ready（about:blank/中途导航态不注入——GUEST_VIEW 冲突根因）
+      if (injected) return
+      const cur = wv.getURL() || ''
+      if (!cur.startsWith(webBase)) return
+      injected = true
+      try {
+        if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
+      } catch (e) {
+        // 注入失败重试一次（guest 页偶发未就绪）
+        await new Promise((r2) => setTimeout(r2, 600))
+        try { if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`) } catch {}
       }
       wv.loadURL(webBase + arg.url)
     })
