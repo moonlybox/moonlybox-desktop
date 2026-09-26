@@ -184,12 +184,14 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             })
             const meBody = (await meRes.json().catch(() => null)) as any
             const u = meBody?.data?.user
+            // avatar 是相对路径（/assets/avatars/…，web 同域直用）——壳端渲染需拼绝对 URL
+            const avatarAbs = u?.avatar && !/^https?:\/\//.test(u.avatar) ? `https://moonlybox.cn${u.avatar}` : (u?.avatar ?? null)
             text = JSON.stringify({
               ok: meRes.ok && !!u,
               email: u?.email ?? creds.accountEmail,
               nickname: u?.nickname ?? null,
               signature: u?.signature ?? null,
-              avatar: u?.avatar ?? null,
+              avatar: avatarAbs,
               level: u?.level ?? null,
               premiumExpiresAt: u?.premiumExpiresAt ?? null,
             })
