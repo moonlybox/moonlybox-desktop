@@ -32,7 +32,7 @@
       border: 0; background: transparent; color: var(--muted); font-size: 12.5px;
       padding: 5px 12px; border-radius: 7px; cursor: pointer;
     }
-    #titlebar .frame-tab.active { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); font-weight: 600; }
+    #titlebar .frame-tab.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); font-weight: 700; }
     #titlebar .frame-tab { display: flex; align-items: center; }
     #titlebar .spacer { flex: 1; }
     #titlebar .win-controls { display: flex; gap: 2px; -webkit-app-region: no-drag; }
@@ -79,11 +79,12 @@
     #titlebar .win-controls #win-close:hover { background: #dc2626; color: #fff; }
     /* 云端列表 manifest 图标同套描边 */
     .cloud-ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+    /* 选中=accent 实底白图标（窄栏强对比，参考网页端 primary 选中态的强化版） */
     #rail .rail-btn.active {
-      background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent);
-      box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent);
+      background: var(--accent); color: #fff;
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 45%, transparent);
     }
-    #rail .rail-btn.active svg { stroke-width: 2.5; }
+    #rail .rail-btn.active svg { stroke-width: 2.2; }
     #rail .rail-btn:hover { background: var(--hover); }
     #rail .grow { flex: 1; }
 
@@ -118,8 +119,8 @@
     .tree-item { padding: 5px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tree-item:hover { background: var(--hover); }
     .tree-item.active {
-      background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-weight: 600;
-      box-shadow: inset 2.5px 0 0 0 var(--accent); /* 左侧指示条（网页端侧栏同款） */
+      background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); font-weight: 600;
+      box-shadow: inset 3px 0 0 0 var(--accent); /* 左侧指示条（网页端侧栏同款） */
     }
     .tree-item.active .cloud-ico { color: var(--accent); }
     .tree-item .dir { font-weight: 600; }
