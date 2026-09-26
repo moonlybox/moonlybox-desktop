@@ -324,19 +324,34 @@ async function renderWork(nav, arg, label2) {
     const webBase = parsed.data?.webBase ?? parsed.webBase ?? 'https://moonlybox.cn'  // webBase 在 data 里（daemon nav: {ok,data,token}），兜底官方域
     const token = parsed.token
     const wv = $('cloud-wv')
+    const stateBar = document.createElement('div')
+    stateBar.style.cssText = 'padding:4px 12px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)'
+    stateBar.textContent = '云端加载中…'
+    wv.before(stateBar)
     let injected = false
     wv.addEventListener('dom-ready', async () => {
-      // 只处理目标域的首次 ready（about:blank/中途导航态不注入——GUEST_VIEW 冲突根因）
+      // 只处理目标域的首次 ready（about:blank 阶段不注入）
       if (injected) return
       const cur = wv.getURL() || ''
       if (!cur.startsWith(webBase)) return
       injected = true
       try {
-        if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
+        if (token) {
+          await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
+          // 回读验证（注入不可见失败太坑——253.33 用户实测营销页=注入没生效）
+          const back = await wv.executeJavaScript(`localStorage.getItem('mf_token')?.slice(0,10) ?? 'NULL'`)
+          stateBar.textContent = `登录态注入：${back === 'NULL' ? '失败' : 'ok（' + back + '…）'}`
+        } else {
+          stateBar.textContent = '无 token（未登录）——返回壳重新登录'
+        }
       } catch (e) {
-        // 注入失败重试一次（guest 页偶发未就绪）
         await new Promise((r2) => setTimeout(r2, 600))
-        try { if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`) } catch {}
+        try {
+          if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
+          stateBar.textContent = '登录态注入：ok（重试）'
+        } catch (e2) {
+          stateBar.textContent = '登录态注入失败：' + String(e2?.message ?? e2).slice(0, 80)
+        }
       }
       wv.loadURL(webBase + arg.url)
     })
