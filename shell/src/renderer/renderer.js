@@ -50,9 +50,9 @@ const NAVS = {
   xiaoyue: { label: '小月' },
   help: { label: '帮助' },
   settings: { label: '设置' },
-}  // ASI 陷阱防护（对象字面量后接 IIFE 必须分号）
+};  // 对象字面量后接 IIFE 必须分号（ASI 陷阱 #253.20）
 let currentNav = null
-const openFrames = new Set()  // ASI 陷阱防护：下一 IIFE 以 ( 开头，无分号会被解析为跨行调用
+const openFrames = new Set();  // 下一 IIFE 以 ( 开头，无分号会被解析为跨行调用（ASI 陷阱 #253.20）
 
 // ---- 第二列拖宽（#253.18：限幅 180-420px，持久化；防误操作比例失调） ----
 (() => {
