@@ -222,7 +222,7 @@ async function renderList(nav) {
 
 function require_exists(v) { return typeof v === 'string' && v.length > 0 }
 
-// 书房树（#253.29）：目录可展开/收起；list-head 提供全展开/全收起
+// 书房树（#253.30 重写）：目录可展开/收起。结构不变式：目录行 el 的下一个兄弟=子容器 .tree-children（未折叠时存在）
 const treeCollapsed = new Set() // 折叠目录 rel 集合（会话内记忆）
 
 async function renderTree(container, rel, depth) {
@@ -237,32 +237,22 @@ async function renderTree(container, rel, depth) {
     if (item.dir) {
       const collapsed = treeCollapsed.has(relPath)
       el.innerHTML = `<span class="tw" style="display:inline-block;width:14px;cursor:pointer;text-align:center;color:var(--muted)">${collapsed ? '▸' : '▾'}</span><span style="margin-left:2px">${item.name}</span>`
-      // 子容器（未折叠时挂载）
-      if (!collapsed) {
-        const box = document.createElement('div')
-        box.className = 'tree-children'
-        container.appendChild(box)
-        el.onclick = async () => {
-          container.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
-          el.classList.add('active')
-          await renderWork('vault', { rel: relPath, dir: true })
-        }
-        el.querySelector('.tw').onclick = async (e) => {
-          e.stopPropagation()
+      el.onclick = async () => {
+        container.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
+        el.classList.add('active')
+        await renderWork('vault', { rel: relPath, dir: true })
+      }
+      // 手柄：切换折叠态——子容器存在性以 DOM 为准（el.nextElementSibling 是否 .tree-children）
+      el.querySelector('.tw').onclick = async (e) => {
+        e.stopPropagation()
+        const existing = el.nextElementSibling
+        if (existing && existing.classList.contains('tree-children')) {
+          // 收起：删容器+记折叠
           treeCollapsed.add(relPath)
-          box.remove()
+          existing.remove()
           el.querySelector('.tw').textContent = '▸'
-        }
-        el.querySelector('.tw').onmouseenter = () => { el.querySelector('.tw').style.color = 'var(--fg)' }
-        el.querySelector('.tw').onmouseleave = () => { el.querySelector('.tw').style.color = 'var(--muted)' }
-      } else {
-        el.onclick = async () => {
-          container.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
-          el.classList.add('active')
-          await renderWork('vault', { rel: relPath, dir: true })
-        }
-        el.querySelector('.tw').onclick = async (e) => {
-          e.stopPropagation()
+        } else {
+          // 展开：建容器+清折叠+递归渲染
           treeCollapsed.delete(relPath)
           const box = document.createElement('div')
           box.className = 'tree-children'
@@ -272,9 +262,11 @@ async function renderTree(container, rel, depth) {
         }
       }
       container.appendChild(el)
-      // 默认展开一层（.moonlybox 跳过）
+      // 默认展开一层（.moonlybox 跳过；用户已折叠的尊重折叠态）
       if (depth < 1 && item.name !== '.moonlybox' && !collapsed) {
-        const box = container.lastElementChild
+        const box = document.createElement('div')
+        box.className = 'tree-children'
+        el.after(box)
         await renderTree(box, relPath, depth + 1)
       }
     } else {
