@@ -57,7 +57,11 @@ function kernelCmd() {
       require('child_process').execFileSync(bun, ['run', 'scripts/build.ts', '--gen-only'], {
         cwd: REPO_ROOT, stdio: 'pipe', timeout: 120_000,
       })
-    } catch {}
+    } catch (e) {
+      // 自愈失败必须可见（静默=daemon 照崩且用户无从得知原因——#253.11 后仍崩的教训）
+      const detail = e && e.stderr ? e.stderr.toString().slice(-300) : String(e && e.message ? e.message : e)
+      dialog.showErrorBox('魔力宝盒', `开发环境自愈失败（bun run scripts/build.ts --gen-only）：\n${detail}\n\n请在仓库根手动执行并检查输出：\n  bun run scripts/build.ts --gen-only`)
+    }
   }
   return { cmd: bun, base: ['run', 'src/cli.ts'] }
 }
