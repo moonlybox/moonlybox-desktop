@@ -28,6 +28,35 @@ const NAVS = {
 let currentNav = null
 const openFrames = new Set()
 
+// ---- 第二列拖宽（#253.18：限幅 180-420px，持久化；防误操作比例失调） ----
+(() => {
+  const MIN = 180, MAX = 420
+  const resizer = document.getElementById('col-resizer')
+  const listcol = document.getElementById('listcol')
+  const saved = Number(localStorage.getItem('mb.listw') || 0)
+  if (saved >= MIN && saved <= MAX) document.documentElement.style.setProperty('--list-w', saved + 'px')
+  let startX = 0, startW = 0
+  resizer.addEventListener('mousedown', (e) => {
+    startX = e.clientX
+    startW = listcol.getBoundingClientRect().width
+    resizer.classList.add('dragging')
+    document.body.classList.add('col-resizing')
+    e.preventDefault()
+  })
+  window.addEventListener('mousemove', (e) => {
+    if (!resizer.classList.contains('dragging')) return
+    const w = Math.min(MAX, Math.max(MIN, Math.round(startW + (e.clientX - startX))))
+    document.documentElement.style.setProperty('--list-w', w + 'px')
+  })
+  window.addEventListener('mouseup', () => {
+    if (!resizer.classList.contains('dragging')) return
+    resizer.classList.remove('dragging')
+    document.body.classList.remove('col-resizing')
+    const w = listcol.getBoundingClientRect().width
+    localStorage.setItem('mb.listw', String(w))
+  })
+})()
+
 // rail 图标注入（单一源——index.html 的按钮内容由此填充）
 for (const b of document.querySelectorAll('#rail .rail-btn')) {
   const nav = b.dataset.nav

@@ -79,8 +79,11 @@
     #titlebar .win-controls #win-close:hover { background: #dc2626; color: #fff; }
     /* 云端列表 manifest 图标同套描边 */
     .cloud-ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-    #rail .rail-btn.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
-    #rail .rail-btn.active svg { stroke-width: 2.4; }
+    #rail .rail-btn.active {
+      background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent);
+      box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent);
+    }
+    #rail .rail-btn.active svg { stroke-width: 2.5; }
     #rail .rail-btn:hover { background: var(--hover); }
     #rail .grow { flex: 1; }
 
@@ -94,6 +97,17 @@
     /* 第三列：工作台 */
     #work { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
+    /* 滚动条：云端网页端同款（细圆角半透明 slate） */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { border-radius: 9999px; background: rgba(148,163,184,.45); }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.7); }
+
+    /* 第二列拖宽手柄（#253.18：180-420px 限幅，防比例失调） */
+    #col-resizer { width: 5px; cursor: col-resize; flex: none; background: transparent; transition: background .15s; }
+    #col-resizer:hover, #col-resizer.dragging { background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 3px; }
+    body.col-resizing { cursor: col-resize; user-select: none; }
+
     /* 通用 */
     .btn { border: 0; background: var(--accent); color: #fff; border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; }
     .btn:disabled { opacity: .5; }
@@ -103,7 +117,10 @@
     .mono { font: 12px/1.6 ui-monospace, monospace; }
     .tree-item { padding: 5px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tree-item:hover { background: var(--hover); }
-    .tree-item.active { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); font-weight: 600; }
+    .tree-item.active {
+      background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-weight: 600;
+      box-shadow: inset 2.5px 0 0 0 var(--accent); /* 左侧指示条（网页端侧栏同款） */
+    }
     .tree-item.active .cloud-ico { color: var(--accent); }
     .tree-item .dir { font-weight: 600; }
     .row { display: flex; gap: 8px; align-items: center; }
@@ -155,6 +172,9 @@
       <div class="list-head" id="list-head">—</div>
       <div class="list-body" id="list-body"></div>
     </section>
+
+    <!-- 列宽拖柄 -->
+    <div id="col-resizer" title="拖动调整列宽"></div>
 
     <!-- 第三列：工作台（各页帧共用容器，JS 按 nav+selection 渲染） -->
     <section id="work"></section>
