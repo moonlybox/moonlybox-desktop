@@ -1,7 +1,7 @@
 {
   "name": "moonlybox-shell",
   "productName": "MoonlyBox",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "main": "src/main.js",
   "description": "MoonlyBox Desktop Shell",
