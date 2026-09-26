@@ -1,4 +1,4 @@
-# v0.5.0 publish trigger
+# v0.5.1 publish trigger
 name: publish-release
 on:
   push:
