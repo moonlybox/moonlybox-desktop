@@ -750,40 +750,18 @@ async function renderWork(nav, arg, label2) {
         const st = $('sp-byok-status'); st.className = 'set-status ok'; st.textContent = '已清除'
       }
     } else if (cat.id === 'model' && currentSetSub === 'local') {
-      panel('模型 · 本地模型', '本地推理端点（Ollama / LM Studio 等）。无需 API Key，只需端点地址与模型名。', `
-        <div class="set-field"><label>端点地址</label><input id="sp-local-url" placeholder="http://127.0.0.1:11434/v1" /></div>
-        <div class="set-field"><label>模型名</label><input id="sp-local-model" placeholder="qwen2.5:7b" /></div>
-        <div class="set-row">
-          <button type="button" class="btn" id="sp-local-save">保存</button>
-          <button type="button" class="btn ghost" id="sp-local-test">测试连接</button>
-          <span class="set-status" id="sp-local-status"></span>
-        </div>
+      // #274：本地模型改为预留预告（真·本地部署：内置模型下载+本地推理，参考 Cherry Studio 模型列表）——端点式接入归自定义
+      panel('模型 · 本地模型', '在本地设备下载并运行模型，数据不出本机。功能预览中，后续版本提供。', `
+        <div class="set-card"><div class="sc-main"><div class="sc-title">内置模型下载与本地部署（开发中）</div>
+          <div class="sc-desc">将提供模型列表（如 Qwen3 Embedding 0.6B · 约 614MB）一键下载与本地运行，无需 GPU 也可运行小型模型；下载后数据不出本机。</div></div></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">已有本地推理服务？</div>
+          <div class="sc-desc">Ollama / LM Studio / vLLM 等本地端点请到「自定义」接入（API 地址填 http://127.0.0.1:11434/v1 这类端点即可）。</div></div></div>
       `)
-      try {
-        const g = JSON.parse((await window.moonlybox.rpc('auth', { op: 'byok', sub: 'get' }, 10_000)).text)
-        $('sp-local-url').value = g.baseUrl ?? ''
-        $('sp-local-model').value = g.model ?? ''
-        $('sp-local-status').textContent = g.hasKey ? '已配置（含 Key）' : '已配置（无 Key，本地端点模式）'
-      } catch {}
-      $('sp-local-save').onclick = async () => {
-        const st = $('sp-local-status')
-        st.className = 'set-status'; st.textContent = '保存中…'
-        const r = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'save', baseUrl: $('sp-local-url').value, model: $('sp-local-model').value }, 15_000)
-        if (r.event === 'done' && r.code === 0) { st.className = 'set-status ok'; st.textContent = '✓ 已保存' }
-        else { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '保存失败' }
-      }
-      $('sp-local-test').onclick = async () => {
-        const st = $('sp-local-status')
-        st.className = 'set-status'; st.textContent = '测试中…'
-        const r = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'test' }, 30_000)
-        if (r.event === 'done' && r.code === 0) { st.className = 'set-status ok'; st.textContent = '✓ 连接成功' }
-        else { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '连接失败' }
-      }
     } else if (cat.id === 'model' && currentSetSub === 'custom') {
       const g = await loadAppSettings()
       const cu = g.model?.custom
-      panel('模型 · 自定义', '自填 OpenAI 兼容 API 地址（vLLM / 中转站 / 私有部署等）。Key 只存本机钥匙串。', `
-        <div class="set-field"><label>API 地址</label><input id="sp-cu-url" placeholder="https://your-endpoint.example.com/v1" value="${cu?.baseUrl ?? ''}" /></div>
+      panel('模型 · 自定义', '自填 OpenAI 兼容 API 地址：本地推理端点（Ollama / LM Studio / vLLM）、中转站、私有部署等。Key 只存本机钥匙串（本地端点可留空）。', `
+        <div class="set-field"><label>API 地址</label><input id="sp-cu-url" placeholder="http://127.0.0.1:11434/v1（Ollama）或 https://your-endpoint.example.com/v1" value="${cu?.baseUrl ?? ''}" /></div>
         <div class="set-field"><label>模型名</label><input id="sp-cu-model" placeholder="your-model" value="${cu?.model ?? ''}" /></div>
         <div class="set-field"><label>API Key（本地端点可留空；已配置时不回显）</label><input id="sp-cu-key" type="password" placeholder="sk-…" /></div>
         <div class="set-row">
