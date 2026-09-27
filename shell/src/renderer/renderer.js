@@ -1458,7 +1458,7 @@ async function renderXiaoyueList() {
   for (const ws of wss) {
     const group = document.createElement('div')
     group.className = 'xy-ws-group'
-    group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.join('\n')}">📁 ${ws.name}</span><span class="xy-ws-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="增加工作目录">＋</span><span class="xy-ws-del" style="color:var(--muted);cursor:pointer;padding:0 4px" title="删除工作空间">×</span></div>`
+    group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.map((d, i) => (i === (ws.primaryIndex ?? 0) ? `【主】${d}` : d)).join('\n')}">📁 ${ws.name}</span><span class="xy-ws-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="增加工作目录">＋</span><span class="xy-ws-del" style="color:var(--muted);cursor:pointer;padding:0 4px" title="删除工作空间">×</span></div>`
     group.querySelector('.xy-ws-add').onclick = async () => {
       const r = await window.moonlybox.pickFolder()
       const dir = r?.ok ? r.path : null
@@ -1501,7 +1501,7 @@ function showWorkspaceDialog() {
       <div class="sc-title" style="font-size:15px;font-weight:600;margin-bottom:12px">新建工作空间</div>
       <div class="set-field"><label>名称（必填）</label><input id="ws-name" placeholder="例：毕业论文" /></div>
       <div class="set-field"><label>工作目录（必选，可多个）</label>
-        <div id="ws-dirs" class="set-desc" style="margin:4px 0 6px">尚未选择</div>
+        <div id="ws-dirs" style="margin:4px 0 6px;display:flex;flex-direction:column;gap:4px"></div>
         <button class="btn ghost" id="ws-add-dir">＋ 添加目录</button>
       </div>
       <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="ws-create">创建</button><button class="btn ghost" id="ws-cancel">取消</button></div>
@@ -1510,20 +1510,51 @@ function showWorkspaceDialog() {
   document.body.appendChild(dlg)
   dlg.showModal()
   const dirs = []
+  let primaryIdx = 0
+  // #282.2：目录独立行渲染——每行全路径+主目录标记+设主/删除按钮（主目录=fs 相对路径解析基准）
+  const renderDirs = () => {
+    const box = dlg.querySelector('#ws-dirs')
+    box.innerHTML = ''
+    if (!dirs.length) { box.innerHTML = '<div class="set-desc">尚未选择</div>'; return }
+    dirs.forEach((d, i) => {
+      const row = document.createElement('div')
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px'
+      const tag = i === primaryIdx ? '<span style="color:var(--accent);font-weight:600;flex-shrink:0">主</span>' : ''
+      row.innerHTML = `${tag}<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d}">${d}</span>`
+      if (i !== primaryIdx) {
+        const setMain = document.createElement('span')
+        setMain.textContent = '设为主目录'
+        setMain.style.cssText = 'color:var(--muted);cursor:pointer;flex-shrink:0'
+        setMain.onclick = () => { primaryIdx = i; renderDirs() }
+        row.appendChild(setMain)
+      }
+      const del = document.createElement('span')
+      del.textContent = '×'
+      del.style.cssText = 'color:var(--muted);cursor:pointer;padding:0 2px;flex-shrink:0'
+      del.onclick = () => {
+        dirs.splice(i, 1)
+        if (primaryIdx === i) primaryIdx = 0
+        else if (primaryIdx > i) primaryIdx--
+        renderDirs()
+      }
+      row.appendChild(del)
+      box.appendChild(row)
+    })
+  }
   dlg.querySelector('#ws-add-dir').onclick = async () => {
     const r = await window.moonlybox.pickFolder()
     const dir = r?.ok ? r.path : null
     if (!dir) return
-    if (!dirs.includes(dir)) dirs.push(dir)
-    dlg.querySelector('#ws-dirs').textContent = dirs.join('\n') || '尚未选择'
+    if (!dirs.includes(dir)) { dirs.push(dir); renderDirs() }
   }
+  renderDirs()
   dlg.querySelector('#ws-cancel').onclick = () => dlg.close()
   dlg.querySelector('#ws-create').onclick = async () => {
     const name = dlg.querySelector('#ws-name').value.trim()
     const st = dlg.querySelector('#ws-status')
     if (!name) { st.className = 'set-status err'; st.textContent = '名称必填'; return }
     if (!dirs.length) { st.className = 'set-status err'; st.textContent = '至少选择一个工作目录'; return }
-    const r = await window.moonlybox.rpc('workspace', { op: 'create', name, dirs }, 15_000)
+    const r = await window.moonlybox.rpc('workspace', { op: 'create', name, dirs, primaryIndex: primaryIdx }, 15_000)
     if (r.event === 'done' && r.code === 0) {
       dlg.close(); dlg.remove()
       await renderWork('xiaoyue')

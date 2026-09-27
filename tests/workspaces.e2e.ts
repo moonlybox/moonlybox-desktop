@@ -19,7 +19,7 @@ fs.writeFileSync(path.join(tmpWork, 'sub', 'b.txt'), 'world')
 
 import {
   createWorkspace, getWorkspace, updateWorkspace, deleteWorkspace, listWorkspaces, isUnderDirs,
-  createChat, loadChat, saveChat, appendTurn, deleteChat, listChats, listChatsByWorkspace, chatTurnsForContext,
+  createChat, loadChat, saveChat, appendTurn, deleteChat, listChats, listChatsByWorkspace, chatTurnsForContext, primaryDir,
 } from '../src/lib/workspaces'
 
 afterAll(() => {
@@ -44,6 +44,42 @@ describe('工作空间', () => {
     const ws2 = updateWorkspace(wsId, { removeDir: other })
     expect(ws2!.dirs.length).toBe(1)
     fs.rmSync(other, { recursive: true, force: true })
+  })
+
+  test('setPrimary：设主目录+primaryDir 回退+删除主目录自动回退（#282.2）', () => {
+    const d2 = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e_wsdir3_'))
+    const d3 = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e_wsdir4_'))
+    const wsId = createWorkspace('主目录用例', [tmpWork]).id  // 独立空间——不污染后续 delete 降级用例
+    updateWorkspace(wsId, { addDir: d2 })
+    updateWorkspace(wsId, { addDir: d3 })
+    // 默认主=首目录
+    let ws = getWorkspace(wsId)!
+    expect(primaryDir(ws)).toBe(ws.dirs[0])
+    // 设第二目录为主
+    ws = updateWorkspace(wsId, { setPrimary: 1 })!
+    expect(ws.primaryIndex).toBe(1)
+    expect(primaryDir(ws)).toBe(path.resolve(d2))
+    // 越界设主不生效
+    ws = updateWorkspace(wsId, { setPrimary: 99 })!
+    expect(ws.primaryIndex).toBe(1)
+    // 删除主目录（下标 1）→主回退首目录
+    ws = updateWorkspace(wsId, { removeDir: d2 })!
+    expect(ws.primaryIndex).toBe(0)
+    expect(primaryDir(ws)).toBe(ws.dirs[0])
+    // 删除主目录前面的目录→主下标前移
+    updateWorkspace(wsId, { setPrimary: 1 })
+    ws = updateWorkspace(wsId, { removeDir: ws.dirs[0]! })!
+    expect(ws.primaryIndex).toBe(0)
+    expect(primaryDir(ws)).toBe(path.resolve(d3))
+    // create 带 primaryIndex
+    const ws2 = createWorkspace('带主', [tmpWork, d3], 1)
+    expect(ws2.primaryIndex).toBe(1)
+    expect(primaryDir(ws2)).toBe(path.resolve(d3))
+    // 清理
+    deleteWorkspace(wsId)
+    deleteWorkspace(ws2.id)
+    fs.rmSync(d2, { recursive: true, force: true })
+    fs.rmSync(d3, { recursive: true, force: true })
   })
 
   test('isUnderDirs：挂载内/子路径/越界', () => {

@@ -204,7 +204,7 @@ import { loadSettings } from '../lib/settings'
 import { localMemoryAdd, localMemorySearch, localMemoryContext } from '../lib/memory-local'
 import { webToolDefs, runWebTool } from '../lib/web-tools'
 import { listAllCustomTools, callCustomTool, enabledCustomServers } from '../lib/mcp-custom'
-import { getWorkspace, loadChat, appendTurn as wsAppendTurn, isUnderDirs, chatTurnsForContext } from '../lib/workspaces'
+import { getWorkspace, loadChat, appendTurn as wsAppendTurn, isUnderDirs, chatTurnsForContext, primaryDir } from '../lib/workspaces'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { defaultVaultRoot } from '../lib/config'
@@ -242,6 +242,7 @@ export async function runAgentTools(
   // #282 工作空间：有 workspaceId→挂载目录读取+fs 工具装配；chatId→会话持久化+恢复
   const wsRec = opts.workspaceId ? getWorkspace(opts.workspaceId) : null
   const wsDirs = wsRec?.dirs ?? []
+  const wsMain = wsRec ? primaryDir(wsRec) : undefined
   if (opts.chatId) {
     // 恢复历史（daemon 重启后 chat-context 内存会话丢——从盘回灌）
     const turns = chatTurnsForContext(opts.chatId)
@@ -270,7 +271,7 @@ export async function runAgentTools(
     `2. 参数从用户话里提取，缺关键参数先问；3. 操作完成后用一句话汇报结果；\n` +
     (memOn && memLocal ? `3.5. 用户陈述的长期事实/偏好会由记忆层静默沉淀（无需口头确认）；\n` : ``) +
     `4. 语气亲切简洁，中文回答。` +
-    (wsDirs.length ? `\n5. 当前工作空间「${wsRec!.name}」已挂载目录：${wsDirs.join('、')}。fs_list/fs_read/fs_write 工具仅可操作这些目录内的文件（相对路径基于 ${wsDirs[0]}）；超出范围的路径会被拒绝或需用户批准，不要尝试绕过。` : ``)
+    (wsDirs.length ? `\n5. 当前工作空间「${wsRec!.name}」已挂载目录：${wsDirs.join('、')}（主目录：${wsMain}）。fs_list/fs_read/fs_write 工具仅可操作这些目录内的文件（相对路径基于主目录 ${wsMain}，其余目录传绝对路径）；超出范围的路径会被拒绝或需用户批准，不要尝试绕过。` : ``)
   // #256.3：上下文管理（设置可关）——buildMessages 组装历史/压缩，appendTurn 落账
   const sessionId = opts.sessionId ?? 'default'
   const built = buildMessages(sessionId, system, question)
@@ -297,26 +298,26 @@ export async function runAgentTools(
       {
         name: 'fs_list',
         title: '列出工作目录',
-        description: `列出工作空间挂载目录（${wsDirs.join('、')}）下的文件与子目录。相对路径基于第一个挂载目录解析，也可传绝对路径（须在挂载目录内）。`,
+        description: `列出工作空间挂载目录（${wsDirs.join('、')}）下的文件与子目录。相对路径基于主目录（${wsMain}）解析，也可传绝对路径（须在挂载目录内）。`,
         annotations: { readOnlyHint: true },
         inputSchema: { type: 'object', properties: { dir: { type: 'string', description: '可选，子目录相对路径或绝对路径；缺省=挂载目录根' } } },
       },
       {
         name: 'fs_read',
         title: '读取工作文件',
-        description: `读取工作空间挂载目录内的文本文件内容（≤32KB 截断）。相对路径基于第一个挂载目录解析。`,
+        description: `读取工作空间挂载目录内的文本文件内容（≤32KB 截断）。相对路径基于主目录解析。`,
         annotations: { readOnlyHint: true },
         inputSchema: { type: 'object', properties: { path: { type: 'string', description: '文件相对路径或绝对路径（须在挂载目录内）' } }, required: ['path'] },
       },
       {
         name: 'fs_write',
         title: '写入工作文件',
-        description: `写入/创建工作空间挂载目录内的文本文件（覆盖须谨慎）。相对路径基于第一个挂载目录解析。写操作需用户确认。`,
+        description: `写入/创建工作空间挂载目录内的文本文件（覆盖须谨慎）。相对路径基于主目录解析。写操作需用户确认。`,
         annotations: { readOnlyHint: false, destructiveHint: true },
         inputSchema: { type: 'object', properties: { path: { type: 'string', description: '文件相对路径或绝对路径（须在挂载目录内）' }, content: { type: 'string', description: '完整文件内容' } }, required: ['path', 'content'] },
       },
     )
-    const resolveIn = (p: string): string => (path.isAbsolute(p) ? path.resolve(p) : path.resolve(wsDirs[0]!, p))
+    const resolveIn = (p: string): string => (path.isAbsolute(p) ? path.resolve(p) : path.resolve(wsMain ?? wsDirs[0]!, p))
     localToolsW.fs_list = async (args) => {
       const dir = resolveIn(String(args.dir ?? '.'))
       if (!guard(dir)) return JSON.stringify({ ok: false, needsApproval: true, error: '路径超出工作空间挂载目录范围' })

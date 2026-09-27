@@ -13,6 +13,8 @@ export interface Workspace {
   id: string
   name: string
   dirs: string[]
+  /** 主目录下标（默认 0）——fs 工具相对路径的解析基准；删除主目录时自动回退 */
+  primaryIndex?: number
   createdAt: string
 }
 
@@ -75,12 +77,14 @@ export function getWorkspace(id: string): Workspace | null {
   return listWorkspaces().find((w) => w.id === id) ?? null
 }
 
-export function createWorkspace(name: string, dirs: string[]): Workspace {
+export function createWorkspace(name: string, dirs: string[], primaryIndex = 0): Workspace {
   const list = listWorkspaces()
+  const resolved = dirs.map((d) => path.resolve(d))
   const ws: Workspace = {
     id: genId('ws'),
     name: name.trim() || '未命名工作空间',
-    dirs: dirs.map((d) => path.resolve(d)),
+    dirs: resolved,
+    primaryIndex: primaryIndex > 0 && primaryIndex < resolved.length ? primaryIndex : 0,
     createdAt: new Date().toISOString(),
   }
   list.push(ws)
@@ -89,7 +93,10 @@ export function createWorkspace(name: string, dirs: string[]): Workspace {
 }
 
 /** 修改工作空间（改名/增删目录——dirs 全量替换） */
-export function updateWorkspace(id: string, patch: { name?: string; addDir?: string; removeDir?: string }): Workspace | null {
+export function updateWorkspace(
+  id: string,
+  patch: { name?: string; addDir?: string; removeDir?: string; setPrimary?: number },
+): Workspace | null {
   const list = listWorkspaces()
   const ws = list.find((w) => w.id === id)
   if (!ws) return null
@@ -100,10 +107,26 @@ export function updateWorkspace(id: string, patch: { name?: string; addDir?: str
   }
   if (patch.removeDir) {
     const d = path.resolve(patch.removeDir)
+    const idx = ws.dirs.indexOf(d)
     ws.dirs = ws.dirs.filter((x) => x !== d)
+    // 删除的正是主目录或其下标前移——主目录下标修正（空目录时清掉）
+    if (idx >= 0) {
+      if (ws.dirs.length === 0) delete ws.primaryIndex
+      else if ((ws.primaryIndex ?? 0) === idx) ws.primaryIndex = 0
+      else if ((ws.primaryIndex ?? 0) > idx) ws.primaryIndex = (ws.primaryIndex ?? 0) - 1
+    }
+  }
+  if (patch.setPrimary !== undefined) {
+    const i = Math.floor(patch.setPrimary)
+    if (i >= 0 && i < ws.dirs.length) ws.primaryIndex = i
   }
   writeJson(workspacesFile(), list)
   return ws
+}
+
+/** 主目录（fs 相对路径解析基准）：primaryIndex 越界/缺省回退首目录 */
+export function primaryDir(ws: Workspace): string | undefined {
+  return ws.dirs[ws.primaryIndex ?? 0] ?? ws.dirs[0]
 }
 
 export function deleteWorkspace(id: string): boolean {

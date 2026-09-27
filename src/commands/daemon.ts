@@ -332,14 +332,16 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           else if (dirs.length === 0) { code = 1; text = '至少选择一个工作目录' }
           else {
             const missing = dirs.filter((d) => { try { return !require('node:fs').statSync(d).isDirectory() } catch { return true } })
+            const pi = Number(args.primaryIndex ?? 0)
             if (missing.length) { code = 1; text = `目录不存在或不是文件夹：${missing.join('、')}` }
-            else text = JSON.stringify({ ok: true, workspace: createWorkspace(name, dirs) })
+            else text = JSON.stringify({ ok: true, workspace: createWorkspace(name, dirs, Number.isFinite(pi) ? pi : 0) })
           }
         } else if (op === 'update') {
           const ws = updateWorkspace(String(args.id ?? ''), {
             name: args.name !== undefined ? String(args.name) : undefined,
             addDir: args.addDir !== undefined ? String(args.addDir) : undefined,
             removeDir: args.removeDir !== undefined ? String(args.removeDir) : undefined,
+            setPrimary: args.setPrimary !== undefined ? Number(args.setPrimary) : undefined,
           })
           if (!ws) { code = 1; text = '工作空间不存在' }
           else text = JSON.stringify({ ok: true, workspace: ws })
