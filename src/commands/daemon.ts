@@ -31,7 +31,8 @@ import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
 import { loadSettings, saveSettings, MESSAGING_PROVIDERS } from '../lib/settings'
-import { defaultVaultRoot } from '../lib/config'
+import { defaultVaultRoot, configDir } from '../lib/config'
+import * as path from 'node:path'
 import { resolveProviders } from '../lib/providers'
 import { addEntry, listCloudDirs, backupSync, backupSyncAll, BACKUP_EXTS, loadRegistry, setEnabled, removeEntry, setPolicies, checkTwin } from '../lib/backup'
 import { apiGet, apiPost } from '../lib/api'
@@ -418,6 +419,37 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         }
         break
       }
+      case 'messaging': {
+        // #286 消息网关编排：start=启动全部已配置平台收件循环；status=运行态
+        try {
+          const op3 = String((args as Record<string, unknown>).op ?? 'status')
+          if (op3 === 'start') {
+            const { startGateway } = require('../lib/messaging-gateway') as typeof import('../lib/messaging-gateway')
+            const st = await startGateway(path.join(configDir(), 'gateway-state'), async (m) => {
+              // 无头小月：每平台会话独立 chatId（持久化/上下文隔离），自动确认（消息通道无法逐条弹窗——写操作默认拒绝更安全）
+              const { runAgentTools } = await import('../commands/xiaoyue')
+              console.log(`（消息网关 ${m.platform} ← ${m.sender ?? m.chatId}：${m.text.slice(0, 60)}）`)
+              const r = await runAgentTools(m.text, async () => false, { chatId: `msg:${m.platform}:${m.chatId}` })
+              return r.answer
+            })
+            code = 0
+            text = JSON.stringify({ statuses: st })
+          } else if (op3 === 'stop') {
+            const { stopGateway } = require('../lib/messaging-gateway') as typeof import('../lib/messaging-gateway')
+            await stopGateway()
+            code = 0
+            text = JSON.stringify({ ok: true })
+          } else {
+            const { gatewayRunning } = require('../lib/messaging-gateway') as typeof import('../lib/messaging-gateway')
+            code = 0
+            text = JSON.stringify({ running: gatewayRunning() })
+          }
+        } catch (e: any) {
+          code = 1
+          text = String(e?.message ?? e)
+        }
+        break
+      }
       case 'backup': {
       // #257 备份目录：list/add/remove/toggle/dirs（云端目录树平铺）/sync（上行到归属目录）
       try {
@@ -556,6 +588,33 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
                 const clean: Record<string, unknown> = { ...sp }
                 delete clean.apiKey
                 patch[sec] = clean
+              }
+            }
+            // #286：消息平台——secret 字段（token 类）剥入钥匙串（account=msg:<platform>:<key>），
+            // settings.json 只落非敏感 config + keyStored 标记；明文/旧哨兵形态都处理
+            const mg = patch.messaging as Record<string, unknown> | undefined
+            if (mg && typeof mg === 'object' && mg.providers && typeof mg.providers === 'object') {
+              const { Entry } = require('@napi-rs/keyring') as typeof import('@napi-rs/keyring')
+              const MSG_SECRET_KEYS: Record<string, string[]> = { feishu: ['appSecret'], wecom: ['corpSecret'], dingtalk: ['appSecret'], telegram: ['botToken'], slack: ['botToken'] }
+              for (const [pid, pv] of Object.entries(mg.providers as Record<string, any>)) {
+                if (!pv || typeof pv !== 'object') continue
+                const cfgIn = (pv.config ?? {}) as Record<string, unknown>
+                const clean: Record<string, unknown> = {}
+                for (const [k, v] of Object.entries(cfgIn)) {
+                  const isSecret = (MSG_SECRET_KEYS[pid] ?? []).includes(k)
+                  if (!isSecret) {
+                    clean[k] = v
+                    continue
+                  }
+                  const s = typeof v === 'string' ? v.trim() : ''
+                  if (s && !s.startsWith('keychain:')) {
+                    new Entry('moonlybox', `msg:${pid}:${k}`).setPassword(s)
+                    clean[`keychain:${k}`] = true
+                  } else if (s.startsWith('keychain:')) {
+                    clean[`keychain:${k}`] = true // 旧哨兵形态：保持已存标记（钥匙串值可能已存过）
+                  }
+                }
+                pv.config = clean
               }
             }
             // #280：自定义 MCP——条目带 apiKey 时入钥匙串（account=mcp:<name>），settings.json 只落 keyStored 布尔

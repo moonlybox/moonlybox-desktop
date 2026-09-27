@@ -897,7 +897,7 @@ async function renderWork(nav, arg, label2) {
       const g = await loadAppSettings()
       const provs = APP_PROVIDERS?.messaging ?? []
       const enabled = g.messaging?.providers ?? {}
-      panel('消息平台', '对接 IM 平台收发消息（参考 Hermes 多平台架构）。Secret/Token 只存本机钥匙串。', `
+      panel('消息平台', '对接 IM 平台，让你在小月里远程收发消息与操作。Token/Secret 只存本机钥匙串。当前支持 Telegram；飞书/企业微信/钉钉/Slack 等逐批接入。', `
         ${provs.map((p) => {
           const cur = enabled[p.id] ?? { enabled: false }
           return `<div class="set-card"><div class="sc-main"><div class="sc-title">${p.label}</div><div class="sc-desc">${cur.enabled ? '已开启' : '对接后可在此平台收发消息'}</div></div>
@@ -907,7 +907,24 @@ async function renderWork(nav, arg, label2) {
           </div>`
         }).join('')}
         <div class="set-status" id="sp-msg-status"></div>
+        <div class="set-row" style="margin-top:10px"><button type="button" class="btn" id="sp-msg-start">启动网关</button><span class="set-desc" id="sp-msg-run"></span></div>
       `)
+      $('sp-msg-start').onclick = async () => {
+        const run = $('sp-msg-run')
+        run.textContent = '启动中…'
+        const r = await window.moonlybox.rpc('messaging', { op: 'start' }, 30_000)
+        if (r.event === 'done' && r.code === 0) {
+          const statuses = JSON.parse(r.text).statuses ?? []
+          const parts = statuses.map((s) => `${s.platform}：${s.running ? '✓ 运行中' : `✗ ${s.error ?? '未启动'}`}`)
+          run.textContent = parts.join('  ') || '无已启用平台'
+        } else run.textContent = `启动失败：${r.message ?? r.text}`
+      }
+      window.moonlybox.rpc('messaging', { op: 'status' }, 10_000).then((r) => {
+        if (r.event === 'done' && r.code === 0) {
+          const running = JSON.parse(r.text).running ?? []
+          if (running.length) $('sp-msg-run').textContent = `运行中：${running.join('、')}`
+        }
+      })
       w.querySelectorAll('[data-msg]').forEach((tg) => {
         tg.onclick = () => { tg.classList.toggle('on'); const box = w.querySelector(`[data-msgcfg="${tg.dataset.msg}"]`); if (box) box.style.display = tg.classList.contains('on') ? 'block' : 'none'; saveMessaging() }
       })
@@ -921,7 +938,7 @@ async function renderWork(nav, arg, label2) {
           const cfg = {}
           for (const n of p.needs) {
             const inp = w.querySelector(`[data-msgkey="${p.id}.${n.key}"]`)
-            if (inp && inp.value) cfg[n.key] = n.secret ? `keychain:${p.id}.${n.key}` : inp.value // secret 占位标记（实际入钥匙串待接线）
+            if (inp && inp.value) cfg[n.key] = inp.value // #286：secret 明文随 patch 发 daemon→剥离入钥匙串，settings 只落标记
             else if (!n.secret && (enabled[p.id]?.config ?? {})[n.key]) cfg[n.key] = (enabled[p.id]?.config ?? {})[n.key]
           }
           providers[p.id] = { enabled: on, config: cfg }
