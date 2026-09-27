@@ -66,7 +66,13 @@ export function loadByokKey(): string | null {
 
 /** BYOK 就绪判定（meta+key 都在才算配好） */
 export function byokReady(): boolean {
-  return loadByokMeta() !== null && loadByokKey() !== null
+  // #283：委托模型注册表（新结构 default 实例 → 旧 byok.json 回落）——两代配置任一可用即 ready
+  try {
+    const { modelReady } = require('./model-registry') as typeof import('./model-registry')
+    return modelReady()
+  } catch {
+    return loadByokMeta() !== null && loadByokKey() !== null
+  }
 }
 
 export interface ChatResult {
@@ -76,10 +82,17 @@ export interface ChatResult {
 }
 
 /** 单轮对话（非流式，CLI 场景 300 字纪律内无需流式渲染） */
-export async function byokChat(system: string, question: string, timeoutMs = 60_000): Promise<ChatResult> {
-  const meta = loadByokMeta()
-  const apiKey = loadByokKey()
-  if (!meta || !apiKey) return { ok: false, error: 'BYOK 未配置' }
+export async function byokChat(
+  system: string,
+  question: string,
+  timeoutMs = 60_000,
+  /** #283：模型注册表实例——传入时替代全局 byok 配置 */
+  modelOverride?: { baseUrl: string; model: string; apiKey: string | null },
+): Promise<ChatResult> {
+  const meta = modelOverride ? { baseUrl: modelOverride.baseUrl, model: modelOverride.model } : loadByokMeta()
+  const apiKey = modelOverride ? modelOverride.apiKey : loadByokKey()
+  if (!meta) return { ok: false, error: 'BYOK 未配置' }
+  if (!apiKey) return { ok: false, error: 'BYOK 未配置（API Key 缺失）' }
 
   try {
     const res = await fetch(`${meta.baseUrl.replace(/\/$/, '')}/chat/completions`, {
@@ -132,10 +145,13 @@ export async function byokChatMessages(
   messages: ChatMessage[],
   tools?: Array<{ type: 'function'; function: { name: string; description?: string; parameters: unknown } }>,
   timeoutMs = 90_000,
+  /** #283：模型注册表实例（resolveActiveModel 结果）——传入时替代全局 byok 配置 */
+  modelOverride?: { baseUrl: string; model: string; apiKey: string | null },
 ): Promise<ChatWithToolsResult> {
-  const meta = loadByokMeta()
-  const apiKey = loadByokKey()
-  if (!meta || !apiKey) return { ok: false, error: 'BYOK 未配置' }
+  const meta = modelOverride ? { baseUrl: modelOverride.baseUrl, model: modelOverride.model } : loadByokMeta()
+  const apiKey = modelOverride ? modelOverride.apiKey : loadByokKey()
+  if (!meta) return { ok: false, error: 'BYOK 未配置' }
+  if (!apiKey) return { ok: false, error: 'BYOK 未配置（API Key 缺失）' }
   try {
     const res = await fetch(`${meta.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',

@@ -386,8 +386,11 @@ ${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}`
       ...fsTools,
     ],
     chat: async (messages, tools) => {
+      // #283：对话走模型注册表（设置-对话默认模型；空/失效回落旧 byok）
+      const { resolveActiveModel } = await import('../lib/model-registry')
+      const active = resolveActiveModel()
       const r = await chatWithRetry(
-        () => byokChatMessages(messages, tools as never),
+        () => byokChatMessages(messages, tools as never, 90_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined),
         (attempt, total, err) => console.log(`（LLM 调用失败，重试 ${attempt}/${total}：${err.slice(0, 80)}）`),
       )
       // #280.3.2：【真根因修复】toolCalls 必须透传——原 `{ ok, text }` 把 tool_calls 静默丢弃，

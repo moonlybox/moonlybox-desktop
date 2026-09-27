@@ -100,6 +100,15 @@ let clipboardWatch = false; // 剪贴板自动采集（启动默认关，与 T3 
 
 // ---------- #256 设置中心运行态（daemon settings 通道单源；localStorage 只做快照缓存） ----------
 let APP_SETTINGS = null // daemon get 的全量 settings（null=未加载）
+// #283 平台清单兜底（云端 providers 拉取失败时平台API 卡片仍可列出；与 settings.ts PLATFORM_PROVIDERS 同源同步）
+const PLATFORM_PROVIDERS_FALLBACK = [
+  { id: 'deepseek', label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', models: ['deepseek-chat', 'deepseek-reasoner'], docs: 'https://platform.deepseek.com' },
+  { id: 'moonshot', label: 'Moonshot AI（Kimi）', baseUrl: 'https://api.moonshot.cn/v1', models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'kimi-k2-0711-preview'], docs: 'https://platform.moonshot.cn' },
+  { id: 'zhipu', label: '智谱 AI（GLM）', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', models: ['glm-4.5', 'glm-4.5-air', 'glm-4-flash'], docs: 'https://open.bigmodel.cn' },
+  { id: 'dashscope', label: '阿里云百炼（通义）', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['qwen-plus', 'qwen-max', 'qwen-turbo'], docs: 'https://bailian.console.aliyun.com' },
+  { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', models: ['gpt-4o', 'gpt-4o-mini'], docs: 'https://platform.openai.com' },
+  { id: 'anthropic', label: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1', models: ['claude-sonnet-4-20250514'], docs: 'https://console.anthropic.com' },
+]
 let APP_PROVIDERS = null // 提供商清单 {platform,websearch,messaging,memory}
 async function loadAppSettings() {
   if (APP_SETTINGS) return APP_SETTINGS
@@ -639,7 +648,23 @@ async function renderWork(nav, arg, label2) {
     } else if (cat.id === 'chat') {
       const g = await loadAppSettings()
       const cv = g.chat ?? {}
+      // #283：默认模型下拉=平台API/自定义/本地部署（预留）所有已启用实例分组列出
+      const mm = g.model ?? {}
+      const modelOpts =
+        `<optgroup label="平台 API"${(mm.providers ?? []).filter((x) => x.enabled).map((x) => {
+          const pv = (APP_PROVIDERS?.platform ?? PLATFORM_PROVIDERS_FALLBACK).find((p) => p.id === x.providerId)
+          return `<option value="platform:${x.id}" ${mm.default === `platform:${x.id}` ? 'selected' : ''}>${pv?.label ?? x.providerId} · ${x.model}</option>`
+        }).join('')}</optgroup>` +
+        `<optgroup label="自定义"${(mm.custom ?? []).filter((x) => x.enabled).map((x) => `<option value="custom:${x.id}" ${mm.default === `custom:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>` +
+        `<optgroup label="本地部署（预留）"${(mm.local ?? []).filter((x) => x.enabled).map((x) => `<option value="local:${x.id}" ${mm.default === `local:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>`
       panel('对话', '小月的上下文与重试行为。上下文仅存内存（本机），不落盘。', `
+        <div class="set-field" style="margin-bottom:14px"><label>默认模型（小月对话/图示 AI 使用）</label>
+          <select id="sp-chat-model" class="set-select set-select-sm" style="max-width:420px">
+            <option value="">— 未指定（回落已配置模型）—</option>
+            ${modelOpts}
+          </select>
+          <div class="set-desc" style="margin-top:4px" id="sp-chat-model-hint"></div>
+        </div>
         <div class="set-card"><div class="sc-main"><div class="sc-title">启用上下文管理</div><div class="sc-desc">小月记住本次会话中的对话</div></div>
           <button type="button" class="toggle ${cv.contextEnabled !== false ? 'on' : ''}" id="sp-ctx"></button></div>
         <div class="set-card"><div class="sc-main"><div class="sc-title">上下文自动压缩</div><div class="sc-desc">历史过长时自动摘要，节省 token</div></div>
@@ -657,6 +682,12 @@ async function renderWork(nav, arg, label2) {
         $('sp-compress').disabled = !ctx
         $('sp-ct').disabled = !ctx || !ac
         $('sp-cg').disabled = !ctx || !ac
+      }
+      $('sp-chat-model').onchange = async (e) => {
+        await saveAppSettings({ model: { default: e.target.value } })
+        const hint = $('sp-chat-model-hint')
+        hint.textContent = e.target.value ? '✓ 已设为默认模型' : '未指定——按已配置模型回落'
+        setTimeout(() => { hint.textContent = '' }, 2500)
       }
       $('sp-ctx').onclick = (e) => { e.currentTarget.classList.toggle('on'); syncDisabled(); saveChat() }
       $('sp-compress').onclick = (e) => { e.currentTarget.classList.toggle('on'); saveChat() }
@@ -694,76 +725,86 @@ async function renderWork(nav, arg, label2) {
         }
       }
     } else if (cat.id === 'model' && currentSetSub === 'platform') {
+      // #283：平台API=多服务商卡片列表——每实例单独配置 key/模型/启停，任一可设为对话默认
       const g = await loadAppSettings()
-      const provs = APP_PROVIDERS?.platform ?? []
-      const mp = g.model ?? {}
-      const curUrl = mp.baseUrl ?? ''
-      panel('模型 · 平台 API（BYOK）', '使用平台提供商的 API Key 接入。Key 只存本机钥匙串，永不上传、不落明文文件。', `
-        <div class="set-field"><label>平台提供商</label>
-          <select id="sp-prov" class="set-select set-select-sm">
-            <option value="">— 选择提供商 —</option>
-            ${provs.map((p) => `<option value="${p.id}" ${mp.provider === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
-          </select>
-          <div class="set-desc" style="margin-top:4px" id="sp-prov-docs"></div>
-        </div>
-        <div class="set-field"><label>模型名（选商后可从推荐列表选或手填）</label>
-          <div class="set-row" style="margin:0 0 6px"><input id="sp-byok-model" placeholder="glm-4.5" style="flex:1" />
-            <select id="sp-prov-models" class="set-select set-select-sm"><option value="">— 推荐模型 —</option></select></div>
-        </div>
-        <div class="set-field"><label>API 地址（选商自动填）</label><input id="sp-byok-url" placeholder="https://api.bigmodel.cn/api/paas/v4" /></div>
-        <div class="set-field"><label>API Key（本地端点可留空；已配置时不回显）</label><input id="sp-byok-key" type="password" placeholder="sk-…" /></div>
-        <div class="set-row">
-          <button type="button" class="btn" id="sp-byok-save">保存</button>
-          <button type="button" class="btn ghost" id="sp-byok-test">测试连接</button>
-          <button type="button" class="btn ghost" id="sp-byok-clear">清除</button>
-          <span class="set-status" id="sp-byok-status"></span>
-        </div>
-      `)
-      try {
-        const g = JSON.parse((await window.moonlybox.rpc('auth', { op: 'byok', sub: 'get' }, 10_000)).text)
-        $('sp-byok-url').value = g.baseUrl || curUrl || ''
-        $('sp-byok-model').value = g.model ?? ''
-        $('sp-byok-status').textContent = g.hasKey ? 'Key 已入钥匙串' : ''
-      } catch {}
-      const provSync = () => {
-        const pv = provs.find((x) => x.id === $('sp-prov').value)
-        $('sp-prov-docs').innerHTML = pv ? `API Key 获取：<a href="#" data-ext="${pv.docs}">${pv.docs}</a>` : ''
-        $('sp-prov-docs').querySelectorAll('[data-ext]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); window.moonlybox.openExternal(a.dataset.ext) } })
-        const sel = $('sp-prov-models')
-        sel.innerHTML = '<option value="">— 推荐模型 —</option>' + (pv ? pv.models.map((m) => `<option value="${m}">${m}</option>`).join('') : '')
-        if (pv) $('sp-byok-url').value = pv.baseUrl
+      const provs = APP_PROVIDERS?.platform ?? PLATFORM_PROVIDERS_FALLBACK
+      const mcfg = g.model ?? {}
+      const insts = Array.isArray(mcfg.providers) ? mcfg.providers : []
+      const isDefault = (id) => mcfg.default === `platform:${id}`
+      const html = (defOpen) => panel('模型 · 平台 API', '每个平台可单独配置 API Key 与模型、单独启用/停用；任一实例可设为对话默认模型。Key 只存本机钥匙串，永不上传。', `
+        <div id="sp-pv-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        <button type="button" class="btn ghost" id="sp-pv-add" style="margin-top:10px">＋ 添加平台</button>
+        <div id="sp-pv-form" style="display:${defOpen ? 'block' : 'none'};margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:10px">
+          <div class="set-field"><label>平台提供商</label>
+            <select id="sp-pv-prov" class="set-select set-select-sm">
+              <option value="">— 选择提供商 —</option>
+              ${provs.map((p) => `<option value="${p.id}">${p.label}</option>`).join('')}
+            </select>
+            <div class="set-desc" style="margin-top:4px" id="sp-pv-docs"></div>
+          </div>
+          <div class="set-field"><label>模型名</label>
+            <div class="set-row" style="margin:0"><input id="sp-pv-model" placeholder="glm-4.5" style="flex:1" />
+              <select id="sp-pv-models" class="set-select set-select-sm"><option value="">— 推荐模型 —</option></select></div>
+          </div>
+          <div class="set-field"><label>API Key</label><input id="sp-pv-key" type="password" placeholder="sk-…" /></div>
+          <div class="set-row">
+            <button type="button" class="btn" id="sp-pv-save">保存</button>
+            <button type="button" class="btn ghost" id="sp-pv-cancel">取消</button>
+            <span class="set-status" id="sp-pv-status"></span>
+          </div>
+        </div>`)
+      html(insts.length === 0)
+      const renderList = () => {
+        const box = $('sp-pv-list')
+        box.innerHTML = ''
+        if (!insts.length) { box.innerHTML = '<div class="set-desc">尚未添加平台——点「＋ 添加平台」接入第一个模型服务</div>'; return }
+        for (const inst of insts) {
+          const pv = provs.find((x) => x.id === inst.providerId)
+          const card = document.createElement('div')
+          card.className = 'set-card'
+          card.innerHTML = `<div class="sc-main"><div class="sc-title">${pv?.label ?? inst.providerId}${isDefault(inst.id) ? ' <span style="color:var(--accent);font-size:11px">默认</span>' : ''}</div>
+            <div class="sc-desc">${inst.model || '未设模型'}${inst.hasKey || inst.enabled ? '' : ' · 未配置 Key'}</div></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">设为默认</button>`}
+              <button type="button" class="toggle ${inst.enabled ? 'on' : ''}" data-act="toggle"></button>
+            </div>`
+          card.querySelector('[data-act=default]').onclick = async () => {
+            await saveAppSettings({ model: { default: `platform:${inst.id}` } })
+            openSetPanel('model', 'platform')
+          }
+          card.querySelector('[data-act=toggle]').onclick = async (e) => {
+            const next = !e.currentTarget.classList.contains('on')
+            e.currentTarget.classList.toggle('on', next)
+            const arr = insts.map((x) => (x.id === inst.id ? { ...x, enabled: next } : x))
+            await saveAppSettings({ model: { providers: arr } })
+          }
+          box.appendChild(card)
+        }
       }
-      $('sp-prov').onchange = provSync
-      $('sp-prov-models').onchange = () => { if ($('sp-prov-models').value) $('sp-byok-model').value = $('sp-prov-models').value }
-      if (mp.provider) provSync()
-      $('sp-byok-save').onclick = async () => {
-        const st = $('sp-byok-status')
+      renderList()
+      let provSync = () => {}
+      $('sp-pv-add').onclick = () => { $('sp-pv-form').style.display = 'block' }
+      $('sp-pv-cancel').onclick = () => { $('sp-pv-form').style.display = 'none' }
+      $('sp-pv-prov').onchange = () => {
+        const pv = provs.find((x) => x.id === $('sp-pv-prov').value)
+        $('sp-pv-docs').innerHTML = pv ? `API Key 获取：<a href="#" data-ext="${pv.docs}">${pv.docs}</a>` : ''
+        $('sp-pv-docs').querySelectorAll('[data-ext]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); window.moonlybox.openExternal(a.dataset.ext) } })
+        $('sp-pv-models').innerHTML = '<option value="">— 推荐模型 —</option>' + (pv ? pv.models.map((m) => `<option value="${m}">${m}</option>`).join('') : '')
+      }
+      $('sp-pv-models').onchange = () => { if ($('sp-pv-models').value) $('sp-pv-model').value = $('sp-pv-models').value }
+      $('sp-pv-save').onclick = async () => {
+        const st = $('sp-pv-status')
         st.className = 'set-status'; st.textContent = '保存中…'
-        const apiKey = $('sp-byok-key').value
-        // 双通道：settings save（provider 状态）+ 平台API 字段齐时由 daemon 同步 BYOK（meta+钥匙串）
-        const r = await saveAppSettings({ model: {
-          provider: $('sp-prov').value,
-          baseUrl: $('sp-byok-url').value,
-          model: $('sp-byok-model').value,
-          ...(apiKey ? { apiKey } : {}),
-        } })
-        const byok = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'save', baseUrl: $('sp-byok-url').value, model: $('sp-byok-model').value, ...(apiKey ? { apiKey } : {}) }, 15_000)
-        if (r.ok && byok.event === 'done' && byok.code === 0) {
-          st.className = 'set-status ok'; st.textContent = '✓ 已保存'
-          $('sp-byok-key').value = ''
-        } else { st.className = 'set-status err'; st.textContent = byok.message ?? byok.text ?? r.error ?? '保存失败' }
-      }
-      $('sp-byok-test').onclick = async () => {
-        const st = $('sp-byok-status')
-        st.className = 'set-status'; st.textContent = '测试中…'
-        const r = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'test' }, 30_000)
-        if (r.event === 'done' && r.code === 0) { st.className = 'set-status ok'; st.textContent = '✓ 连接成功' }
-        else { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '连接失败' }
-      }
-      $('sp-byok-clear').onclick = async () => {
-        await window.moonlybox.rpc('auth', { op: 'byok', sub: 'clear' }, 10_000)
-        $('sp-byok-url').value = ''; $('sp-byok-model').value = ''; $('sp-byok-key').value = ''
-        const st = $('sp-byok-status'); st.className = 'set-status ok'; st.textContent = '已清除'
+        const providerId = $('sp-pv-prov').value
+        const model = $('sp-pv-model').value.trim()
+        const apiKey = $('sp-pv-key').value.trim()
+        if (!providerId || !model) { st.className = 'set-status err'; st.textContent = '提供商与模型名必填'; return }
+        const inst = { id: `platform_${providerId}_${Date.now().toString(36)}`, providerId, enabled: true, model, ...(apiKey ? { apiKey } : {}) }
+        const arr = [...insts, inst]
+        const r = await saveAppSettings({ model: { providers: arr, ...(insts.length === 0 ? { default: `platform:${inst.id}` } : {}) } })
+        st.className = r.ok ? 'set-status ok' : 'set-status err'
+        if (r.ok) openSetPanel('model', 'platform')
+        else st.textContent = r.error ?? '保存失败'
       }
     } else if (cat.id === 'model' && currentSetSub === 'local') {
       // #274：本地模型改为预留预告（真·本地部署：内置模型下载+本地推理，参考 Cherry Studio 模型列表）——端点式接入归自定义
@@ -774,33 +815,74 @@ async function renderWork(nav, arg, label2) {
           <div class="sc-desc">Ollama / LM Studio / vLLM 等本地端点请到「自定义」接入（API 地址填 http://127.0.0.1:11434/v1 这类端点即可）。</div></div></div>
       `)
     } else if (cat.id === 'model' && currentSetSub === 'custom') {
+      // #283：自定义=多模型列表——每条单独启停/删除，任一可设为对话默认；key 走钥匙串
       const g = await loadAppSettings()
-      const cu = g.model?.custom
-      panel('模型 · 自定义', '自填 OpenAI 兼容 API 地址：本地推理端点（Ollama / LM Studio / vLLM）、中转站、私有部署等。Key 只存本机钥匙串（本地端点可留空）。', `
-        <div class="set-field"><label>API 地址</label><input id="sp-cu-url" placeholder="http://127.0.0.1:11434/v1（Ollama）或 https://your-endpoint.example.com/v1" value="${cu?.baseUrl ?? ''}" /></div>
-        <div class="set-field"><label>模型名</label><input id="sp-cu-model" placeholder="your-model" value="${cu?.model ?? ''}" /></div>
-        <div class="set-field"><label>API Key（本地端点可留空；已配置时不回显）</label><input id="sp-cu-key" type="password" placeholder="sk-…" /></div>
-        <div class="set-row">
-          <button type="button" class="btn" id="sp-cu-save">保存</button>
-          <button type="button" class="btn ghost" id="sp-cu-test">测试连接</button>
-          <span class="set-status" id="sp-cu-status"></span>
-        </div>
-      `)
+      const mcfg = g.model ?? {}
+      const insts = Array.isArray(mcfg.custom) ? mcfg.custom : []
+      const isDefault = (id) => mcfg.default === `custom:${id}`
+      panel('模型 · 自定义', '添加多个 OpenAI 兼容端点（Ollama / LM Studio / vLLM / 中转站 / 私有部署），每条可单独启用/停用，任一可设为对话默认。本地端点 Key 可留空。', `
+        <div id="sp-cu-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        <button type="button" class="btn ghost" id="sp-cu-add" style="margin-top:10px">＋ 添加自定义模型</button>
+        <div id="sp-cu-form" style="display:${insts.length === 0 ? 'block' : 'none'};margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:10px">
+          <div class="set-field"><label>名称</label><input id="sp-cu-name" placeholder="例：本地 Ollama" /></div>
+          <div class="set-field"><label>API 地址</label><input id="sp-cu-url" placeholder="http://127.0.0.1:11434/v1（Ollama）或 https://your-endpoint.example.com/v1" /></div>
+          <div class="set-field"><label>模型名</label><input id="sp-cu-model" placeholder="your-model" /></div>
+          <div class="set-field"><label>API Key（本地端点可留空）</label><input id="sp-cu-key" type="password" placeholder="sk-…" /></div>
+          <div class="set-row">
+            <button type="button" class="btn" id="sp-cu-save">保存</button>
+            <button type="button" class="btn ghost" id="sp-cu-cancel">取消</button>
+            <span class="set-status" id="sp-cu-status"></span>
+          </div>
+        </div>`)
+      const renderList = () => {
+        const box = $('sp-cu-list')
+        box.innerHTML = ''
+        if (!insts.length) { box.innerHTML = '<div class="set-desc">尚未添加自定义模型</div>'; return }
+        for (const inst of insts) {
+          const card = document.createElement('div')
+          card.className = 'set-card'
+          card.innerHTML = `<div class="sc-main"><div class="sc-title">${inst.name || '未命名'}${isDefault(inst.id) ? ' <span style="color:var(--accent);font-size:11px">默认</span>' : ''}</div>
+            <div class="sc-desc">${inst.model} · ${inst.baseUrl}</div></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">设为默认</button>`}
+              <button type="button" class="toggle ${inst.enabled ? 'on' : ''}" data-act="toggle"></button>
+              <span data-act="del" style="color:var(--muted);cursor:pointer;padding:0 4px">×</span>
+            </div>`
+          card.querySelector('[data-act=default]').onclick = async () => {
+            await saveAppSettings({ model: { default: `custom:${inst.id}` } })
+            openSetPanel('model', 'custom')
+          }
+          card.querySelector('[data-act=toggle]').onclick = async (e) => {
+            const next = !e.currentTarget.classList.contains('on')
+            e.currentTarget.classList.toggle('on', next)
+            await saveAppSettings({ model: { custom: insts.map((x) => (x.id === inst.id ? { ...x, enabled: next } : x)) } })
+          }
+          card.querySelector('[data-act=del]').onclick = async () => {
+            await saveAppSettings({ model: { custom: insts.filter((x) => x.id !== inst.id), ...(isDefault(inst.id) ? { default: '' } : {}) } })
+            openSetPanel('model', 'custom')
+          }
+          box.appendChild(card)
+        }
+      }
+      renderList()
+      $('sp-cu-add').onclick = () => { $('sp-cu-form').style.display = 'block' }
+      $('sp-cu-cancel').onclick = () => { $('sp-cu-form').style.display = 'none' }
       $('sp-cu-save').onclick = async () => {
-        const st = $('sp-cu-status'); st.className = 'set-status'; st.textContent = '保存中…'
-        const apiKey = $('sp-cu-key').value
-        const r = await saveAppSettings({ model: { custom: { baseUrl: $('sp-cu-url').value, model: $('sp-cu-model').value } } })
-        const byok = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'save', baseUrl: $('sp-cu-url').value, model: $('sp-cu-model').value, ...(apiKey ? { apiKey } : {}) }, 15_000)
-        st.className = r.ok && byok.code === 0 ? 'set-status ok' : 'set-status err'
-        st.textContent = r.ok && byok.code === 0 ? '✓ 已保存（自定义端点即当前对话模型）' : (byok.message ?? byok.text ?? r.error ?? '保存失败')
-        if (r.ok && byok.code === 0) $('sp-cu-key').value = ''
+        const st = $('sp-cu-status')
+        st.className = 'set-status'; st.textContent = '保存中…'
+        const name = $('sp-cu-name').value.trim()
+        const baseUrl = $('sp-cu-url').value.trim().replace(/\/+$/, '')
+        const model = $('sp-cu-model').value.trim()
+        const apiKey = $('sp-cu-key').value.trim()
+        if (!baseUrl || !model) { st.className = 'set-status err'; st.textContent = 'API 地址与模型名必填'; return }
+        if (!/^https?:\/\//.test(baseUrl)) { st.className = 'set-status err'; st.textContent = 'API 地址需以 http(s):// 开头'; return }
+        const inst = { id: `custom_${Date.now().toString(36)}`, name: name || '自定义模型', baseUrl, model, enabled: true, ...(apiKey ? { apiKey } : {}) }
+        const r = await saveAppSettings({ model: { custom: [...insts, inst], ...(insts.length === 0 ? { default: `custom:${inst.id}` } : {}) } })
+        st.className = r.ok ? 'set-status ok' : 'set-status err'
+        if (r.ok) openSetPanel('model', 'custom')
+        else st.textContent = r.error ?? '保存失败'
       }
-      $('sp-cu-test').onclick = async () => {
-        const st = $('sp-cu-status'); st.className = 'set-status'; st.textContent = '测试中…'
-        const r = await window.moonlybox.rpc('auth', { op: 'byok', sub: 'test' }, 30_000)
-        st.className = r.code === 0 ? 'set-status ok' : 'set-status err'
-        st.textContent = r.code === 0 ? '✓ 连接成功' : (r.message ?? r.text ?? '连接失败')
-      }
+
     } else if (cat.id === 'messaging') {
       const g = await loadAppSettings()
       const provs = APP_PROVIDERS?.messaging ?? []

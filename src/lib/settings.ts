@@ -30,8 +30,18 @@ export interface SettingsSchema {
     maxRetries: number // 模型重试次数（默认 10）
   }
   model: {
-    provider: string // 平台 API 提供商 id（settings PROVIDERS 键）
-    custom: { baseUrl: string; model: string } | null // 自定义（api 地址自填）
+    /** #283 对话默认模型：'platform:<id>' | 'custom:<id>' | 'local:<id>' | ''（空=回落旧 byok.json 兼容） */
+    default: string
+    /** 平台 API 多服务商实例（每个可单独配置 key/启停；key 走钥匙串 account=llm:<id>） */
+    providers: Array<{ id: string; providerId: string; enabled: boolean; model: string; baseUrl?: string }>
+    /** 自定义多模型（OpenAI 兼容端点；本地推理 key 可空） */
+    custom: Array<{ id: string; name: string; baseUrl: string; model: string; enabled: boolean }>
+    /** 本地部署（预留，结构同 custom；v1 恒空数组） */
+    local: Array<{ id: string; name: string; model: string; enabled: boolean }>
+    /** 遗留字段（<=#282 单模型形态），迁移后零消费 */
+    provider?: string
+    /** 遗留字段（<=#282），迁移后零消费 */
+    legacyCustom?: { baseUrl: string; model: string } | null
   }
   messaging: {
     providers: Record<string, { enabled: boolean; config: Record<string, string> }> // 平台 id → 配置
@@ -68,7 +78,7 @@ export const DEFAULT_SETTINGS: SettingsSchema = {
   general: { launchAtLogin: false, launchMinimized: false, closeToTray: true, keepAwake: false, clipboardWatch: false },
   appearance: { theme: 'system', lang: 'zh-CN', zoom: 100 },
   chat: { contextEnabled: true, autoCompress: true, compressThreshold: 80, compressTarget: 20, maxRetries: 10 },
-  model: { provider: '', custom: null },
+  model: { default: '', providers: [], custom: [], local: [] },
   messaging: { providers: {} },
   mcp: { builtinEnabled: true, custom: [] },
   websearch: { provider: '', config: {} },
@@ -97,6 +107,18 @@ export function loadSettings(): SettingsSchema {
   const legacy = (file as any).general?.toolsEnabled
   if (legacy !== undefined && (file as any).mcp?.builtinEnabled === undefined) {
     ;(out as any).mcp.builtinEnabled = !!legacy
+  }
+  // #283 迁移：旧单模型形态（provider/custom 对象）→ 新多实例结构。providers/custom 数组存在=已迁移过，不重复
+  const fm = (file as any).model ?? {}
+  const migrated = Array.isArray(fm.providers) || Array.isArray(fm.custom)
+  if (!migrated && (fm.provider || fm.custom)) {
+    if (fm.provider) {
+      ;(out as any).model.providers = [{ id: `mig_${fm.provider}`, providerId: String(fm.provider), enabled: true, model: String(fm.model ?? '') }]
+      ;(out as any).model.default = `platform:mig_${fm.provider}`
+    } else if (fm.custom?.baseUrl) {
+      ;(out as any).model.custom = [{ id: 'mig_custom', name: '自定义（迁移）', baseUrl: String(fm.custom.baseUrl), model: String(fm.custom.model ?? ''), enabled: true }]
+      ;(out as any).model.default = 'custom:mig_custom'
+    }
   }
   return out
 }

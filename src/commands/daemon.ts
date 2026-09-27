@@ -280,13 +280,33 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
               if (apiKey) saveByokKey(apiKey)
               text = JSON.stringify({ ok: true, hasKey: apiKey ? true : loadByokKey() !== null })
             }
-          } else if (sub === 'test') {
-            // 最小补全验证连通（20s 超时）；不落盘任何东西，仅验
-            const meta = loadByokMeta()
-            const apiKey = loadByokKey()
+          } else if (sub === 'test' || sub === 'testId') {
+            // 最小补全验证连通（20s 超时）；不落盘任何东西，仅验。#283 testId=按模型注册表实例测（多模型各测各的）
+            let meta = loadByokMeta()
+            let apiKey = loadByokKey()
+            if (sub === 'testId') {
+              const { resolveActiveModel } = require('../lib/model-registry') as typeof import('../lib/model-registry')
+              const saved = loadSettings()
+              // 临时指向指定实例解析（不动 default）——直接从 settings 里找
+              const instId = String(args.id ?? '')
+              const prov = (saved.model.providers ?? []).find((p) => p.id === instId)
+              const cust = (saved.model.custom ?? []).find((c) => c.id === instId)
+              if (prov) {
+                const { PLATFORM_PROVIDERS } = await import('../lib/settings')
+                const pv = PLATFORM_PROVIDERS.find((x) => x.id === prov.providerId)
+                meta = { baseUrl: prov.baseUrl || pv?.baseUrl || '', model: prov.model }
+                apiKey = new (require('@napi-rs/keyring').Entry)('moonlybox', `llm:${prov.id}`).getPassword() || null
+              } else if (cust) {
+                meta = { baseUrl: cust.baseUrl, model: cust.model }
+                apiKey = new (require('@napi-rs/keyring').Entry)('moonlybox', `llm:${cust.id}`).getPassword() || null
+              } else {
+                code = 1
+                text = '模型实例不存在'
+              }
+            }
             if (!meta || !apiKey) {
               code = 1
-              text = 'BYOK 未配置完整（BaseUrl/模型名/Key）'
+              text = '模型未配置完整（BaseUrl/模型名/Key；本地端点可留空 Key）'
             } else {
               const res = await fetch(`${meta.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
                 method: 'POST',
@@ -459,11 +479,39 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             code = 1
             text = 'patch 不能为空'
           } else {
-            // #256.4：模型平台API——provider 表单带 apiKey 时同步到 BYOK 通道（meta+钥匙串；key 绝不落 settings.json）
+            // #283：模型注册表——providers[]/custom[] 实例带明文 apiKey 时入钥匙串（account=llm:<id>），
+            // settings.json 只存非敏感元数据；旧单模型表单（provider/baseUrl/model/apiKey）兼容保留
             const mp = patch.model as Record<string, unknown> | undefined
             if (mp && typeof mp === 'object') {
+              const stripInst = (arr: unknown, kind: 'platform' | 'custom'): unknown => {
+                if (!Array.isArray(arr)) return arr
+                return arr.map((raw) => {
+                  const inst = raw as Record<string, unknown>
+                  const k = typeof inst.apiKey === 'string' ? inst.apiKey.trim() : ''
+                  const clean = { ...inst } as Record<string, unknown>
+                  delete clean.apiKey
+                  if (k) {
+                    const { saveModelKey } = require('../lib/model-registry') as typeof import('../lib/model-registry')
+                    saveModelKey(String(inst.id), k)
+                    clean.hasKey = true
+                  }
+                  if (kind === 'custom' && inst.baseUrl && !/^https?:\/\//.test(String(inst.baseUrl))) {
+                    throw new Error('自定义模型 API 地址需以 http(s):// 开头')
+                  }
+                  return clean
+                })
+              }
+              const clean: Record<string, unknown> = { ...mp }
+              try {
+                if (mp.providers !== undefined) clean.providers = stripInst(mp.providers, 'platform')
+                if (mp.custom !== undefined && Array.isArray(mp.custom)) clean.custom = stripInst(mp.custom, 'custom')
+              } catch (e: any) {
+                code = 1
+                text = String(e?.message ?? e)
+                break
+              }
+              // 旧单模型表单兼容（platformAPI 面板旧版提交形态）
               const apiKey = typeof mp.apiKey === 'string' ? mp.apiKey.trim() : ''
-              const providerId = typeof mp.provider === 'string' ? mp.provider : ''
               const baseUrl = typeof mp.baseUrl === 'string' ? mp.baseUrl.trim() : ''
               const model = typeof mp.model === 'string' ? mp.model.trim() : ''
               if (apiKey) {
@@ -480,10 +528,9 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
                 saveByokMeta({ baseUrl, model })
                 saveByokKey(apiKey)
               }
-              // 落 settings.json 的 model 节去掉 key/明文（只存选择状态）
-              const clean: Record<string, unknown> = { provider: providerId }
-              if (mp.custom && typeof mp.custom === 'object') clean.custom = mp.custom
-              if (baseUrl && model) { clean.baseUrl = baseUrl; clean.model = model }
+              delete clean.apiKey
+              delete clean.baseUrl
+              delete clean.model
               patch.model = clean
             }
             // #279：搜索/URL 提取——节带 apiKey 时入钥匙串，settings.json 只落非敏感 config
@@ -579,7 +626,9 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           const parts: string[] = []
           let aiErr = ''
           await withCapturedConsole(async () => {
-            const r = await byokChat(sys, question, 120_000)
+            const { resolveActiveModel } = await import('../lib/model-registry')
+            const active = resolveActiveModel()
+            const r = await byokChat(sys, question, 120_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined)
             if (r.ok) parts.push(r.text ?? '')
             else aiErr = r.error ?? '未知错误'
           }, (t) => { parts.push(t) })
