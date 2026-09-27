@@ -104,7 +104,13 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   const { system, question, ready, chat, confirm, say } = deps
   if (!ready) throw new Error('BYOK 未配置')
 
-  const remote = await listTools()
+  // #283.4：MoonLink 远程工具失败隔离——未登录/网络断只报告，循环继续（内置/fs/自定义工具照常装配）
+  let remote: McpTool[] = []
+  try {
+    remote = await listTools()
+  } catch (e: any) {
+    say(`（MoonLink 工具不可用：${String(e?.message ?? e).slice(0, 80)}——继续使用内置工具）`)
+  }
   const exclude = new Set(deps.excludeTools ?? [])
   const remoteFiltered = exclude.size ? remote.filter((t) => !exclude.has(t.name)) : remote
   // #279 内置工具并列装配（重名时内置优先、远程同名剔除）

@@ -1414,7 +1414,15 @@ async function renderWork(nav, arg, label2) {
       const r = await window.moonlybox.rpc('workspace', { op: 'chat', id: arg.chat }, 15_000)
       if (r.event === 'done' && r.code === 0) meta = JSON.parse(r.text).chat
     }
-    const wsLabel = meta ? (meta.workspaceId ? '📁 工作空间对话' : '💬 无工作空间（文档库/MCP）') : ''
+    // #283.4：标签带工作空间名——用户能一眼确认当前对话是否真的挂在工作空间下（fs 工具只在此时装配）
+    let wsName = ''
+    if (meta?.workspaceId) {
+      try {
+        const rw = await window.moonlybox.rpc('workspace', { op: 'list' }, 10_000)
+        wsName = (JSON.parse(rw.text).workspaces ?? []).find((x) => x.id === meta.workspaceId)?.name ?? ''
+      } catch {}
+    }
+    const wsLabel = meta ? (meta.workspaceId ? `📁 工作空间${wsName ? `「${wsName}」` : ''}对话（可读写挂载目录）` : '💬 无工作空间（无本地文件访问，仅文档库/MCP）') : ''
     w.innerHTML = `
       ${meta ? `<div class="muted" style="padding:8px 16px 0;font-size:12px">${meta.title} · ${wsLabel}</div>` : ''}
       <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:16px;white-space:pre-wrap;user-select:text"></div>
@@ -1676,7 +1684,9 @@ function bindChat(chatInfo) {
     if (tools) payload.tools = true
     const r = await window.moonlybox.rpc('xiaoyue', payload, 300_000)
     $('btn-ask').disabled = false
-    log(r.event === 'done' && r.code === 0 ? `小月> ${r.text}` : `⚠ ${r.message ?? r.text}`)
+    // #283.4：回答只显示一路——过程行（含「小月：」终答）已经 kernel log 实时上屏，
+    // done.text 是同一批行的整包（parts.join），再 log 一次＝回答重复两段。done 分支只报错误。
+    if (!(r.event === 'done' && r.code === 0)) log(`⚠ ${r.message ?? r.text ?? '请求失败'}`)
     // 会话标题随首轮更新（列表刷新）
     if (meta && meta.title === '新对话') renderXiaoyueList()
   }
