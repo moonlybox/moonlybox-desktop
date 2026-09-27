@@ -766,6 +766,7 @@ async function renderWork(nav, arg, label2) {
             <div class="sc-desc">${inst.model || '未设模型'}${inst.hasKey || inst.enabled ? '' : ' · 未配置 Key'}</div></div>
             <div style="display:flex;align-items:center;gap:8px">
               ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">设为默认</button>`}
+              <button type="button" class="btn ghost" data-act="del" style="padding:2px 8px;font-size:11px">删除</button>
               <button type="button" class="toggle ${inst.enabled ? 'on' : ''}" data-act="toggle"></button>
             </div>`
           const defBtnP = card.querySelector('[data-act=default]')
@@ -778,6 +779,11 @@ async function renderWork(nav, arg, label2) {
             e.currentTarget.classList.toggle('on', next)
             const arr = insts.map((x) => (x.id === inst.id ? { ...x, enabled: next } : x))
             await saveAppSettings({ model: { providers: arr } })
+          }
+          card.querySelector('[data-act=del]').onclick = async () => {
+            await window.moonlybox.rpc('settings', { op: 'deleteModelInst', kind: 'platform', id: inst.id }, 10_000)
+            await saveAppSettings({ model: { providers: insts.filter((x) => x.id !== inst.id), ...(isDefault(inst.id) ? { default: '' } : {}) } })
+            renderWork('settings')
           }
           box.appendChild(card)
         }
@@ -861,6 +867,7 @@ async function renderWork(nav, arg, label2) {
             await saveAppSettings({ model: { custom: insts.map((x) => (x.id === inst.id ? { ...x, enabled: next } : x)) } })
           }
           card.querySelector('[data-act=del]').onclick = async () => {
+            await window.moonlybox.rpc('settings', { op: 'deleteModelInst', kind: 'custom', id: inst.id }, 10_000)
             await saveAppSettings({ model: { custom: insts.filter((x) => x.id !== inst.id), ...(isDefault(inst.id) ? { default: '' } : {}) } })
             renderWork('settings')
           }

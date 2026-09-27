@@ -562,6 +562,24 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             const s = saveSettings(patch)
             text = JSON.stringify({ ok: true, settings: s })
           }
+        } else if (op1 === 'deleteModelInst') {
+          // #283.9：删除模型实例时清理钥匙串残留 key（llm:<id>）——否则残留明文密钥永久留在系统钥匙串
+          try {
+            const kind = String((args as Record<string, unknown>).kind ?? '')
+            const instId = String((args as Record<string, unknown>).id ?? '')
+            if ((kind !== 'platform' && kind !== 'custom') || !instId) {
+              code = 1
+              text = 'deleteModelInst 需要 kind(platform|custom) 与 id'
+              break
+            }
+            const { deleteModelKey } = require('../lib/model-registry') as typeof import('../lib/model-registry')
+            deleteModelKey(instId)
+            code = 0
+            text = 'ok'
+          } catch (e: any) {
+            code = 1
+            text = String(e?.message ?? e)
+          }
         } else {
           code = 2
           text = `未知 settings op：${op1}`
