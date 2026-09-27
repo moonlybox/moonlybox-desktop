@@ -1506,10 +1506,11 @@ function bindDiagramWorkbench(existing) {
   $('dg-ai').onclick = async () => {
     const prompt = window.prompt('描述你要画的图')
     if (!prompt?.trim()) return
-    $('dg-ai').disabled = true
+    const aiBtn = $('dg-ai') // #283.11：await 期间面板可能重渲——持有引用而非事后 querySelector（重渲后为 null）
+    aiBtn.disabled = true
     $('dg-state').textContent = '✨ AI 生成中…'
     const r = await window.moonlybox.rpc('diagram', { op: 'ai', prompt }, 150_000)
-    $('dg-ai').disabled = false
+    aiBtn.disabled = false
     if (r.event === 'done' && r.code === 0) {
       $('dg-code').value = JSON.parse(r.text).source
       dgCurrentId = null
@@ -1703,14 +1704,15 @@ function bindChat(chatInfo) {
     const q = $('q').value.trim()
     if (!q) return
     $('q').value = ''
-    $('btn-ask').disabled = true
+    const askBtn = $('btn-ask') // #283.11：await 最长 300s，期间切对话/切页重渲——持有引用，事后 querySelector 会是 null
+    askBtn.disabled = true
     log(`\n你> ${q}`)
     // #269：工具（管家模式）归 MCP 分类——mcp.builtinEnabled 总闸；#282 chatId/workspaceId 随请求
     const tools = APP_SETTINGS?.mcp?.builtinEnabled !== false
     const payload = { q, chatId: meta?.id, workspaceId: meta ? (meta.workspaceId ?? null) : undefined }
     if (tools) payload.tools = true
     const r = await window.moonlybox.rpc('xiaoyue', payload, 300_000)
-    $('btn-ask').disabled = false
+    askBtn.disabled = false
     // #283.4：回答只显示一路——过程行（含「小月：」终答）已经 kernel log 实时上屏，
     // done.text 是同一批行的整包（parts.join），再 log 一次＝回答重复两段。done 分支只报错误。
     if (!(r.event === 'done' && r.code === 0)) log(`⚠ ${r.message ?? r.text ?? '请求失败'}`)
