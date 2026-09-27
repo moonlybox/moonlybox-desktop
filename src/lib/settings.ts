@@ -86,7 +86,7 @@ export const DEFAULT_SETTINGS: SettingsSchema = {
   websearch: { provider: '', config: {} },
   urlextract: { mode: 'local', provider: '', config: {} },
   docproc: { mode: 'local', provider: '', config: {} },
-  memory: { enabled: true, mode: 'builtin_moonrecall', injectLimit: 5000, syncToMoon: false },
+  memory: { enabled: true, mode: 'builtin_moonrecall', injectLimit: 5000, syncToMoon: true },
 }
 
 function settingsPath(): string {

@@ -1137,7 +1137,7 @@ async function renderWork(nav, arg, label2) {
         <div class="set-card"><div class="sc-main"><div class="sc-title">启用长期记忆</div><div class="sc-desc">对话中的关键事实自动沉淀到本机记忆层，跨会话可 recall</div></div>
           <button type="button" class="toggle ${mm.enabled !== false ? 'on' : ''}" id="sp-mm-on"></button></div>
         <div class="set-card"><div class="sc-main"><div class="sc-title">同步到月忆</div><div class="sc-desc">本机沉淀的记忆条目同时上行到云端月忆候选池，你确认后才进入云端正式记忆（跨设备可用）</div></div>
-          <button type="button" class="toggle ${mm.syncToMoon ? 'on' : ''}" id="sp-mm-sync"></button></div>
+          <button type="button" class="toggle ${mm.syncToMoon !== false ? 'on' : ''}" id="sp-mm-sync"></button></div>
         <div class="set-field"><label>记忆模式</label>
           <select id="sp-mm-mode" class="set-select set-select-sm">
             <option value="builtin_moonrecall" selected>本机内置 + 月忆（MoonRecall）增强</option>
