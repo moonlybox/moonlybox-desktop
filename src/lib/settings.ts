@@ -13,7 +13,7 @@ export interface SettingsSchema {
   general: {
     launchAtLogin: boolean // 开机启动
     launchMinimized: boolean // 启动时最小化到托盘
-    closeToTray: boolean // 关闭时最小化到托盘（false=真退出）
+    closeToTray: boolean // 关闭时最小化到托盘（#268 默认 true；false=真退出）
     keepAwake: boolean // 运行任务时保持电脑唤醒（powerSaveBlocker）
     clipboardWatch: boolean // 剪贴板自动采集（原 T3 开关迁入）
     toolsEnabled: boolean // 工具（管家模式）开关
@@ -63,7 +63,7 @@ export interface SettingsSchema {
 }
 
 export const DEFAULT_SETTINGS: SettingsSchema = {
-  general: { launchAtLogin: false, launchMinimized: false, closeToTray: false, keepAwake: false, clipboardWatch: false, toolsEnabled: true },
+  general: { launchAtLogin: false, launchMinimized: false, closeToTray: true, keepAwake: false, clipboardWatch: false, toolsEnabled: true },
   appearance: { theme: 'system', lang: 'zh-CN', zoom: 100 },
   chat: { contextEnabled: true, autoCompress: true, compressThreshold: 80, compressTarget: 20, maxRetries: 10 },
   model: { provider: '', custom: null },

@@ -40,7 +40,7 @@ function applyLaunchAtLogin() {
     return { launchAtLogin: !!s.launchAtLogin, applied: app.isPackaged ? 'loginItemSettings' : 'dev-跳过（仅打包态生效）' }
   } catch (e) { return { error: String(e.message ?? e) } }
 }
-// 关闭行为（#256.1）：closeToTray=true → close 事件拦截为 hide（托盘常驻）；false → 真销毁（D12 默认）
+// 关闭行为（#256.1/#268）：closeToTray 默认 true → close 事件拦截为 hide（托盘常驻）；false → 真退出
 let closeToTrayOn = false
 let silentLaunch = false // #267：静默启动态（托盘保活依据之一）
 // keepAwake（#256.1）：powerSaveBlocker 阻止系统休眠（运行任务期间）
@@ -319,8 +319,8 @@ function handleMoonlinkUrl(url) {
 
 const ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAEbUlEQVR42sWXXWxURRTHfzNzd1m27XbLR1ugLFtoSwGBrUEiQUUwih/RliggYGJfTDSGGOXFRx59U16MJhp5MREicR/Q+BFADB8aNCwYQ0uh37SlhdJtS7u79M7xoRV4ML23SQv/yXmZe+bMmTPn/M8dxX1IJOqjuWHeA+oQEkwnFCkgGcznQCp1cODe9ARWVdbXY+VjgSgzCAUDaPX+P00HDwIYgFXL6uutla8EQswwBEIi1JXMqWnru5VKqUSiPpobtC0zffL/i0QwosvNnPCaDwV5fqoGtFIorVBKoQBBpmoiZLNkHRFq/SxduCCfru5hjDYopdFK38sgASUWEYtr3ak4UasFmwBhMtn0ZIxPD7zAlk3lGGNwjIMxDqFgHo4JYIwzMTf+rap6CV42x2NmE44fN3871c7oiEvq7xsEndk8uvw5lpSuJuCEMCZI941GTl/8lkxuhLXrlrGmppKmxjZEvGOrlpfv8dRyjMHoAOHZEV55ei8NrWdp724kkxkGIFpYzLOPv8nhHz8ieydDOC9IOp1mzPW+Do0Ik4kCFJpQMI/tL+4jeewTLjf/SS47SlFRIeG8MIODN/n59JfUbd2LRnN7KINCj6eIh33tGSI1nulPbdzGr38cQqHR2uHtD15FoXGzgtEOQ7fTdPVdZmn56rtrlFLeERAmH0qBKEW8vIp0updIpIhnXnqMxfFiMiMuxgTQWqO1ZkyyzJtXAkohSo2v9RjaR7ISiUTpH+omkx1l5+53KS4pYn5JEeH80ASbKwIBh9HMEE7Q+CmAu6I9S0WEoYF+AiGDYOnsauSvs03kF4TYt38H1asXUbO+gvzILOYvKKGv/xpgJ3jB2wMzJ7pqvxd7V1bHCYULQODqlUts2LyVr784TNmSYuIVpZw/10C8cg0mYDh3+iSuuFjr4toxT4b0TEIrQl7BbH4/c4K1G9bT19vDse+T1GzcQmsbNLe4PLJuI6OZYX45+t345uJisVg/PFAZ2+GppbXG0QEihUXseectjn5zhIGb/ZTFyzGOpre7h3R/P66d2NwdY8zewVo7PQ4AGG0w2qE0VsbLu1/DcRzamlq4eO481zu6EGuxuFh3PPR+e4KqiG33dGBWKEQoHGJoYBCtHLTWLIrHWBxfTGdbB9daOxGxWGuxMkZBNEJmJEM2k/HBhD5qpWJlFbVv7JxIrByum6Oj+SpnTpykvbkZ183iujlcm8Nal9o9O6hcWeWrDp0ptXEBEcHF9aXrx7bj50fifuby6advfc1DhoOPWr3e2UVsaZwFZQs9G4yIEFsW54dDR/BjWy0t2+YrrvGqCp7YuoV5xSWT6t3ovc6pn47TevmKvzL068BMQYNcmFL7ml654ABJEdY+jNMrRVIl4nXR9BitiBQ+4N3ThQ5x0zPQkJlbWN0jInUP9O612nWpPZkyALcGG1LRyIo2YDMyw+9DpdJovaulI5m8+zgFGBhqSEXnrvgMV7IoKQJKp/kxeAHU5wT1663tydR/0/8CK0dxAWA3M5IAAAAASUVORK5CYII=' // 涌月漩 32px（brand/client/windows/moonlybox-32x32.png 内联——托盘需运行时可用，无文件 IO）
 
-// #267：托盘按需创建——closeToTray=true 或静默启动（launchMinimized 无窗可点）才有托盘；
-// 默认（closeToTray=false）关窗=退出应用，不留托盘（用户预期+D12 关窗真退出）
+// #267：托盘按需创建——closeToTray（#268 默认 true）开启或静默启动（launchMinimized 无窗可点）时创建；
+// 用户显式关闭后关窗=退出应用，不留托盘
 function ensureTray() {
   if (tray) return
   const icon = nativeImage.createFromDataURL(ICON)
@@ -431,7 +431,8 @@ app.whenReady().then(() => {
   // #256.1：设置保存后 main 侧行为同步（closeToTray/keepAwake/clipboardWatch/login 项）——daemon 管 settings.json，main 只收行为
   ipcMain.handle('shell:applyGeneral', (_e, general) => {
     const g = general || {}
-    closeToTrayOn = !!g.closeToTray
+    // #268：默认 true（renderer 落盘后字段必在，此处兜底仅防异常调用）
+    closeToTrayOn = g.closeToTray === undefined ? true : !!g.closeToTray
     // #267 托盘跟随开关实时增减
     if (closeToTrayOn) ensureTray()
     else if (!silentLaunch) destroyTray()
@@ -485,7 +486,8 @@ app.whenReady().then(() => {
     const st = readSettings()
     const g = st.general || {}
     applyLaunchAtLogin()
-    closeToTrayOn = !!g.closeToTray
+    // #268：closeToTray 默认 true（与 settings.ts DEFAULTS 对齐）——settings.json 缺字段/首次安装时 undefined→true
+    closeToTrayOn = g.closeToTray === undefined ? true : !!g.closeToTray
     if (g.keepAwake) setKeepAwake(true)
     if (g.clipboardWatch) { clipboardWatchOn = true; startClipboardWatch() }
     // 启动时最小化到托盘：命令行/协议唤起（带参数）除外，静默启动不弹窗
