@@ -577,7 +577,7 @@ async function renderWork(nav, arg, label2) {
         try { await window.moonlybox.applyGeneral(patch.general) } catch {}
         return r
       }
-      for (const id of ['sp-launch', 'sp-min', 'sp-tray', 'sp-awake', 'sp-tools', 'sp-watch']) {
+      for (const id of ['sp-launch', 'sp-min', 'sp-tray', 'sp-awake', 'sp-watch']) {
         $(id).onclick = (e) => { e.currentTarget.classList.toggle('on'); saveGeneral() }
       }
     } else if (cat.id === 'appearance') {
