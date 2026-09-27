@@ -837,16 +837,18 @@ async function renderWork(nav, arg, label2) {
       }
     } else if (cat.id === 'mcp' && currentSetSub === 'market') {
       panel('MCP · 市场', '发现并安装社区 MCP 服务器。', '<div class="set-status">市场目录由平台维护，当前目录为空。</div>')
-    } else if (cat.id === 'mcp' && currentSetSub === 'custom') {
+} else if (cat.id === 'mcp' && currentSetSub === 'custom') {
       const g = await loadAppSettings()
       const list = g.mcp?.custom ?? []
-      panel('MCP · 自定义', '添加自己的 MCP 服务器（URL 流）。', `
+      panel('MCP · 自定义', '添加自己的 MCP 服务器（Streamable HTTP）。启用后其工具与小月内置工具并列装配；API Key 只存本机钥匙串。', `
         <div id="sp-mcp-list">${list.map((m, i) => `<div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:10px">
-          <div class="set-row" style="margin:0 0 6px"><b>${m.name || '未命名'}</b><span class="set-desc" style="margin:0">${m.enabled ? '已启用' : '已停用'}</span>
-            <button type="button" class="btn ghost" data-mcpdel="${i}" style="margin-left:auto">删除</button></div>
+          <div class="set-row" style="margin:0 0 6px"><b>${m.name || '未命名'}</b><span class="set-desc" style="margin:0">${m.enabled !== false ? '已启用' : '已停用'}${m.keyStored ? ' · Key 已存钥匙串' : ''}</span>
+            <button type="button" class="btn ghost" data-mcptoggle="${i}" style="margin-left:auto">${m.enabled !== false ? '停用' : '启用'}</button>
+            <button type="button" class="btn ghost" data-mcpdel="${i}">删除</button></div>
           <div class="set-desc" style="margin:0">${m.url}</div></div>`).join('') || '<div class="set-status">暂无自定义 MCP 服务器。</div>'}</div>
         <div class="set-field" style="margin-top:14px"><label>名称</label><input id="sp-mcp-name" placeholder="my-mcp" /></div>
         <div class="set-field"><label>URL</label><input id="sp-mcp-url" placeholder="https://…/mcp" /></div>
+        <div class="set-field"><label>API Key（可选，只存钥匙串）</label><input type="password" id="sp-mcp-key" placeholder="服务器要求鉴权时填写" /></div>
         <div class="set-row"><button type="button" class="btn" id="sp-mcp-add">添加</button><span class="set-status" id="sp-mcp2-status"></span></div>
       `)
       w.querySelectorAll('[data-mcpdel]').forEach((b) => {
@@ -856,11 +858,21 @@ async function renderWork(nav, arg, label2) {
           renderWork('settings')
         }
       })
+      w.querySelectorAll('[data-mcptoggle]').forEach((b) => {
+        b.onclick = async () => {
+          const idx = Number(b.dataset.mcptoggle)
+          const list2 = (APP_SETTINGS.mcp?.custom ?? []).map((m, i) => (i === idx ? { ...m, enabled: m.enabled === false } : m))
+          const r = await saveAppSettings({ mcp: { custom: list2 } })
+          if (r.ok) renderWork('settings')
+        }
+      })
       $('sp-mcp-add').onclick = async () => {
         const st = $('sp-mcp2-status')
-        const name = $('sp-mcp-name').value.trim(), url = $('sp-mcp-url').value.trim()
+        const name = $('sp-mcp-name').value.trim(), url = $('sp-mcp-url').value.trim(), key = $('sp-mcp-key').value
         if (!name || !/^https?:\/\//.test(url)) { st.className = 'set-status err'; st.textContent = '名称与 http(s) URL 必填'; return }
-        const list2 = [...(APP_SETTINGS.mcp?.custom ?? []), { name, url, apiKey: null, enabled: true }]
+        // #280：key 走条目顶层 apiKey→daemon 入钥匙串后剥离（settings.json 只落 keyStored 布尔）
+        const entry = { name, url, apiKey: null, enabled: true, ...(key ? { apiKey: key } : {}) }
+        const list2 = [...(APP_SETTINGS.mcp?.custom ?? []), entry]
         const r = await saveAppSettings({ mcp: { custom: list2 } })
         if (r.ok) renderWork('settings')
         else { st.className = 'set-status err'; st.textContent = r.error ?? '保存失败' }

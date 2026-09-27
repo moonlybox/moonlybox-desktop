@@ -21,6 +21,7 @@ import { cmdXiaoyue } from '../commands/xiaoyue'
 import { runAgentTools } from '../commands/xiaoyue'
 import { byokReady, byokChat, loadByokMeta, saveByokMeta, saveByokKey, clearByok, loadByokKey } from '../lib/llm'
 import { saveProviderKey } from '../lib/web-tools'
+import { saveMcpKey } from '../lib/mcp-custom'
 import { cmdSync } from '../commands/sync'
 import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
@@ -422,6 +423,20 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
                 delete clean.apiKey
                 patch[sec] = clean
               }
+            }
+            // #280：自定义 MCP——条目带 apiKey 时入钥匙串（account=mcp:<name>），settings.json 只落 keyStored 布尔
+            const mc = patch.mcp as Record<string, unknown> | undefined
+            if (mc && typeof mc === 'object' && Array.isArray(mc.custom)) {
+              mc.custom = (mc.custom as Array<Record<string, unknown>>).map((entry) => {
+                const apiKey = typeof entry.apiKey === 'string' ? entry.apiKey.trim() : ''
+                const name = String(entry.name ?? '')
+                if (apiKey && name) {
+                  saveMcpKey(name, apiKey)
+                  return { ...entry, apiKey: null, keyStored: true }
+                }
+                const { apiKey: _drop, ...rest } = entry
+                return rest
+              })
             }
             const s = saveSettings(patch)
             text = JSON.stringify({ ok: true, settings: s })
