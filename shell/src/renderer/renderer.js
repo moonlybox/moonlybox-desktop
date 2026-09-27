@@ -1028,7 +1028,10 @@ async function renderWork(nav, arg, label2) {
         <div class="set-card"><div class="sc-main"><div class="sc-title">启用长期记忆</div><div class="sc-desc">对话中的关键事实自动沉淀到本机记忆层，跨会话可 recall</div></div>
           <button type="button" class="toggle ${mm.enabled !== false ? 'on' : ''}" id="sp-mm-on"></button></div>
         <div class="set-field"><label>记忆模式</label>
-          <div class="set-desc" style="margin-top:4px">本机内置 + 月忆（MoonRecall）增强：本机记忆层恒在（MEMORY.md/USER.md，明文可编辑、不出本机），月忆作为云端增强跨设备可用。</div>
+          <select id="sp-mm-mode" class="set-select set-select-sm">
+            <option value="builtin_moonrecall" selected>本机内置 + 月忆（MoonRecall）增强</option>
+          </select>
+          <div class="set-desc" style="margin-top:4px">本机记忆层恒在（MEMORY.md/USER.md，明文可编辑、不出本机），月忆作为云端增强跨设备可用。</div>
         </div>
         <div class="set-field"><label>记忆注入上限（字符）</label>
           <input id="sp-mm-limit" type="number" min="500" step="100" value="${mm.injectLimit ?? 5000}" style="max-width:180px" />
@@ -1040,7 +1043,7 @@ async function renderWork(nav, arg, label2) {
       $('sp-mm-save').onclick = async () => {
         const st = $('sp-mm-status'); st.className = 'set-status'; st.textContent = '保存中…'
         const limit = Math.max(500, Math.floor(Number($('sp-mm-limit').value) || 5000))
-        const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').classList.contains('on'), injectLimit: limit } })
+        const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').classList.contains('on'), mode: $('sp-mm-mode').value, injectLimit: limit } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }

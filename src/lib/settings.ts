@@ -56,7 +56,8 @@ export interface SettingsSchema {
   }
   memory: {
     enabled: boolean // 长期记忆开关
-    /** #281 定稿：记忆模式唯一=本机内置+月忆增强（provider 字段退役，存量值忽略） */
+    /** #281 定稿：记忆模式唯一=本机内置+月忆增强；mode 字段=单选项下拉落点（现唯一取值 builtin_moonrecall，为将来受限扩展的挂载点） */
+    mode?: string
     injectLimit: number // 记忆注入上限（字符），默认 5000
     provider?: string // 遗留字段（≤#280 双档选择），仅存量兼容不消费
     config?: Record<string, string>
@@ -73,7 +74,7 @@ export const DEFAULT_SETTINGS: SettingsSchema = {
   websearch: { provider: '', config: {} },
   urlextract: { mode: 'local', provider: '', config: {} },
   docproc: { mode: 'local', provider: '', config: {} },
-  memory: { enabled: true, injectLimit: 5000 },
+  memory: { enabled: true, mode: 'builtin_moonrecall', injectLimit: 5000 },
 }
 
 function settingsPath(): string {
