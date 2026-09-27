@@ -154,11 +154,22 @@ export async function byokChatMessages(
     const choice = body.choices?.[0]
     const msg = choice?.message
     if (!msg) return { ok: false, error: '空回复' }
+    // #280.3 诊断行：空回答排查需要有据——模型原始形态打进活动流（content 长度/reasoning 痕迹/工具调用数/finish_reason）
+    const dbgParts = [
+      `content=${msg.content ? msg.content.length : 'null'}`,
+      `reasoning=${(msg as Record<string, unknown>).reasoning_content ? 'yes' : 'no'}`,
+      `tool_calls=${msg.tool_calls?.length ?? 0}`,
+      `finish=${choice?.finish_reason ?? '?'}`,
+    ]
+    console.log(`（LLM 响应：${dbgParts.join(' ')}）`)
     const text = msg.content?.trim() || undefined
     // #280.3：空内容+无工具调用=端点异常静默源（思考型模型 reasoning 吃掉 max_tokens/端点 tools 协议不兼容）
     // ——必须当失败走重试与最终报错，绝不能静默 ok 让小月零输出零报错
     if (!text && (!msg.tool_calls || msg.tool_calls.length === 0)) {
-      return { ok: false, error: `模型返回空内容（finish_reason=${choice?.finish_reason ?? '未知'}；思考型模型可能吃掉 max_tokens，或端点不兼容 tools 协议）` }
+      const hint = (msg as Record<string, unknown>).reasoning_content
+        ? '模型只输出思考未输出正文（思考型模型在 tools 协议下可能吃掉全部 max_tokens）'
+        : '端点可能不兼容 tools 协议或返回格式异常'
+      return { ok: false, error: `模型返回空内容（finish_reason=${choice?.finish_reason ?? '未知'}；${hint}）` }
     }
     return { ok: true, text, toolCalls: msg.tool_calls }
   } catch (e) {

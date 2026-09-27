@@ -144,6 +144,8 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       const localFn = deps.localTools?.[tc.function.name]
       if (localFn) {
         // #278 本地覆写（builtin 记忆=本地文件层）：不经远程 tools/call
+        // #280.3：本地工具执行同样打活动流（原来静默——deepwiki 类自定义 MCP 执行零痕迹，排查盲区）
+        say(`⚙ ${tc.function.name} ${argsJson.slice(0, 120)}`)
         let out: string
         try { out = await localFn(args) } catch (e: any) { out = `本地执行失败：${String(e?.message ?? e)}` }
         messages.push({ role: 'tool', tool_call_id: tc.id, content: out })
