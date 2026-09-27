@@ -199,8 +199,6 @@ for (const b of document.querySelectorAll('#rail .rail-btn')) {
       tip.style.left = x + 'px'
       tip.style.top = y + 'px'
     }
-    tip.style.left = x + 'px'
-    tip.style.top = y + 'px'
     cur = el
   }
   const hide = () => { tip.classList.remove('show'); cur = null }
