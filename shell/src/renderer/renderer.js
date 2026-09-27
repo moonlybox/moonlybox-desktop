@@ -1071,7 +1071,7 @@ async function renderWork(nav, arg, label2) {
           <h3>新建备份目录</h3>
           <p class="set-desc">把一个本地文件夹持续备份到云端书房的指定目录（归属目录）下。<br/>
           <b>可识别的文件格式：.md、.txt 文本文件</b>（其它格式自动跳过）；备份只上传、不改动本地文件；
-          文件内容未变化时自动跳过；同一目录可注册多次同步到不同归属目录。</p>
+          文件内容未变化时自动跳过。</p>
           <div class="set-field">
             <label>本地目录</label>
             <div class="set-row" style="margin:0"><input id="bk-path" readonly placeholder="未选择" style="flex:1" />
