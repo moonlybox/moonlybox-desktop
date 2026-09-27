@@ -694,7 +694,6 @@ async function renderWork(nav, arg, label2) {
             <select id="sp-prov-models" class="set-select set-select-sm"><option value="">— 推荐模型 —</option></select></div>
         </div>
         <div class="set-field"><label>API 地址（选商自动填）</label><input id="sp-byok-url" placeholder="https://api.bigmodel.cn/api/paas/v4" /></div>
-        <div class="set-field"><label>模型名</label><input id="sp-byok-model" placeholder="glm-4.7-flash" /></div>
         <div class="set-field"><label>API Key（本地端点可留空；已配置时不回显）</label><input id="sp-byok-key" type="password" placeholder="sk-…" /></div>
         <div class="set-row">
           <button type="button" class="btn" id="sp-byok-save">保存</button>
