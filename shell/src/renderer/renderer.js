@@ -771,7 +771,7 @@ async function renderWork(nav, arg, label2) {
           const defBtnP = card.querySelector('[data-act=default]')
           if (defBtnP) defBtnP.onclick = async () => {
             await saveAppSettings({ model: { default: `platform:${inst.id}` } })
-            openSetPanel('model', 'platform')
+            renderWork('settings')
           }
           card.querySelector('[data-act=toggle]').onclick = async (e) => {
             const next = !e.currentTarget.classList.contains('on')
@@ -804,7 +804,7 @@ async function renderWork(nav, arg, label2) {
         const arr = [...insts, inst]
         const r = await saveAppSettings({ model: { providers: arr, ...(insts.length === 0 ? { default: `platform:${inst.id}` } : {}) } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
-        if (r.ok) openSetPanel('model', 'platform')
+        if (r.ok) renderWork('settings')
         else st.textContent = r.error ?? '保存失败'
       }
     } else if (cat.id === 'model' && currentSetSub === 'local') {
@@ -853,7 +853,7 @@ async function renderWork(nav, arg, label2) {
           const defBtn = card.querySelector('[data-act=default]')
           if (defBtn) defBtn.onclick = async () => {
             await saveAppSettings({ model: { default: `custom:${inst.id}` } })
-            openSetPanel('model', 'custom')
+            renderWork('settings')
           }
           card.querySelector('[data-act=toggle]').onclick = async (e) => {
             const next = !e.currentTarget.classList.contains('on')
@@ -862,7 +862,7 @@ async function renderWork(nav, arg, label2) {
           }
           card.querySelector('[data-act=del]').onclick = async () => {
             await saveAppSettings({ model: { custom: insts.filter((x) => x.id !== inst.id), ...(isDefault(inst.id) ? { default: '' } : {}) } })
-            openSetPanel('model', 'custom')
+            renderWork('settings')
           }
           box.appendChild(card)
         }
@@ -882,7 +882,7 @@ async function renderWork(nav, arg, label2) {
         const inst = { id: `custom_${Date.now().toString(36)}`, name: name || '自定义模型', baseUrl, model, enabled: true, ...(apiKey ? { apiKey } : {}) }
         const r = await saveAppSettings({ model: { custom: [...insts, inst], ...(insts.length === 0 ? { default: `custom:${inst.id}` } : {}) } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
-        if (r.ok) openSetPanel('model', 'custom')
+        if (r.ok) renderWork('settings')
         else st.textContent = r.error ?? '保存失败'
       }
 
