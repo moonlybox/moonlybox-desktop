@@ -1109,12 +1109,48 @@ async function renderWork(nav, arg, label2) {
       sel.innerHTML = dirs.map((d) => `<option value="${d.id ?? ''}">${d.label}</option>`).join('')
       $('bk-save').onclick = async () => {
         const st = $('bk-status')
-        st.className = 'set-status'; st.textContent = '注册中…'
+        st.className = 'set-status'; st.textContent = ''
         const localPath = $('bk-path').value
         if (!localPath) { st.className = 'set-status err'; st.textContent = '先选择本地目录'; return }
         const dirId = sel.value || null
         const dirName = sel.options[sel.selectedIndex]?.text ?? '书房根目录'
-        const r = await window.moonlybox.rpc('backup', { op: 'add', localPath, directoryId: dirId, directoryName: dirName, onDelete: $('bk-ondel').value }, 15_000)
+        // #260 预检：云端同名清单 → 有则内嵌确认（重命名/覆盖认领二选一）
+        st.textContent = '检查云端同名文件…'
+        let hits = []
+        try {
+          const rc = await window.moonlybox.rpc('backup', { op: 'check', localPath, directoryId: dirId }, 20_000)
+          if (rc.event !== 'done' || rc.code !== 0) { st.className = 'set-status err'; st.textContent = rc.message ?? rc.text ?? '预检失败'; return }
+          hits = JSON.parse(rc.text).hits ?? []
+        } catch (e) { st.className = 'set-status err'; st.textContent = '预检失败：' + String(e?.message ?? e); return }
+        let claims = null
+        if (hits.length) {
+          st.className = 'set-status'; st.textContent = ''
+          const listHtml = hits.map((h) => `<div class="set-card" style="margin:6px 0"><div class="sc-main"><div class="sc-title">${h.title}</div><div class="sc-desc">云端已有同名文档（版本 ${h.version}${h.updatedAt ? '，更新于 ' + new Date(h.updatedAt).toLocaleString() : ''}）</div></div></div>`).join('')
+          const panel = w.querySelector('.set-panel')
+          const confirmBox = document.createElement('div')
+          confirmBox.innerHTML = `
+            <div style="margin:14px 0;padding:12px;border:1px solid var(--border);border-radius:10px">
+              <div style="font-weight:600;margin-bottom:4px">发现 ${hits.length} 个同名文件</div>
+              <p class="set-desc">云端归属目录中已存在同名文档。若这是<b>重装/换机后的认领</b>（本机就是这些文件的原始作者，且<b>确保没有其他电脑同时在同步这些文件</b>），可选择覆盖认领；否则请选重命名上传（保留双方）。</p>
+              ${listHtml}
+              <div class="set-row" style="margin-top:10px">
+                <button type="button" class="btn" id="bk-claim">覆盖认领（重装机）</button>
+                <button type="button" class="btn ghost" id="bk-rename">重命名上传（推荐）</button>
+              </div>
+            </div>`
+          panel.appendChild(confirmBox)
+          const userPick = await new Promise((resolve) => {
+            confirmBox.querySelector('#bk-rename').onclick = () => resolve('rename')
+            confirmBox.querySelector('#bk-claim').onclick = () => resolve('claim')
+          })
+          confirmBox.remove()
+          if (userPick === 'claim') {
+            claims = {}
+            for (const h of hits) claims[h.title] = h.docId
+          }
+        }
+        st.textContent = '注册中…'
+        const r = await window.moonlybox.rpc('backup', { op: 'add', localPath, directoryId: dirId, directoryName: dirName, onDelete: $('bk-ondel').value, ...(claims ? { claims } : {}) }, 15_000)
         if (r.event !== 'done' || r.code !== 0) { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '注册失败'; return }
         const entry = JSON.parse(r.text).entry
         st.textContent = '已注册，首次同步中…'

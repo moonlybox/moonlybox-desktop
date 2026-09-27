@@ -45,11 +45,13 @@ export interface BackupEntry {
   enabled: boolean
   /** 云端删除后行为（默认 resync：备份目录是源，删了就补回去） */
   onDelete: BackupOnDelete
-  /** 同名冲突行为（默认 rename：不碰别人传的同名文档） */
+  /** 同名冲突行为：rename（overwrite 已禁用——重装认领走一次性 claims） */
   onConflict: BackupOnConflict
   lastSyncAt?: string
   /** sha256 账：absolutePath → 记录 */
   files: Record<string, BackupFileRec>
+  /** #260 一次性认领清单：本地文件名 → 云端 docId（首次 sync 消费入账；保留无害） */
+  claims?: Record<string, string>
 }
 
 export interface BackupRegistry {
@@ -88,9 +90,10 @@ export function addEntry(
   localPath: string,
   directoryId: string | null,
   directoryName: string,
-  opts?: { onDelete?: BackupOnDelete; onConflict?: BackupOnConflict },
+  opts?: { onDelete?: BackupOnDelete; onConflict?: BackupOnConflict; claims?: Record<string, string> },
 ): BackupEntry {
-  // #259：同名覆盖（overwrite）已禁用——双机同目录会轮流静默覆盖且被「云端编辑采纳」洗白；一律 rename
+  // #259：同名覆盖（overwrite）已禁用——双机同目录会轮流静默覆盖且被「云端编辑采纳」洗白；一律 rename。
+  // #260：重装认领走一次性 claims（新建时用户确认后的 docId 清单），不是持久策略。
   if (opts?.onConflict === 'overwrite') throw new Error('同名覆盖已停用：同名冲突一律重命名上传（双机备份互不覆盖）')
   const reg = loadRegistry()
   if (reg.entries.some((e) => e.localPath === localPath)) throw new Error('该目录已注册备份')
@@ -110,6 +113,7 @@ export function addEntry(
     onDelete: opts?.onDelete ?? 'resync',
     onConflict: opts?.onConflict ?? 'rename',
     files: {},
+    ...(opts?.claims && Object.keys(opts.claims).length ? { claims: { ...opts.claims } } : {}),
   }
   reg.entries.push(entry)
   saveRegistry(reg)
@@ -171,6 +175,58 @@ export async function listCloudDirs(): Promise<Array<{ id: string | null; label:
   }
   walk(dirs, 1)
   return out
+}
+
+export interface TwinHit {
+  /** 本地文件名（含扩展名） */
+  name: string
+  /** 上传将使用的标题 */
+  title: string
+  /** 云端同名文档 */
+  docId: string
+  cloudTitle: string
+  version: number
+  updatedAt?: string
+}
+
+/**
+ * #260 新建前预检：本地候选文件与云端（title+归属目录口径）同名清单。
+ * 供新建向导确认「重命名上传/覆盖认领」；不做任何写操作。
+ */
+export async function checkTwin(localPath: string, directoryId: string | null): Promise<TwinHit[]> {
+  const creds = loadCredentials()
+  if (!creds?.accessToken) throw new Error('未登录：先在壳端头像登录')
+  if (!fs.existsSync(localPath) || !fs.statSync(localPath).isDirectory()) throw new Error('本地目录不存在')
+  let names: string[] = []
+  try {
+    names = fs.readdirSync(localPath)
+  } catch (e: any) {
+    throw new Error(`本地目录不可读：${String(e?.message ?? e)}`)
+  }
+  const files = names
+    .filter((n) => !n.startsWith('.') && BACKUP_EXTS.includes(path.extname(n).toLowerCase()))
+    .sort()
+  if (!files.length) return []
+  const res = await apiGet<any>('/library')
+  if (!res.ok) throw new Error(`云端文档获取失败：HTTP ${res.status}`)
+  const docs: any[] = res.data?.documents ?? []
+  const dirId = directoryId ?? null
+  const hits: TwinHit[] = []
+  for (const name of files) {
+    const title = name.replace(/\.(md|txt)$/i, '').slice(0, 200)
+    const twin = docs.find(
+      (d) =>
+        d.status === 'active' &&
+        !d.isArchived &&
+        !(d.kind === 'diagram' && d.diagramState === 'draft') &&
+        String(d.title ?? '') === title &&
+        (d.directoryId ?? null) === dirId,
+    )
+    if (twin) {
+      hits.push({ name, title, docId: twin.id, cloudTitle: String(twin.title ?? ''), version: Number(twin.version ?? 1), updatedAt: twin.updatedAt })
+    }
+  }
+  return hits
 }
 
 export interface BackupReport {
@@ -320,6 +376,19 @@ export async function backupSync(id: string): Promise<BackupReport> {
       const title = name.replace(/\.(md|txt)$/i, '').slice(0, 200)
       const twin = [...cloud.values()].find((c) => c.title === title && (c.directoryId ?? null) === (entry.directoryId ?? null))
       if (twin) {
+        // #260：用户在新建时明确认领（claims[title] === twin.id）→ PATCH 认领该云端文档（一次性，入账后随 files 持久）
+        if (entry.claims?.[title] === twin.id) {
+          const res = await apiPatch<any>(`/library/${twin.id}`, {
+            content: stripped,
+            message: '备份同步（重装认领）',
+          })
+          const doc = res.data?.document
+          if (!doc?.id) throw new Error(res.message ?? '认领失败')
+          entry.files[abs] = { sha256: hash, docId: doc.id, docVersion: Number(doc.version ?? 1), uploadedAt: new Date().toISOString() }
+          dirty = true
+          report.uploaded.push(`${name}（已认领云端「${twin.title}」，版本 ${doc.version ?? '?'}）`)
+          continue
+        }
         // #259：同名冲突一律 rename（overwrite 已禁用——存量条目 onConflict=overwrite 也按 rename 兜底）
         const res = await apiPost<any>('/library', {
           title: `${title} 2`,

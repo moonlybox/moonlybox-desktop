@@ -25,7 +25,7 @@ import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
 import { loadSettings, saveSettings, PLATFORM_PROVIDERS, WEBSEARCH_PROVIDERS, MESSAGING_PROVIDERS, MEMORY_PROVIDERS } from '../lib/settings'
-import { addEntry, listCloudDirs, backupSync, backupSyncAll, BACKUP_EXTS, loadRegistry, setEnabled, removeEntry, setPolicies } from '../lib/backup'
+import { addEntry, listCloudDirs, backupSync, backupSyncAll, BACKUP_EXTS, loadRegistry, setEnabled, removeEntry, setPolicies, checkTwin } from '../lib/backup'
 import { apiGet, apiPost } from '../lib/api'
 import { loadCredentials, saveCredentials, clearCredentials } from '../lib/auth'
 import { ensureClient, requestDeviceCode, pollToken, refreshAccessToken } from '../lib/device-flow'
@@ -313,9 +313,14 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             const entry = addEntry(localPath, directoryId, directoryName, {
               onDelete: args.onDelete === 'keep' ? 'keep' : 'resync',
               onConflict: 'rename',
+              claims: args.claims && typeof args.claims === 'object' && !Array.isArray(args.claims) ? (args.claims as Record<string, string>) : undefined,
             })
             text = JSON.stringify({ ok: true, entry })
           }
+        } else if (op1 === 'check') {
+          // #260 新建预检：同名清单（重装认领确认用；只读）
+          const hits = await checkTwin(String(args.localPath ?? ''), args.directoryId ? String(args.directoryId) : null)
+          text = JSON.stringify({ ok: true, hits })
         } else if (op1 === 'remove') {
           removeEntry(String(args.id ?? ''))
           text = JSON.stringify({ ok: true })

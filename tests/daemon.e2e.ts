@@ -176,6 +176,8 @@ const bkAddBad2 = await rpc('backup', { op: 'add', localPath: '/nonexistent-dir-
 assert('backup add 目录不存在拒绝', bkAddBad2.at(-1)?.event === 'done' && bkAddBad2.at(-1)?.code === 1)
 const bkBad = await rpc('backup', { op: 'nope' }, 4000)
 assert('backup 未知 op 拒绝', bkBad.at(-1)?.event === 'done' && bkBad.at(-1)?.code === 2)
+const bkCheck = await rpc('backup', { op: 'check', localPath: '/tmp' }, 8000)
+assert('backup check 预检通道存在（未登录报错非未知op）', bkCheck.at(-1)?.event === 'done' && (bkCheck.at(-1)?.code === 1 || bkCheck.at(-1)?.code === 0))
 const pingBk = await rpc('ping', {})
 assert('backup 调用后 daemon 存活', pingBk.at(-1)?.text === 'pong')
 

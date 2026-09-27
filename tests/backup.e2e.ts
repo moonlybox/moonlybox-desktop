@@ -40,7 +40,7 @@ mock.module('../src/lib/api', () => ({
   apiDelete: async () => ({ ok: true, status: 200 }),
 }))
 
-const { addEntry, backupSync, loadRegistry, setPolicies } = await import('../src/lib/backup')
+const { addEntry, backupSync, loadRegistry, setPolicies, checkTwin } = await import('../src/lib/backup')
 
 function mkLocal(files: Record<string, string>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bk3-'))
@@ -177,6 +177,58 @@ describe('#258 备份策略引擎', () => {
     fs.mkdirSync('/tmp/fake-vault-z/文档', { recursive: true })
     expect(() => addEntry('/tmp/fake-vault-z/文档', null, 'x')).toThrow('书房')
     fs.rmSync('/tmp/fake-vault-z', { recursive: true, force: true })
+  })
+
+  test('#260 checkTwin：预检同名清单（title+归属目录口径，只读）', async () => {
+    cloudDocs.set('tw_3', { id: 'tw_3', title: '手册', version: 2, directoryId: 'dirA', status: 'active', kind: 'note', updatedAt: '2026-09-27T00:00:00.000Z' })
+    cloudDocs.set('tw_4', { id: 'tw_4', title: '别目录同名', version: 1, directoryId: 'dirB', status: 'active', kind: 'note' })
+    const local = mkLocal({ '手册.md': '本地版', '全新.md': '新文件', 'other.txt': 'x' })
+    const hits = await checkTwin(local, 'dirA')
+    expect(hits.length).toBe(1)
+    expect(hits[0].name).toBe('手册.md')
+    expect(hits[0].docId).toBe('tw_3')
+    expect(hits[0].version).toBe(2)
+    // 空目录 → []
+    const empty = mkLocal({})
+    expect(await checkTwin(empty, 'dirA')).toEqual([])
+  })
+
+  test('#260 认领：claims 命中 → PATCH 认领云端文档入账（不 rename）', async () => {
+    cloudDocs.set('tw_5', { id: 'tw_5', title: '手册', version: 4, directoryId: 'dirA', status: 'active', kind: 'note' })
+    const local = mkLocal({ '手册.md': '重装后的本地版' })
+    const e = addEntry(local, 'dirA', '工作备份', { claims: { 手册: 'tw_5' } })
+    const rep = await backupSync(e.id)
+    expect(rep.uploaded[0]).toContain('认领')
+    const patch = calls.find((c) => c.m === 'PATCH')
+    expect(patch!.p).toBe('/library/tw_5')
+    expect(cloudDocs.get('tw_5').version).toBe(5)
+    const rec = Object.values(loadRegistry().entries[0].files)[0] as any
+    expect(rec.docId).toBe('tw_5')
+    expect(rec.docVersion).toBe(5)
+    // 认领后修改走正常 PATCH 更新（C1 链路接续）
+    calls.length = 0
+    fs.writeFileSync(path.join(local, '手册.md'), '认领后又改了')
+    const rep2 = await backupSync(e.id)
+    expect(rep2.updated).toEqual(['手册.md'])
+    expect(calls.find((c) => c.m === 'PATCH')!.p).toBe('/library/tw_5')
+  })
+
+  test('#260 不认领（默认）：同名仍 rename，claims 不匹配的 twin 也 rename', async () => {
+    cloudDocs.set('tw_6', { id: 'tw_6', title: '纪要', version: 1, directoryId: 'dirA', status: 'active', kind: 'note' })
+    const local = mkLocal({ '纪要.md': '内容' })
+    const e = addEntry(local, 'dirA', '工作备份') // 无 claims
+    const rep = await backupSync(e.id)
+    expect(rep.uploaded[0]).toContain('2」')
+    expect(calls.some((c) => c.m === 'PATCH')).toBe(false)
+    // claims 指向别的 docId（不匹配 twin）→ rename 兜底
+    cloudDocs.clear()
+    cloudDocs.set('tw_7', { id: 'tw_7', title: '周报', version: 1, directoryId: 'dirA', status: 'active', kind: 'note' })
+    const local2 = mkLocal({ '周报.md': '内容2' })
+    const e2 = addEntry(local2, 'dirA', '工作备份', { claims: { 周报: 'tw_XX' } })
+    calls.length = 0
+    const rep2 = await backupSync(e2.id)
+    expect(rep2.uploaded[0]).toContain('2」')
+    expect(calls.some((c) => c.m === 'PATCH')).toBe(false)
   })
 
   test('setPolicies 落盘（#259 后仅 onDelete）', () => {
