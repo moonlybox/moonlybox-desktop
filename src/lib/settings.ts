@@ -140,6 +140,14 @@ export const MESSAGING_PROVIDERS: Array<{ id: string; label: string; needs: Arra
   { id: 'slack', label: 'Slack', needs: [{ key: 'botToken', label: 'Bot Token (xoxb-)', secret: true }] },
 ]
 
+/** URL 提取服务商（#256.9：本地 Readability 或服务商；Jina 免 Key） */
+export const URL_EXTRACT_PROVIDERS: Array<{ id: string; label: string; baseUrl?: string; note?: string; needs?: string[] }> = [
+  { id: 'local', label: '本地提取（内置 Readability）', note: '本机解析正文，零流量零成本' },
+  { id: 'jina', label: 'Jina Reader', baseUrl: 'https://r.jina.ai', note: '免 Key' },
+  { id: 'firecrawl', label: 'Firecrawl', baseUrl: 'https://api.firecrawl.dev', needs: ['apiKey'] },
+  { id: 'custom', label: '自定义', baseUrl: '', needs: ['baseUrl', 'apiKey'] },
+]
+
 /** 记忆提供方（#256.11：参考 Hermes——内置为主，预留扩展） */
 export const MEMORY_PROVIDERS: Array<{ id: string; label: string; note: string }> = [
   { id: 'builtin', label: '内置（书房记忆库）', note: 'MoonLink add_memory/search_memory 本地落库' },

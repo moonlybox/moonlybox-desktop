@@ -919,12 +919,13 @@ async function renderWork(nav, arg, label2) {
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存（搜索工具接入 Agent 在后续迭代点亮）' : (r.error ?? '保存失败')
       }
-      // URL 提取服务商（Jina Reader 免 key；Firecrawl/自定义需 key）
-      const UE_PROVIDERS = [
-        { id: 'jina', label: 'Jina Reader', baseUrl: 'https://r.jina.ai', needsKey: false },
-        { id: 'firecrawl', label: 'Firecrawl', baseUrl: 'https://api.firecrawl.dev/v1/scrape', needsKey: true },
-        { id: 'custom', label: '自定义', baseUrl: '', needsKey: true },
-      ]
+      // URL 提取服务商（#276：云端清单优先——APP_PROVIDERS.urlextract；Jina 免 key，Firecrawl/自定义需 key）
+      const UE_PROVIDERS = (APP_PROVIDERS?.urlextract ?? []).filter((x) => x.id !== 'local').map((x) => ({
+        id: x.id,
+        label: x.label,
+        baseUrl: x.baseUrl ?? '',
+        needsKey: (x.needs ?? []).includes('apiKey') || x.id === 'custom',
+      }))
       const renderUeCfg = () => {
         const mode = $('sp-ue-mode').value
         const box = $('sp-ue-cfg')

@@ -24,7 +24,8 @@ import { cmdSync } from '../commands/sync'
 import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
-import { loadSettings, saveSettings, PLATFORM_PROVIDERS, WEBSEARCH_PROVIDERS, MESSAGING_PROVIDERS, MEMORY_PROVIDERS } from '../lib/settings'
+import { loadSettings, saveSettings, MESSAGING_PROVIDERS } from '../lib/settings'
+import { resolveProviders } from '../lib/providers'
 import { addEntry, listCloudDirs, backupSync, backupSyncAll, BACKUP_EXTS, loadRegistry, setEnabled, removeEntry, setPolicies, checkTwin } from '../lib/backup'
 import { apiGet, apiPost } from '../lib/api'
 import { loadCredentials, saveCredentials, clearCredentials } from '../lib/auth'
@@ -370,10 +371,12 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         const op1 = String(args.op ?? 'get')
         if (op1 === 'get') {
           const s = loadSettings()
+          // #276：providers 云端优先（登录拉取+24h 缓存）→ 缓存 → 内置兜底；messaging 恒本地
+          const providers = await resolveProviders()
           text = JSON.stringify({
             ok: true,
             settings: s,
-            providers: { platform: PLATFORM_PROVIDERS, websearch: WEBSEARCH_PROVIDERS, messaging: MESSAGING_PROVIDERS, memory: MEMORY_PROVIDERS },
+            providers,
           })
         } else if (op1 === 'save') {
           const patch = (args.patch ?? {}) as Record<string, unknown>
