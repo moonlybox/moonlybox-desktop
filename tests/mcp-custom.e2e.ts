@@ -135,3 +135,23 @@ describe('mcp-custom 客户端', () => {
     expect(raw).not.toContain('sk-mcp-abc123')
   })
 })
+
+describe('sanitizeJsonSchema（#280.2 LLM 兼容清洗）', () => {
+  test('anyOf 拍平为首选类型+required 保留+x-* 剥离', async () => {
+    const { sanitizeJsonSchema } = await import('../src/lib/agent-loop')
+    const out = sanitizeJsonSchema({
+      properties: {
+        repoName: { anyOf: [{ type: 'string' }, { items: { type: 'string' }, type: 'array' }], description: 'repo' },
+        flag: { oneOf: [{ type: 'boolean' }, { type: 'string' }] },
+      },
+      required: ['repoName'],
+      type: 'object',
+      $schema: 'http://json-schema.org/draft-07/schema#',
+    })
+    expect(out.$schema).toBeUndefined()
+    const props = out.properties as Record<string, any>
+    expect(props.repoName.type).toBe('string')
+    expect(out.required).toEqual(['repoName'])
+    expect(props.flag.type).toBe('boolean')
+  })
+})

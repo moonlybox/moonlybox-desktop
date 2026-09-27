@@ -45,6 +45,60 @@ export interface AgentLoopResult {
   toolCalls: Array<{ name: string; ok: boolean }>
 }
 
+/**
+ * #280.2 JSON Schema LLM 兼容清洗（递归）：
+ * - anyOf/oneOf/allOf：拍平为分支合并（属性并集；type 取各分支 type 的并集字符串/数组）
+ * - 剥离非标/供应商不识别关键字：$schema/$id/outputs/outputSchema/x-* 前缀、format 保留（主流支持）
+ * - 未知类型字段落回落 object
+ */
+export function sanitizeJsonSchema(node: unknown, depth = 0): Record<string, unknown> {
+  const MAX_DEPTH = 8
+  if (depth > MAX_DEPTH || typeof node !== 'object' || node === null) return { type: 'object', properties: {} }
+  const src = node as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  // description/enum/default 直接透传
+  if (typeof src.description === 'string') out.description = src.description
+  if (src.enum) out.enum = src.enum
+  if (src.default !== undefined) out.default = src.default
+  // 组合关键字拍平：合并各分支属性与 required
+  const combo = (src.anyOf ?? src.oneOf ?? src.allOf) as Array<Record<string, unknown>> | undefined
+  if (Array.isArray(combo)) {
+    const merged: Record<string, unknown> = {}
+    const req = new Set<string>()
+    const types = new Set<string>()
+    for (const branch of combo) {
+      const b = sanitizeJsonSchema(branch, depth + 1)
+      if (typeof b.type === 'string') types.add(b.type)
+      if (b.items !== undefined && !merged.items) merged.items = b.items
+      if (b.properties && typeof b.properties === 'object') Object.assign(merged, b.properties)
+      if (Array.isArray(b.required)) b.required.forEach((k) => req.add(String(k)))
+    }
+    if (merged.properties !== undefined) out.properties = merged.properties
+    if (req.size) out.required = [...req]
+    // 多类型分支：优先第一分支类型（保语义顺序）；但 array 分支在前且有更简类型时选简类型（LLM 传单值远稳于数组）
+    const branchTypes = combo.map((b) => (typeof (b as any).type === 'string' ? (b as any).type : '')).filter(Boolean)
+    let picked = branchTypes[0] ?? 'string'
+    if (picked === 'array' && branchTypes.includes('string')) picked = 'string'
+    out.type = picked
+    if (picked === 'array' && merged.items !== undefined) out.items = merged.items
+    return out
+  }
+  // type 缺省回落 object
+  out.type = typeof src.type === 'string' ? src.type : Array.isArray(src.type) ? src.type[0] : 'object'
+  if (out.type === 'object' && src.properties && typeof src.properties === 'object') {
+    const props: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(src.properties as Record<string, unknown>)) {
+      props[k] = sanitizeJsonSchema(v, depth + 1)
+    }
+    out.properties = props
+    if (Array.isArray(src.required)) out.required = src.required
+  }
+  if (out.type === 'array' && src.items !== undefined) {
+    out.items = sanitizeJsonSchema(src.items, depth + 1)
+  }
+  return out
+}
+
 /** Agent 主循环：chat → (tool_calls? → confirm → callTool → 回注 → chat)* → 最终回答 */
 export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   const { system, question, ready, chat, confirm, say } = deps
@@ -56,9 +110,11 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   // #279 内置工具并列装配（重名时内置优先、远程同名剔除）
   const builtinNames = new Set((deps.builtinTools ?? []).map((t) => t.name))
   const tools = [...remoteFiltered.filter((t) => !builtinNames.has(t.name)), ...(deps.builtinTools ?? [])]
+  // #280.2：schema LLM 兼容清洗——部分 OpenAI 兼容端点（国产中转类）对 anyOf/oneOf/allOf、$schema 等进阶
+  // JSON Schema 关键字支持差（请求 400/挂起，表现为小月首轮无响应）。装配层拍平为最大兼容形态。
   const openaiTools = tools.map((t) => ({
     type: 'function' as const,
-    function: { name: t.name, description: t.description ?? t.title ?? t.name, parameters: t.inputSchema },
+    function: { name: t.name, description: t.description ?? t.title ?? t.name, parameters: sanitizeJsonSchema(t.inputSchema) },
   }))
   say(`（已接入工具 ${tools.length} 个${builtinNames.size ? `，含内置 ${builtinNames.size} 个` : ''}）`)
 
