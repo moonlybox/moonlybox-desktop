@@ -398,6 +398,9 @@ ${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}`
     console.log(`小月：${result.answer}`)
     appendTurn(sessionId, question, result.answer)
     if (opts.chatId) wsAppendTurn(opts.chatId, 'assistant', result.answer)
+  } else if (!result.toolCalls.length) {
+    // #280.3：LLM 链路整体成功但零输出——给可见引导行，绝不让小月静默
+    console.log('（小月这次没有返回内容——请重试；若反复出现，检查模型是否兼容工具调用，或联系反馈）')
   }
   if (result.toolCalls.length) {
     const ok = result.toolCalls.filter((t) => t.ok).length

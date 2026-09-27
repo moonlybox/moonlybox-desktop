@@ -400,9 +400,12 @@ app.whenReady().then(() => {
 
   ipcMain.handle('kernel:rpc', (_e, { cmd, args, timeoutMs }) => kernelRpc(cmd, args, timeoutMs))
   ipcMain.on('kernel:subscribe', (e) => {
+    // #280.3：同 sender 去重——重复 subscribe 会把同一 webContents 推 N 份 kernel:event
+    if (eventHooks.some((h) => h.sender === e.sender)) return
     const hook = (id, event, payload) => {
       if (!e.sender.isDestroyed()) e.sender.send('kernel:event', { id, event, payload })
     }
+    hook.sender = e.sender
     eventHooks.push(hook)
     e.sender.once('destroyed', () => {
       const i = eventHooks.indexOf(hook)

@@ -95,9 +95,19 @@ async function testUnknownTool() {
   console.log('✓ 场景5：未知工具容错（不崩，回注错误信息）')
 }
 
+async function testEmptyAnswer() {
+  // #280.3：LLM 返回 ok 但零内容零工具调用（思考型模型吃掉 max_tokens 类）——循环返回空 answer 不死循环
+  scripted = [{ ok: true, text: undefined, toolCalls: undefined }]
+  const r = await agentLoop(baseDeps(true))
+  if (r.answer !== '') throw new Error('场景6 空回答应返回空串')
+  if (r.toolCalls.length !== 0) throw new Error('场景6 不应有工具调用')
+  console.log('✓ 场景6：LLM 空内容容错（空 answer 返回，不死循环）')
+}
+
 await testDirectAnswer()
 await testToolCallFlow()
 await testConfirmReject()
 await testConfirmAccept()
 await testUnknownTool()
-console.log('agent-loop E2E 5/5 通过')
+await testEmptyAnswer()
+console.log('agent-loop E2E 6/6 通过')

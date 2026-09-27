@@ -1532,15 +1532,21 @@ function showWorkspaceDialog() {
 }
 
 // ---------- 小月对话绑定（从旧 renderer 迁移） ----------
+let kernelEventBound = false
 function bindChat(chatInfo) {
   const meta = chatInfo?.meta
   const log = (t) => { $('log').textContent += t + '\n'; $('log').scrollTop = $('log').scrollHeight }
-  window.moonlybox.subscribe()
-  window.moonlybox.onKernelEvent((msg) => {
-    if (msg.event === 'log') log(msg.payload)
-    else if (msg.event === 'stderr') log('[stderr] ' + msg.payload)
-    else if (msg.event === 'confirm_request') renderConfirmBar(msg.id, msg.payload)
-  })
+  // #280.3：事件绑定只做一次——bindChat 每次进对话页都跑，重复 subscribe+onKernelEvent
+  // 会让 main eventHooks 与 renderer 监听累加，同一 log 事件渲染 N 份（「装配行越聊越多」根因）
+  if (!kernelEventBound) {
+    window.moonlybox.subscribe()
+    window.moonlybox.onKernelEvent((msg) => {
+      if (msg.event === 'log') log(msg.payload)
+      else if (msg.event === 'stderr') log('[stderr] ' + msg.payload)
+      else if (msg.event === 'confirm_request') renderConfirmBar(msg.id, msg.payload)
+    })
+    kernelEventBound = true
+  }
   async function ask() {
     const q = $('q').value.trim()
     if (!q) return
@@ -1566,14 +1572,6 @@ function bindChat(chatInfo) {
     log('—— 以上为历史 ——')
   }
 }
-
-  const log = (t) => { $('log').textContent += t + '\n'; $('log').scrollTop = $('log').scrollHeight }
-  window.moonlybox.subscribe()
-  window.moonlybox.onKernelEvent((msg) => {
-    if (msg.event === 'log') log(msg.payload)
-    else if (msg.event === 'stderr') log('[stderr] ' + msg.payload)
-    else if (msg.event === 'confirm_request') renderConfirmBar(msg.id, msg.payload)
-  })
 
 function renderConfirmBar(rpcId, payload) {
   const log = $('log')

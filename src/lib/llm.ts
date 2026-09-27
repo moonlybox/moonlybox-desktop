@@ -91,7 +91,7 @@ export async function byokChat(system: string, question: string, timeoutMs = 60_
           { role: 'system', content: system },
           { role: 'user', content: question },
         ],
-        max_tokens: 1500,
+        max_tokens: 4000,
         temperature: 0.3,
       }),
       signal: AbortSignal.timeout(timeoutMs),
@@ -144,16 +144,23 @@ export async function byokChatMessages(
         model: meta.model,
         messages,
         ...(tools && tools.length ? { tools } : {}),
-        max_tokens: 1500,
+        max_tokens: 4000,
         temperature: 0.3,
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
-    const body = (await res.json()) as { choices?: Array<{ message?: { content?: string; tool_calls?: ToolCallRequest[] } }> }
-    const msg = body.choices?.[0]?.message
+    const body = (await res.json()) as { choices?: Array<{ message?: { content?: string; tool_calls?: ToolCallRequest[] }; finish_reason?: string }> }
+    const choice = body.choices?.[0]
+    const msg = choice?.message
     if (!msg) return { ok: false, error: '空回复' }
-    return { ok: true, text: msg.content?.trim() || undefined, toolCalls: msg.tool_calls }
+    const text = msg.content?.trim() || undefined
+    // #280.3：空内容+无工具调用=端点异常静默源（思考型模型 reasoning 吃掉 max_tokens/端点 tools 协议不兼容）
+    // ——必须当失败走重试与最终报错，绝不能静默 ok 让小月零输出零报错
+    if (!text && (!msg.tool_calls || msg.tool_calls.length === 0)) {
+      return { ok: false, error: `模型返回空内容（finish_reason=${choice?.finish_reason ?? '未知'}；思考型模型可能吃掉 max_tokens，或端点不兼容 tools 协议）` }
+    }
+    return { ok: true, text, toolCalls: msg.tool_calls }
   } catch (e) {
     return { ok: false, error: String((e as Error).message ?? e) }
   }
