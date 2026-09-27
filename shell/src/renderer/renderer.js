@@ -768,7 +768,8 @@ async function renderWork(nav, arg, label2) {
               ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">设为默认</button>`}
               <button type="button" class="toggle ${inst.enabled ? 'on' : ''}" data-act="toggle"></button>
             </div>`
-          card.querySelector('[data-act=default]').onclick = async () => {
+          const defBtnP = card.querySelector('[data-act=default]')
+          if (defBtnP) defBtnP.onclick = async () => {
             await saveAppSettings({ model: { default: `platform:${inst.id}` } })
             openSetPanel('model', 'platform')
           }
@@ -848,7 +849,9 @@ async function renderWork(nav, arg, label2) {
               <button type="button" class="toggle ${inst.enabled ? 'on' : ''}" data-act="toggle"></button>
               <span data-act="del" style="color:var(--muted);cursor:pointer;padding:0 4px">×</span>
             </div>`
-          card.querySelector('[data-act=default]').onclick = async () => {
+          // #283.1：默认实例无「设为默认」按钮——querySelector 判空再绑（null.onclick 报错源）
+          const defBtn = card.querySelector('[data-act=default]')
+          if (defBtn) defBtn.onclick = async () => {
             await saveAppSettings({ model: { default: `custom:${inst.id}` } })
             openSetPanel('model', 'custom')
           }
