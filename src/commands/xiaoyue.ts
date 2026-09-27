@@ -236,9 +236,10 @@ export async function runAgentTools(
   opts: { sessionId?: string } = {},
 ): Promise<{ answer: string; toolCalls: Array<{ name: string; ok: boolean }> }> {
   // #278：记忆设置接线——enabled=false 记忆指引不进 system+记忆工具不装配；provider=builtin 走本地文件记忆
-  const memCfg = loadSettings().memory ?? { enabled: true, provider: 'builtin' }
+  // #281：记忆模式唯一（本机内置+月忆增强）——provider 判定退役，本机记忆层恒在（enabled 控制注入与工具）
+  const memCfg = loadSettings().memory ?? { enabled: true, injectLimit: 5000 }
   const memOn = memCfg.enabled !== false
-  const memLocal = memCfg.provider !== 'moonrecall'
+  const memLocal = true
   // #279 内置网络工具定义（web_search 仅在配置了搜索服务商时装配；fetch_url 恒装配）
   const wDefs = webToolDefs()
   // #280 自定义 MCP：启用中的服务器工具并列装配（失败隔离——失败服务器只报告不阻塞）
@@ -292,7 +293,7 @@ export async function runAgentTools(
       ? `${system}
 
 以下是已知的用户画像与长期记忆（本机记忆层），回答时自然运用，不要逐条复述：
-${localMemoryContext(defaultVaultRoot())}`
+${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}`
       : system
   for (const f of customCat.failures) console.log(`（自定义 MCP ${f.name} 连接失败：${f.error}）`)
   const result = await agentLoop({

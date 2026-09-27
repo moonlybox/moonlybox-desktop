@@ -1021,35 +1021,30 @@ async function renderWork(nav, arg, label2) {
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
-    } else if (cat.id === 'memory') {
+} else if (cat.id === 'memory') {
       const g = await loadAppSettings()
-      const provs = APP_PROVIDERS?.memory ?? []
       const mm = g.memory ?? {}
-      panel('记忆', '长期记忆：小月跨会话记住关键信息（参考 Hermes 记忆架构）。', `
-        <div class="set-card"><div class="sc-main"><div class="sc-title">启用长期记忆</div><div class="sc-desc">对话中的关键事实自动沉淀，跨会话可 recall</div></div>
+      panel('记忆', '长期记忆：小月跨会话记住关键信息。模式为本机内置+月忆（MoonRecall）增强——记忆沉淀在书房目录（明文可编辑、随书房备份），月忆作为云端增强逐步生效。', `
+        <div class="set-card"><div class="sc-main"><div class="sc-title">启用长期记忆</div><div class="sc-desc">对话中的关键事实自动沉淀到本机记忆层，跨会话可 recall</div></div>
           <button type="button" class="toggle ${mm.enabled !== false ? 'on' : ''}" id="sp-mm-on"></button></div>
-        <div class="set-field"><label>记忆提供方</label>
-          <select id="sp-mm-prov" class="set-select set-select-sm">
-            ${provs.map((p) => `<option value="${p.id}" ${(mm.provider ?? 'builtin') === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
-          </select>
-          <div class="set-desc" style="margin-top:4px" id="sp-mm-note"></div>
+        <div class="set-field"><label>记忆模式</label>
+          <div class="set-desc" style="margin-top:4px">本机内置 + 月忆（MoonRecall）增强：本机记忆层恒在（MEMORY.md/USER.md，明文可编辑、不出本机），月忆作为云端增强跨设备可用。</div>
+        </div>
+        <div class="set-field"><label>记忆注入上限（字符）</label>
+          <input id="sp-mm-limit" type="number" min="500" step="100" value="${mm.injectLimit ?? 5000}" style="max-width:180px" />
+          <div class="set-desc" style="margin-top:4px">每次对话注入小月的记忆上下文上限，超出按新旧保留截断。默认 5000。</div>
         </div>
         <div class="set-row"><button type="button" class="btn" id="sp-mm-save">保存</button><span class="set-status" id="sp-mm-status"></span></div>
       `)
-      const noteSync = () => {
-        const pv = provs.find((x) => x.id === $('sp-mm-prov').value)
-        $('sp-mm-note').textContent = pv?.note ?? ''
-      }
-      $('sp-mm-prov').onchange = noteSync
-      noteSync()
       $('sp-mm-on').onclick = (e) => { e.currentTarget.classList.toggle('on'); $('sp-mm-save').click() }
       $('sp-mm-save').onclick = async () => {
         const st = $('sp-mm-status'); st.className = 'set-status'; st.textContent = '保存中…'
-        const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').classList.contains('on'), provider: $('sp-mm-prov').value } })
+        const limit = Math.max(500, Math.floor(Number($('sp-mm-limit').value) || 5000))
+        const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').classList.contains('on'), injectLimit: limit } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
-    } else {
+        } else {
       const subLabel = currentSetSub ? ` · ${SET_SUB_LABELS[currentSetSub] ?? currentSetSub}` : ''
       panel(`${cat.label}${subLabel}`, '此分类的配置项随功能开启逐步展示。', '')
     }

@@ -62,13 +62,20 @@ describe('memory-local 本地文件记忆层', () => {
     expect(localMemorySearch(vault, '不存在的词xyzq').length).toBe(0)
   })
 
-  test('context 注入含两层+超长截断护栏（6000 上限）', () => {
+  test('context 注入含两层+截断护栏（默认 5000，#281 参数化）', () => {
     for (let i = 0; i < 300; i++) localMemoryAdd(vault, `填充记忆条目第${i}条内容足够长一些以撑爆上限${'x'.repeat(40)}`)
     const ctx = localMemoryContext(vault)
     expect(ctx).toContain('用户画像')
     expect(ctx).toContain('长期记忆')
-    expect(ctx.length).toBeLessThanOrEqual(6100)
+    expect(ctx.length).toBeLessThanOrEqual(5100)
     expect(ctx).toContain('已截断')
+    // #281：注入上限可配（2000 上限→更短；低于 500 钳到 500）
+    const ctx2 = localMemoryContext(vault, 2000)
+    expect(ctx2.length).toBeLessThanOrEqual(2100)
+    expect(ctx2.length).toBeLessThan(ctx.length)
+    expect(localMemoryContext(vault, 100).length).toBeLessThanOrEqual(600)
+    // 不传参=默认 5000
+    expect(localMemoryContext(vault, undefined as any).length).toBeLessThanOrEqual(5100)
   })
 
   test('stats 统计条目数', () => {

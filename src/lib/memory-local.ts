@@ -8,9 +8,8 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
-const INJECT_MAX_CHARS = 6_000
-const HEAD_CHARS = 4_000
-const TAIL_CHARS = 1_500
+/** 默认注入上限（#281：settings.memory.injectLimit 可配，默认 5000） */
+export const DEFAULT_INJECT_LIMIT = 5_000
 const TRUNCATION_MARKER = '\n…[记忆过长已截断]…\n'
 
 function memoryDir(vaultRoot: string): string {
@@ -82,15 +81,20 @@ export function localMemorySearch(vaultRoot: string, query: string, limit = 10):
   return out.slice(0, limit)
 }
 
-/** 注入上下文：MEMORY.md+USER.md 合并、6000 字符护栏（head+tail 截断，照抄 Hermes） */
-export function localMemoryContext(vaultRoot: string): string {
+/**
+ * 注入上下文：MEMORY.md+USER.md 合并、injectLimit 字符护栏（head 2/3 + tail 1/3 截断，Hermes 式）。
+ * #281：上限由设置注入上限控制（默认 5000，最小 500）。
+ */
+export function localMemoryContext(vaultRoot: string, injectLimit = DEFAULT_INJECT_LIMIT): string {
   const { memFile, userFile } = ensureFiles(vaultRoot)
   const read = (f: string) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '')
   const mem = read(memFile)
   const user = read(userFile)
   let body = `## 用户画像\n${user}\n## 长期记忆\n${mem}`.trim()
-  if (body.length > INJECT_MAX_CHARS) {
-    body = body.slice(0, HEAD_CHARS) + TRUNCATION_MARKER + body.slice(-TAIL_CHARS)
+  const limit = Math.max(500, injectLimit || DEFAULT_INJECT_LIMIT)
+  if (body.length > limit) {
+    const head = Math.floor(limit * 2 / 3)
+    body = body.slice(0, head) + TRUNCATION_MARKER + body.slice(-(limit - head))
   }
   return body
 }

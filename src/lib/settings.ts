@@ -56,8 +56,10 @@ export interface SettingsSchema {
   }
   memory: {
     enabled: boolean // 长期记忆开关
-    provider: string // 记忆提供方
-    config: Record<string, string>
+    /** #281 定稿：记忆模式唯一=本机内置+月忆增强（provider 字段退役，存量值忽略） */
+    injectLimit: number // 记忆注入上限（字符），默认 5000
+    provider?: string // 遗留字段（≤#280 双档选择），仅存量兼容不消费
+    config?: Record<string, string>
   }
 }
 
@@ -71,7 +73,7 @@ export const DEFAULT_SETTINGS: SettingsSchema = {
   websearch: { provider: '', config: {} },
   urlextract: { mode: 'local', provider: '', config: {} },
   docproc: { mode: 'local', provider: '', config: {} },
-  memory: { enabled: true, provider: 'builtin', config: {} },
+  memory: { enabled: true, injectLimit: 5000 },
 }
 
 function settingsPath(): string {
@@ -148,8 +150,8 @@ export const URL_EXTRACT_PROVIDERS: Array<{ id: string; label: string; baseUrl?:
   { id: 'custom', label: '自定义', baseUrl: '', needs: ['baseUrl', 'apiKey'] },
 ]
 
-/** 记忆提供方（#256.11：参考 Hermes——内置为主，预留扩展） */
-export const MEMORY_PROVIDERS: Array<{ id: string; label: string; note: string }> = [
-  { id: 'builtin', label: '内置书房记忆库（本机）', note: '记忆沉淀在书房目录（MEMORY.md/USER.md），明文可编辑、不出本机' },
-  { id: 'moonrecall', label: '月忆 MoonRecall（云端）', note: '记忆沉淀到平台记忆库，跨设备跨 Agent 可用（采集走确认制）' },
-]
+/**
+ * 记忆模式（#281 用户定稿）：唯一=「本机内置+月忆（MoonRecall）增强」——本机记忆层恒在、月忆为云端增强，
+ * 不再提供提供方选择（MEMORY_PROVIDERS 双档表退役；云端清单 memory 类客户端不消费）。
+ * 月忆增强的同步开关挂账（采集走 quick-capture 确认制管道）。
+ */

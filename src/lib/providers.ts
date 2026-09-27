@@ -9,7 +9,7 @@ import * as path from 'node:path'
 import { configDir } from './config'
 import { apiGet } from './api'
 import { loadCredentials } from './auth'
-import { PLATFORM_PROVIDERS, WEBSEARCH_PROVIDERS, MEMORY_PROVIDERS, URL_EXTRACT_PROVIDERS } from './settings'
+import { PLATFORM_PROVIDERS, WEBSEARCH_PROVIDERS, URL_EXTRACT_PROVIDERS } from './settings'
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
@@ -49,7 +49,7 @@ export async function resolveProviders(): Promise<ProvidersManifest> {
     platform: PLATFORM_PROVIDERS,
     websearch: WEBSEARCH_PROVIDERS,
     urlextract: URL_EXTRACT_PROVIDERS as ProvidersManifest['urlextract'],
-    memory: MEMORY_PROVIDERS,
+    memory: [], // #281 记忆模式唯一（本机内置+月忆增强），客户端不消费提供方清单
     messaging,
   }
   const cache = readCache()
