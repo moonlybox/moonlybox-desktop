@@ -22,11 +22,13 @@ function msgKeyGet(platform: string, key: string): string | null {
 
 export interface InboundMessage {
   platform: string
-  /** 平台内会话标识（telegram=chat.id） */
+  /** 平台内会话标识（telegram=chat.id，qqbot=group:/c2c:前缀+openid） */
   chatId: string
   /** 发送者展示名（可空） */
   sender?: string
   text: string
+  /** 原始消息 id（QQbot 被动回复 5min 窗口用，可空） */
+  replyTo?: string
 }
 
 /** 平台发送凭据（钥匙串读取由 daemon 侧注入，本模块不碰 keyring） */
@@ -37,8 +39,8 @@ export interface PlatformAdapter {
   id: string
   /** 启动收件循环；返回 stop 函数。onMessage 回调抛错由网关兜 */
   start(onMessage: (m: InboundMessage) => Promise<void>): Promise<() => void>
-  /** 发送文本到指定会话 */
-  send(chatId: string, text: string): Promise<void>
+  /** 发送文本到指定会话；replyTo=原始消息 id（QQbot 被动回复窗口用，可空） */
+  send(chatId: string, text: string, replyTo?: string): Promise<void>
 }
 
 /* ============================ Telegram ============================ */
@@ -126,8 +128,8 @@ export class TelegramAdapter implements PlatformAdapter {
     }
   }
 
-  async send(chatId: string, text: string): Promise<void> {
-    // 4096 字符上限分片
+  async send(chatId: string, text: string, _replyTo?: string): Promise<void> {
+    // 4096 字符上限分片（Telegram 无被动回复窗口语义，replyTo 忽略）
     for (let i = 0; i < text.length; i += 4000) {
       await this.api('sendMessage', { chat_id: chatId, text: text.slice(i, i + 4000) })
     }
@@ -295,7 +297,7 @@ export class DingtalkAdapter implements PlatformAdapter {
     })
   }
 
-  async send(chatId: string, text: string): Promise<void> {
+  async send(chatId: string, text: string, _replyTo?: string): Promise<void> {
     const token = await this.accessToken()
     const [mode, id] = chatId.includes(':') ? [chatId.slice(0, chatId.indexOf(':')), chatId.slice(chatId.indexOf(':') + 1)] : ['oTo', chatId]
     const msgParam = JSON.stringify({ content: text })
@@ -317,6 +319,176 @@ export class DingtalkAdapter implements PlatformAdapter {
   }
 }
 
+/* ============================ QQbot（官方开放平台 ws 接入，零依赖自实现） ============================ */
+
+const QQ_API = 'https://api.bot.qq.com'
+const QQ_INTENT_GROUP_AND_C2C = 1 << 25
+
+/**
+ * QQ 机器人适配器（官方开放平台 v2 ws 接入，协议照 bot.q.qq.com wiki 取直）：
+ * getAppAccessToken → GET /gateway 领 wss → op10 hello(心跳周期) → op2 identify(token=Bot {appid}.{secret}, intents=1<<25)
+ * → READY → 按 interval 发 op1 心跳(d=最新 s) → op0 dispatch（GROUP_AT_MESSAGE_CREATE/C2C_MESSAGE_CREATE）
+ * → 回复 POST /v2/groups|users/{openid}/messages（msg_type=0 纯文本，msg_id 被动回复+msg_seq 防重）。
+ */
+export class QQBotAdapter implements PlatformAdapter {
+  id = 'qqbot'
+  private ws: WebSocket | null = null
+  private stopped = false
+  private stopFns: Array<() => void> = []
+  private token: string | null = null
+  private tokenAt = 0
+  private lastSeq: number | null = null
+
+  constructor(
+    private appId: string,
+    private clientSecret: string,
+    private fetchImpl: FetchImpl = global.fetch,
+    private wsImpl: WsImpl = WebSocket,
+  ) {}
+
+  private async apiToken(): Promise<string> {
+    if (this.token && Date.now() - this.tokenAt < 6_600_000) return this.token // 7200s 有效，提前 10min 刷新
+    const res = await this.fetchImpl(`${QQ_API}/app/getAppAccessToken`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ appId: this.appId, clientSecret: this.clientSecret }),
+      signal: AbortSignal.timeout(30_000),
+    })
+    const json = (await res.json()) as { access_token?: string }
+    if (!json.access_token) throw new Error('QQ getAppAccessToken 失败')
+    this.token = json.access_token
+    this.tokenAt = Date.now()
+    return this.token
+  }
+
+  private async authedFetch(path: string, body?: Record<string, unknown>): Promise<any> {
+    const token = await this.apiToken()
+    const res = await this.fetchImpl(`${QQ_API}${path}`, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'content-type': 'application/json', Authorization: `QQBot ${token}` },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(30_000),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(`QQ ${path}: ${JSON.stringify(json).slice(0, 160)}`)
+    return json
+  }
+
+  async start(onMessage: (m: InboundMessage) => Promise<void>): Promise<() => void> {
+    this.stopped = false
+    void this.loop(onMessage)
+    return () => {
+      this.stopped = true
+      for (const fn of this.stopFns) fn()
+      try {
+        this.ws?.close()
+      } catch {
+        /* ignore */
+      }
+      this.ws = null
+    }
+  }
+
+  private async loop(onMessage: (m: InboundMessage) => Promise<void>): Promise<void> {
+    let backoff = 2
+    while (!this.stopped) {
+      try {
+        const gw = (await this.authedFetch('/gateway')) as { url?: string }
+        if (!gw.url) throw new Error('/gateway 未返回 url')
+        backoff = 2
+        await this.serve(gw.url, onMessage)
+      } catch (e: any) {
+        if (this.stopped) return
+        console.log(`（消息网关 qqbot 连接失败：${String(e?.message ?? e).slice(0, 120)}，${backoff}s 后重试）`)
+        await new Promise((r) => setTimeout(r, backoff * 1000))
+        backoff = Math.min(backoff * 2, 120)
+      }
+    }
+  }
+
+  /** 单次 ws 会话：hello→identify→心跳→dispatch；断开返回后 loop 重连 */
+  private serve(url: string, onMessage: (m: InboundMessage) => Promise<void>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const ws = new this.wsImpl(url)
+      this.ws = ws
+      let settled = false
+      let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+      const done = (err?: unknown) => {
+        if (settled) return
+        settled = true
+        if (heartbeatTimer) clearInterval(heartbeatTimer)
+        err ? reject(err) : resolve()
+      }
+      ws.onopen = () => {
+        /* 等 op10 hello */
+      }
+      ws.onmessage = (ev) => {
+        void (async () => {
+          try {
+            const p = JSON.parse(String(ev.data)) as { op: number; s?: number; t?: string; d?: any }
+            if (p.s !== undefined) this.lastSeq = p.s
+            if (p.op === 10) {
+              const interval = p.d?.heartbeat_interval ?? 45_000
+              // identify（v1 不做 resume——断线重连走全新 identify，简单可靠）
+              ws.send(JSON.stringify({
+                op: 2,
+                d: {
+                  token: `Bot ${this.appId}.${this.clientSecret}`,
+                  intents: QQ_INTENT_GROUP_AND_C2C,
+                  shard: [0, 0],
+                  properties: { $os: 'moonlybox', $browser: 'moonlybox', $device: 'moonlybox' },
+                },
+              }))
+              heartbeatTimer = setInterval(() => {
+                try {
+                  ws.send(JSON.stringify({ op: 1, d: this.lastSeq }))
+                } catch {
+                  /* 发送失败由 onclose 兜 */
+                }
+              }, interval)
+            } else if (p.op === 0 && p.t && p.d) {
+              const d = p.d as {
+                id?: string
+                content?: string
+                group_openid?: string
+                author?: { user_openid?: string; id?: string }
+              }
+              const text = (d.content ?? '').trim()
+              if (!text) return
+              if (p.t === 'GROUP_AT_MESSAGE_CREATE' && d.group_openid) {
+                await onMessage({ platform: 'qqbot', chatId: `group:${d.group_openid}`, sender: undefined, text, replyTo: d.id })
+              } else if (p.t === 'C2C_MESSAGE_CREATE' && d.author?.user_openid) {
+                await onMessage({ platform: 'qqbot', chatId: `c2c:${d.author.user_openid}`, sender: undefined, text, replyTo: d.id })
+              }
+            }
+            // op11 心跳 ack 无需处理
+          } catch (e: any) {
+            console.log(`（消息网关 qqbot 帧处理失败：${String(e?.message ?? e).slice(0, 120)}）`)
+          }
+        })()
+      }
+      ws.onerror = (err) => done(err as unknown as Event)
+      ws.onclose = () => done()
+      this.stopFns.push(() => {
+        try {
+          ws.close()
+        } catch {
+          /* ignore */
+        }
+        done()
+      })
+    })
+  }
+
+  async send(chatId: string, text: string, replyTo?: string): Promise<void> {
+    const [mode, openid] = chatId.includes(':') ? [chatId.slice(0, chatId.indexOf(':')), chatId.slice(chatId.indexOf(':') + 1)] : ['c2c', chatId]
+    const body: Record<string, unknown> = { msg_type: 0, content: text, msg_seq: Math.floor(Math.random() * 1000) + 1 }
+    if (replyTo) body.msg_id = replyTo // 被动回复（5min 内有效）；过期则服务端按主动消息处理/拒绝
+    if (mode === 'group') await this.authedFetch(`/v2/groups/${openid}/messages`, body)
+    else await this.authedFetch(`/v2/users/${openid}/messages`, body)
+  }
+}
+
 /* ============================ 网关编排 ============================ */
 
 export interface GatewayStatus {
@@ -333,6 +505,7 @@ const SECRET_KEYS: Record<string, string[]> = {
   wecom: ['corpSecret'],
   dingtalk: ['appSecret'],
   telegram: ['botToken'],
+  qqbot: ['appSecret'],
   slack: ['botToken'],
 }
 
@@ -366,7 +539,7 @@ export function enabledPlatforms(): Array<{ id: string; config: PlatformConfig }
 }
 
 /** 已接入网关的平台（buildAdapter 有实现）；新平台接入时同步更新 */
-const GATEWAY_READY = ['telegram', 'dingtalk']
+const GATEWAY_READY = ['telegram', 'dingtalk', 'qqbot']
 
 function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetchImpl?: FetchImpl, wsImpl?: WsImpl): PlatformAdapter | null {
   switch (id) {
@@ -374,6 +547,8 @@ function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetc
       return config.botToken ? new TelegramAdapter(config.botToken, stateDir, fetchImpl) : null
     case 'dingtalk':
       return config.appKey && config.appSecret ? new DingtalkAdapter(config.appKey, config.appSecret, fetchImpl, wsImpl) : null
+    case 'qqbot':
+      return config.appId && config.appSecret ? new QQBotAdapter(config.appId, config.appSecret, fetchImpl, wsImpl) : null
     default:
       return null // 飞书/钉钉/Slack/QQbot/企微/微信逐个迭代接入（未接入平台静默跳过）
   }
@@ -401,7 +576,7 @@ export async function startGateway(
       const stop = await adapter.start(async (m) => {
         try {
           const answer = await onMessage(m)
-          if (answer) await adapter.send(m.chatId, answer)
+          if (answer) await adapter.send(m.chatId, answer, m.replyTo)
         } catch (e: any) {
           console.log(`（消息网关 ${m.platform} 处理失败：${String(e?.message ?? e).slice(0, 120)}）`)
           try {

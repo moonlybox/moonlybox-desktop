@@ -167,6 +167,7 @@ export const MESSAGING_PROVIDERS: Array<{ id: string; label: string; needs: Arra
   { id: 'feishu', label: '飞书', needs: [{ key: 'appId', label: 'App ID' }, { key: 'appSecret', label: 'App Secret', secret: true }] },
   { id: 'wecom', label: '企业微信', needs: [{ key: 'corpId', label: '企业 ID' }, { key: 'corpSecret', label: '应用 Secret', secret: true }, { key: 'agentId', label: 'AgentId' }] },
   { id: 'dingtalk', label: '钉钉', needs: [{ key: 'appKey', label: 'AppKey' }, { key: 'appSecret', label: 'AppSecret', secret: true }] },
+  { id: 'qqbot', label: 'QQ 机器人', needs: [{ key: 'appId', label: 'AppID' }, { key: 'appSecret', label: 'AppSecret', secret: true }] },
   { id: 'telegram', label: 'Telegram Bot', needs: [{ key: 'botToken', label: 'Bot Token', secret: true }] },
   { id: 'slack', label: 'Slack', needs: [{ key: 'botToken', label: 'Bot Token (xoxb-)', secret: true }] },
 ]
