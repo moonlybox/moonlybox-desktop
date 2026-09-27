@@ -373,7 +373,24 @@ async function renderList(nav) {
       body.innerHTML = '<div class="muted" style="padding:10px">列表加载失败（登录后可用）</div>'
     }
   } else if (nav === 'xiaoyue') {
-    body.innerHTML = '<div class="muted" style="padding:10px">小月对话（会话列表规划中）</div>'
+    // #282 会话列表：工作空间分组 + 对话（无工作空间）分类
+    body.innerHTML = `
+      <div style="padding:8px 8px 4px;display:flex;gap:6px">
+        <button class="btn" id="xy-new-ws" style="flex:1;font-size:12px">＋ 工作空间</button>
+        <button class="btn ghost" id="xy-new-chat" style="flex:1;font-size:12px">＋ 对话</button>
+      </div>
+      <div id="xy-list" style="flex:1;overflow-y:auto;padding:4px 8px 12px"></div>`
+    $('xy-new-ws').onclick = () => showWorkspaceDialog()
+    $('xy-new-chat').onclick = async () => {
+      const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: xyActiveWorkspace }, 15_000)
+      if (r.event === 'done' && r.code === 0) {
+        xyActiveChat = JSON.parse(r.text).chat.id
+        xyActiveWorkspace = null // 新无工作空间对话
+        await renderWork('xiaoyue')
+        await renderWork('xiaoyue', { chat: xyActiveChat })
+      }
+    }
+    await renderXiaoyueList()
   } else if (nav === 'help') {
     for (const [label, fn] of [['🧠 内核状态', () => renderWork('help', 'kernel')], ['ℹ️ 关于', () => renderWork('help', 'about')]]) {
       const el = document.createElement('div')
@@ -1306,13 +1323,22 @@ async function renderWork(nav, arg, label2) {
     return
   }
   if (nav === 'xiaoyue') {
+    // #282：arg.chat=打开指定对话（恢复历史+绑定 chatId/workspaceId）；无参=占位
+    let meta = null
+    if (arg?.chat) {
+      const r = await window.moonlybox.rpc('workspace', { op: 'chat', id: arg.chat }, 15_000)
+      if (r.event === 'done' && r.code === 0) meta = JSON.parse(r.text).chat
+    }
+    const wsLabel = meta ? (meta.workspaceId ? '📁 工作空间对话' : '💬 无工作空间（文档库/MCP）') : ''
     w.innerHTML = `
+      ${meta ? `<div class="muted" style="padding:8px 16px 0;font-size:12px">${meta.title} · ${wsLabel}</div>` : ''}
       <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:16px;white-space:pre-wrap;user-select:text"></div>
       <div class="row" style="padding:12px 16px;border-top:1px solid var(--border)">
-        <input id="q" placeholder="问小月（本地检索+直连回答）…" style="flex:1" />
-        <button class="btn" id="btn-ask">发送</button>
+        <input id="q" placeholder="${meta ? (meta.workspaceId ? '问小月（工作空间内可读写文件）…' : '问小月（文档库/MCP，无本地目录访问）…') : '先在左侧选择或新建对话'}" style="flex:1" ${meta ? '' : 'disabled'} />
+        <button class="btn" id="btn-ask" ${meta ? '' : 'disabled'}>发送</button>
       </div>`
-    bindChat()
+    if (meta) bindChat({ meta })
+    else w.insertAdjacentHTML('afterbegin', '<div class="muted" style="padding:16px">左侧新建工作空间或对话开始。</div>')
     return
   }
   if (nav === 'help' && arg === 'kernel') {
@@ -1393,8 +1419,119 @@ function bindDiagramWorkbench(existing) {
   }
 }
 
+// ---------- 小月会话列表与工作空间（#282） ----------
+let xyActiveChat = null      // 当前打开的对话 id
+let xyActiveWorkspace = null // 新建对话的默认归属（null=无工作空间）
+
+async function renderXiaoyueList() {
+  const box = $('xy-list')
+  if (!box) return
+  const rw = await window.moonlybox.rpc('workspace', { op: 'list' }, 10_000)
+  const rc = await window.moonlybox.rpc('workspace', { op: 'chats' }, 10_000)
+  const wss = rw.event === 'done' && rw.code === 0 ? JSON.parse(rw.text).workspaces : []
+  const chats = rc.event === 'done' && rc.code === 0 ? JSON.parse(rc.text).chats : []
+  box.innerHTML = ''
+  const openChat = async (id, wsId) => {
+    xyActiveChat = id
+    xyActiveWorkspace = wsId
+    box.querySelectorAll('.xy-chat.active').forEach((x) => x.classList.remove('active'))
+    const el = box.querySelector(`[data-chat="${id}"]`)
+    if (el) el.classList.add('active')
+    await renderWork('xiaoyue', { chat: id })
+  }
+  const chatItem = (c, wsId) => {
+    const el = document.createElement('div')
+    el.className = 'tree-item xy-chat' + (c.id === xyActiveChat ? ' active' : '')
+    el.style.paddingLeft = '26px'
+    el.dataset.chat = c.id
+    el.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.title}</span><span data-del="1" style="color:var(--muted);cursor:pointer;padding:0 4px">×</span>`
+    el.onclick = (e) => { if (!e.target.dataset.del) openChat(c.id, wsId) }
+    el.querySelector('[data-del]').onclick = async (e) => {
+      e.stopPropagation()
+      await window.moonlybox.rpc('workspace', { op: 'deleteChat', id: c.id }, 10_000)
+      if (xyActiveChat === c.id) { xyActiveChat = null; await renderWork('xiaoyue') }
+      await renderXiaoyueList()
+    }
+    return el
+  }
+  // 工作空间分组
+  for (const ws of wss) {
+    const group = document.createElement('div')
+    group.className = 'xy-ws-group'
+    group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.join('\n')}">📁 ${ws.name}</span><span class="xy-ws-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="增加工作目录">＋</span><span class="xy-ws-del" style="color:var(--muted);cursor:pointer;padding:0 4px" title="删除工作空间">×</span></div>`
+    group.querySelector('.xy-ws-add').onclick = async () => {
+      const dir = await window.moonlybox.pickFolder()
+      if (!dir) return
+      await window.moonlybox.rpc('workspace', { op: 'update', id: ws.id, addDir: dir }, 10_000)
+      await renderXiaoyueList()
+    }
+    group.querySelector('.xy-ws-del').onclick = async () => {
+      if (!window.confirm(`删除工作空间「${ws.name}」？其下对话将变为无工作空间对话（历史保留）。`)) return
+      await window.moonlybox.rpc('workspace', { op: 'delete', id: ws.id }, 10_000)
+      await renderXiaoyueList()
+    }
+    box.appendChild(group)
+    for (const c of chats.filter((x) => x.workspaceId === ws.id)) box.appendChild(chatItem(c, ws.id))
+    // 工作空间下新建对话
+    const add = document.createElement('div')
+    add.className = 'tree-item'
+    add.style.paddingLeft = '26px'
+    add.style.color = 'var(--muted)'
+    add.textContent = '＋ 新对话'
+    add.onclick = async () => {
+      const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: ws.id }, 15_000)
+      if (r.event === 'done' && r.code === 0) { xyActiveChat = JSON.parse(r.text).chat.id; xyActiveWorkspace = ws.id; await renderWork('xiaoyue'); await renderWork('xiaoyue', { chat: xyActiveChat }) }
+    }
+    box.appendChild(add)
+  }
+  // 无工作空间的「对话」分类
+  const free = chats.filter((c) => !c.workspaceId)
+  const freeGroup = document.createElement('div')
+  freeGroup.className = 'xy-ws-group'
+  freeGroup.innerHTML = `<div class="tree-item" style="font-weight:600">💬 对话<span class="set-desc" style="margin-left:6px;font-weight:400">无工作空间</span></div>`
+  box.appendChild(freeGroup)
+  for (const c of free) box.appendChild(chatItem(c, null))
+}
+
+function showWorkspaceDialog() {
+  const dlg = document.createElement('dialog')
+  dlg.innerHTML = `
+    <div class="dlg-body" style="min-width:420px">
+      <div class="sc-title" style="font-size:15px;font-weight:600;margin-bottom:12px">新建工作空间</div>
+      <div class="set-field"><label>名称（必填）</label><input id="ws-name" placeholder="例：毕业论文" /></div>
+      <div class="set-field"><label>工作目录（必选，可多个）</label>
+        <div id="ws-dirs" class="set-desc" style="margin:4px 0 6px">尚未选择</div>
+        <button class="btn ghost" id="ws-add-dir">＋ 添加目录</button>
+      </div>
+      <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="ws-create">创建</button><button class="btn ghost" id="ws-cancel">取消</button></div>
+      <div class="set-status" id="ws-status"></div>
+    </div>`
+  document.body.appendChild(dlg)
+  dlg.showModal()
+  const dirs = []
+  dlg.querySelector('#ws-add-dir').onclick = async () => {
+    const dir = await window.moonlybox.pickFolder()
+    if (!dir) return
+    if (!dirs.includes(dir)) dirs.push(dir)
+    dlg.querySelector('#ws-dirs').textContent = dirs.join('\n') || '尚未选择'
+  }
+  dlg.querySelector('#ws-cancel').onclick = () => dlg.close()
+  dlg.querySelector('#ws-create').onclick = async () => {
+    const name = dlg.querySelector('#ws-name').value.trim()
+    const st = dlg.querySelector('#ws-status')
+    if (!name) { st.className = 'set-status err'; st.textContent = '名称必填'; return }
+    if (!dirs.length) { st.className = 'set-status err'; st.textContent = '至少选择一个工作目录'; return }
+    const r = await window.moonlybox.rpc('workspace', { op: 'create', name, dirs }, 15_000)
+    if (r.event === 'done' && r.code === 0) {
+      dlg.close(); dlg.remove()
+      await renderWork('xiaoyue')
+    } else { st.className = 'set-status err'; st.textContent = r.text || '创建失败' }
+  }
+}
+
 // ---------- 小月对话绑定（从旧 renderer 迁移） ----------
-function bindChat() {
+function bindChat(chatInfo) {
+  const meta = chatInfo?.meta
   const log = (t) => { $('log').textContent += t + '\n'; $('log').scrollTop = $('log').scrollHeight }
   window.moonlybox.subscribe()
   window.moonlybox.onKernelEvent((msg) => {
@@ -1408,15 +1545,33 @@ function bindChat() {
     $('q').value = ''
     $('btn-ask').disabled = true
     log(`\n你> ${q}`)
-    // #269：工具（管家模式）归 MCP 分类——mcp.builtinEnabled 总闸
+    // #269：工具（管家模式）归 MCP 分类——mcp.builtinEnabled 总闸；#282 chatId/workspaceId 随请求
     const tools = APP_SETTINGS?.mcp?.builtinEnabled !== false
-    const r = await window.moonlybox.rpc('xiaoyue', tools ? { q, tools: true } : { q }, 300_000)
+    const payload = { q, chatId: meta?.id, workspaceId: meta ? (meta.workspaceId ?? null) : undefined }
+    if (tools) payload.tools = true
+    const r = await window.moonlybox.rpc('xiaoyue', payload, 300_000)
     $('btn-ask').disabled = false
     log(r.event === 'done' && r.code === 0 ? `小月> ${r.text}` : `⚠ ${r.message ?? r.text}`)
+    // 会话标题随首轮更新（列表刷新）
+    if (meta && meta.title === '新对话') renderXiaoyueList()
   }
   $('btn-ask').onclick = ask
   $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') ask() })
+  // #282：恢复历史轮次
+  if (meta?.turns?.length) {
+    log(`—— 历史对话（${meta.turns.length} 轮）——`)
+    for (const t of meta.turns.slice(-40)) log(`${t.role === 'user' ? '你' : '小月'}> ${t.content}`)
+    log('—— 以上为历史 ——')
+  }
 }
+
+  const log = (t) => { $('log').textContent += t + '\n'; $('log').scrollTop = $('log').scrollHeight }
+  window.moonlybox.subscribe()
+  window.moonlybox.onKernelEvent((msg) => {
+    if (msg.event === 'log') log(msg.payload)
+    else if (msg.event === 'stderr') log('[stderr] ' + msg.payload)
+    else if (msg.event === 'confirm_request') renderConfirmBar(msg.id, msg.payload)
+  })
 
 function renderConfirmBar(rpcId, payload) {
   const log = $('log')

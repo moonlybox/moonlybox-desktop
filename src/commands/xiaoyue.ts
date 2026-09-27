@@ -204,6 +204,9 @@ import { loadSettings } from '../lib/settings'
 import { localMemoryAdd, localMemorySearch, localMemoryContext } from '../lib/memory-local'
 import { webToolDefs, runWebTool } from '../lib/web-tools'
 import { listAllCustomTools, callCustomTool, enabledCustomServers } from '../lib/mcp-custom'
+import { getWorkspace, loadChat, appendTurn as wsAppendTurn, isUnderDirs, chatTurnsForContext } from '../lib/workspaces'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { defaultVaultRoot } from '../lib/config'
 
 /** --tools 模式：Agent 循环（D9 装配）——LLM 可调 moonlink 29 工具（写操作确认制） */
@@ -233,9 +236,22 @@ async function askWithTools(question: string): Promise<void> {
 export async function runAgentTools(
   question: string,
   confirm: (toolName: string, argsJson: string) => Promise<boolean>,
-  opts: { sessionId?: string } = {},
+  opts: { sessionId?: string; chatId?: string; workspaceId?: string | null } = {},
 ): Promise<{ answer: string; toolCalls: Array<{ name: string; ok: boolean }> }> {
   // #278：记忆设置接线——enabled=false 记忆指引不进 system+记忆工具不装配；provider=builtin 走本地文件记忆
+  // #282 工作空间：有 workspaceId→挂载目录读取+fs 工具装配；chatId→会话持久化+恢复
+  const wsRec = opts.workspaceId ? getWorkspace(opts.workspaceId) : null
+  const wsDirs = wsRec?.dirs ?? []
+  if (opts.chatId) {
+    // 恢复历史（daemon 重启后 chat-context 内存会话丢——从盘回灌）
+    const turns = chatTurnsForContext(opts.chatId)
+    if (turns.length) {
+      const { getSession, clearSession } = await import('../lib/chat-context')
+      clearSession(opts.chatId)
+      for (const t of turns) getSession(opts.chatId).push({ role: t.role, content: t.content })
+    }
+    wsAppendTurn(opts.chatId, 'user', question)
+  }
   // #281：记忆模式唯一（本机内置+月忆增强）——provider 判定退役，本机记忆层恒在（enabled 控制注入与工具）
   const memCfg = loadSettings().memory ?? { enabled: true, injectLimit: 5000 }
   const memOn = memCfg.enabled !== false
@@ -253,7 +269,8 @@ export async function runAgentTools(
     `纪律：1. 用户意图涉及「记录/收藏/保存/查询」时主动调工具，不要只口头答应；\n` +
     `2. 参数从用户话里提取，缺关键参数先问；3. 操作完成后用一句话汇报结果；\n` +
     (memOn && memLocal ? `3.5. 用户陈述的长期事实/偏好会由记忆层静默沉淀（无需口头确认）；\n` : ``) +
-    `4. 语气亲切简洁，中文回答。`
+    `4. 语气亲切简洁，中文回答。` +
+    (wsDirs.length ? `\n5. 当前工作空间「${wsRec!.name}」已挂载目录：${wsDirs.join('、')}。fs_list/fs_read/fs_write 工具仅可操作这些目录内的文件（相对路径基于 ${wsDirs[0]}）；超出范围的路径会被拒绝或需用户批准，不要尝试绕过。` : ``)
   // #256.3：上下文管理（设置可关）——buildMessages 组装历史/压缩，appendTurn 落账
   const sessionId = opts.sessionId ?? 'default'
   const built = buildMessages(sessionId, system, question)
@@ -272,6 +289,66 @@ export async function runAgentTools(
   for (const d of wDefs) localToolsW[d.name] = (args) => runWebTool(d.name, args)
   // #280 自定义 MCP 工具执行器（catalog 闭包随本轮装配）
   for (const d of customDefs) localToolsW[d.name] = (args) => callCustomTool(d.name, args, customCat).then((r) => JSON.stringify({ ok: r.ok, content: r.text }))
+  // #282 工作空间 fs 工具（仅工作空间对话装配）：路径必须落在挂载目录内——越界返回 needs_approval 交 confirm 批准
+  const fsTools: Array<{ name: string; title?: string; description?: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean }; inputSchema: unknown }> = []
+  if (wsDirs.length) {
+    const guard = (abs: string) => isUnderDirs(abs, wsDirs)
+    fsTools.push(
+      {
+        name: 'fs_list',
+        title: '列出工作目录',
+        description: `列出工作空间挂载目录（${wsDirs.join('、')}）下的文件与子目录。相对路径基于第一个挂载目录解析，也可传绝对路径（须在挂载目录内）。`,
+        annotations: { readOnlyHint: true },
+        inputSchema: { type: 'object', properties: { dir: { type: 'string', description: '可选，子目录相对路径或绝对路径；缺省=挂载目录根' } } },
+      },
+      {
+        name: 'fs_read',
+        title: '读取工作文件',
+        description: `读取工作空间挂载目录内的文本文件内容（≤32KB 截断）。相对路径基于第一个挂载目录解析。`,
+        annotations: { readOnlyHint: true },
+        inputSchema: { type: 'object', properties: { path: { type: 'string', description: '文件相对路径或绝对路径（须在挂载目录内）' } }, required: ['path'] },
+      },
+      {
+        name: 'fs_write',
+        title: '写入工作文件',
+        description: `写入/创建工作空间挂载目录内的文本文件（覆盖须谨慎）。相对路径基于第一个挂载目录解析。写操作需用户确认。`,
+        annotations: { readOnlyHint: false, destructiveHint: true },
+        inputSchema: { type: 'object', properties: { path: { type: 'string', description: '文件相对路径或绝对路径（须在挂载目录内）' }, content: { type: 'string', description: '完整文件内容' } }, required: ['path', 'content'] },
+      },
+    )
+    const resolveIn = (p: string): string => (path.isAbsolute(p) ? path.resolve(p) : path.resolve(wsDirs[0]!, p))
+    localToolsW.fs_list = async (args) => {
+      const dir = resolveIn(String(args.dir ?? '.'))
+      if (!guard(dir)) return JSON.stringify({ ok: false, needsApproval: true, error: '路径超出工作空间挂载目录范围' })
+      try {
+        const items = fs.readdirSync(dir, { withFileTypes: true }).slice(0, 200).map((e) => ({ name: e.name, dir: e.isDirectory() }))
+        return JSON.stringify({ ok: true, dir, items })
+      } catch (e: any) {
+        return JSON.stringify({ ok: false, error: String(e?.message ?? e) })
+      }
+    }
+    localToolsW.fs_read = async (args) => {
+      const f = resolveIn(String(args.path ?? ''))
+      if (!guard(f)) return JSON.stringify({ ok: false, needsApproval: true, error: '路径超出工作空间挂载目录范围' })
+      try {
+        const content = fs.readFileSync(f, 'utf8')
+        return JSON.stringify({ ok: true, path: f, truncated: content.length > 32_000, content: content.slice(0, 32_000) })
+      } catch (e: any) {
+        return JSON.stringify({ ok: false, error: String(e?.message ?? e) })
+      }
+    }
+    localToolsW.fs_write = async (args) => {
+      const f = resolveIn(String(args.path ?? ''))
+      if (!guard(f)) return JSON.stringify({ ok: false, needsApproval: true, error: '路径超出工作空间挂载目录范围——需用户批准' })
+      try {
+        fs.mkdirSync(path.dirname(f), { recursive: true })
+        fs.writeFileSync(f, String(args.content ?? ''), 'utf8')
+        return JSON.stringify({ ok: true, path: f, bytes: Buffer.byteLength(String(args.content ?? '')) })
+      } catch (e: any) {
+        return JSON.stringify({ ok: false, error: String(e?.message ?? e) })
+      }
+    }
+  }
   const baseLocalTools: Record<string, (args: Record<string, unknown>) => Promise<string>> = memOn && memLocal
     ? {
         add_memory: async (args: Record<string, unknown>) => {
@@ -305,6 +382,7 @@ ${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}`
     builtinTools: [
       ...wDefs.map((d) => ({ ...d, annotations: { readOnlyHint: true } })),
       ...customDefs.map((d) => ({ ...d })),
+      ...fsTools,
     ],
     chat: async (messages, tools) => {
       const r = await chatWithRetry(
@@ -319,6 +397,7 @@ ${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}`
   if (result.answer) {
     console.log(`小月：${result.answer}`)
     appendTurn(sessionId, question, result.answer)
+    if (opts.chatId) wsAppendTurn(opts.chatId, 'assistant', result.answer)
   }
   if (result.toolCalls.length) {
     const ok = result.toolCalls.filter((t) => t.ok).length

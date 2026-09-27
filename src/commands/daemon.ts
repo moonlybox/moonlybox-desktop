@@ -22,6 +22,10 @@ import { runAgentTools } from '../commands/xiaoyue'
 import { byokReady, byokChat, loadByokMeta, saveByokMeta, saveByokKey, clearByok, loadByokKey } from '../lib/llm'
 import { saveProviderKey } from '../lib/web-tools'
 import { saveMcpKey, resetCatalogCache } from '../lib/mcp-custom'
+import {
+  listWorkspaces, getWorkspace, createWorkspace, updateWorkspace, deleteWorkspace,
+  listChats, listChatsByWorkspace, loadChat, saveChat, createChat, deleteChat, appendTurn,
+} from '../lib/workspaces'
 import { cmdSync } from '../commands/sync'
 import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
@@ -119,7 +123,11 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           } else {
             const confirm = (toolName: string, argsJson: string) =>
               requestUiConfirm(req.id, toolName, argsJson, emit)
-            await runAgentTools(q, confirm, { sessionId: String(args.sessionId ?? 'default') })
+            await runAgentTools(q, confirm, {
+              sessionId: String(args.sessionId ?? args.chatId ?? 'default'),
+              chatId: args.chatId !== undefined ? String(args.chatId) : undefined,
+              workspaceId: args.workspaceId !== undefined ? (args.workspaceId === null ? null : String(args.workspaceId)) : undefined,
+            })
           }
         } else {
           await cmdXiaoyue([q, ...(args.cloud ? ['--cloud'] : [])], { dir } as CommandOptions)
@@ -304,6 +312,69 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         } else {
           code = 2
           text = `未知 auth op：${op2}`
+        }
+      } catch (e: any) {
+        code = 1
+        text = String(e?.message ?? e)
+      }
+      break
+    }
+    case 'workspace': {
+      // #282 工作空间+对话持久化：list|create|update|delete|chats|createChat|chat|deleteChat|appendTurn
+      try {
+        const op = String(args.op ?? 'list')
+        if (op === 'list') {
+          text = JSON.stringify({ ok: true, workspaces: listWorkspaces() })
+        } else if (op === 'create') {
+          const name = String(args.name ?? '').trim()
+          const dirs = Array.isArray(args.dirs) ? args.dirs.map(String) : []
+          if (!name) { code = 1; text = '工作空间名称必填' }
+          else if (dirs.length === 0) { code = 1; text = '至少选择一个工作目录' }
+          else {
+            const missing = dirs.filter((d) => { try { return !require('node:fs').statSync(d).isDirectory() } catch { return true } })
+            if (missing.length) { code = 1; text = `目录不存在或不是文件夹：${missing.join('、')}` }
+            else text = JSON.stringify({ ok: true, workspace: createWorkspace(name, dirs) })
+          }
+        } else if (op === 'update') {
+          const ws = updateWorkspace(String(args.id ?? ''), {
+            name: args.name !== undefined ? String(args.name) : undefined,
+            addDir: args.addDir !== undefined ? String(args.addDir) : undefined,
+            removeDir: args.removeDir !== undefined ? String(args.removeDir) : undefined,
+          })
+          if (!ws) { code = 1; text = '工作空间不存在' }
+          else text = JSON.stringify({ ok: true, workspace: ws })
+        } else if (op === 'delete') {
+          text = JSON.stringify({ ok: deleteWorkspace(String(args.id ?? '')) })
+        } else if (op === 'chats') {
+          const wid = args.workspaceId === null || args.workspaceId === undefined ? undefined : String(args.workspaceId)
+          text = JSON.stringify({ ok: true, chats: wid === undefined ? listChats() : listChatsByWorkspace(wid === 'null' ? null : wid) })
+        } else if (op === 'createChat') {
+          const wid = args.workspaceId === null || args.workspaceId === 'null' ? null : args.workspaceId === undefined ? null : String(args.workspaceId)
+          if (wid) {
+            const ws = getWorkspace(wid)
+            if (!ws) { code = 1; text = '工作空间不存在' }
+          }
+          if (code === 0) text = JSON.stringify({ ok: true, chat: createChat(wid, args.title !== undefined ? String(args.title) : undefined) })
+        } else if (op === 'chat') {
+          const rec = loadChat(String(args.id ?? ''))
+          if (!rec) { code = 1; text = '对话不存在' }
+          else text = JSON.stringify({ ok: true, chat: rec })
+        } else if (op === 'deleteChat') {
+          text = JSON.stringify({ ok: deleteChat(String(args.id ?? '')) })
+        } else if (op === 'appendTurn') {
+          const rec = appendTurn(String(args.id ?? ''), args.role === 'user' ? 'user' : 'assistant', String(args.content ?? ''))
+          if (!rec) { code = 1; text = '对话不存在' }
+          else text = JSON.stringify({ ok: true, chat: rec })
+        } else if (op === 'renameChat') {
+          const rec = loadChat(String(args.id ?? ''))
+          if (!rec) { code = 1; text = '对话不存在' }
+          else {
+            rec.title = String(args.title ?? '').trim() || rec.title
+            text = JSON.stringify({ ok: true, chat: saveChat(rec) })
+          }
+        } else {
+          code = 2
+          text = `未知 workspace op：${op}`
         }
       } catch (e: any) {
         code = 1
