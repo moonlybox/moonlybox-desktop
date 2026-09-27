@@ -31,6 +31,7 @@ import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
 import { loadSettings, saveSettings, MESSAGING_PROVIDERS } from '../lib/settings'
+import { defaultVaultRoot } from '../lib/config'
 import { resolveProviders } from '../lib/providers'
 import { addEntry, listCloudDirs, backupSync, backupSyncAll, BACKUP_EXTS, loadRegistry, setEnabled, removeEntry, setPolicies, checkTwin } from '../lib/backup'
 import { apiGet, apiPost } from '../lib/api'
@@ -404,7 +405,20 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
       }
       break
     }
-    case 'backup': {
+    case 'skills': {
+        // #285 技能清单（设置-技能面板）：书房 .moonlybox/skills/ 扫描
+        try {
+          const { listSkills } = require('../lib/skills') as typeof import('../lib/skills')
+          const skills = listSkills(defaultVaultRoot()).map((s) => ({ name: s.name, description: s.description, files: s.files.length }))
+          code = 0
+          text = JSON.stringify({ skills })
+        } catch (e: any) {
+          code = 1
+          text = String(e?.message ?? e)
+        }
+        break
+      }
+      case 'backup': {
       // #257 备份目录：list/add/remove/toggle/dirs（云端目录树平铺）/sync（上行到归属目录）
       try {
         const op1 = String(args.op ?? 'list')

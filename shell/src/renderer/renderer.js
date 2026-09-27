@@ -987,11 +987,28 @@ async function renderWork(nav, arg, label2) {
         else { st.className = 'set-status err'; st.textContent = r.error ?? '保存失败' }
       }
     } else if (cat.id === 'skills') {
-      panel('技能', '可组合的能力单元。', `
-        <div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px"><b>URL 提取</b><div class="set-desc" style="margin:4px 0 0">网页正文抓取→Markdown（在「网络搜索/文档处理」配套设置）</div></div>
-        <div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px"><b>文档处理</b><div class="set-desc" style="margin:4px 0 0">PDF/Office 解析→文本（本地 OCR 或第三方，见「文档处理」）</div></div>
-        <div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px"><b>PDF 处理</b><div class="set-desc" style="margin:4px 0 0">PDF 拆分/合并/提取</div></div>
+      const gs = await loadAppSettings()
+      const skOn = (gs.skills ?? { enabled: true }).enabled !== false
+      let listHtml = ''
+      let openState = skOn
+      try {
+        const lr = await window.moonlybox.rpc('skills', { op: 'list' }, 10_000)
+        if (lr.event === 'done' && lr.code === 0) {
+          const items = JSON.parse(lr.text).skills ?? []
+          listHtml = items.length
+            ? items.map((s) => `<div class="set-card"><div class="sc-main"><div class="sc-title">${s.name}</div><div class="sc-desc">${s.description || '（无描述）'}${s.files?.length ? ` · 关联文件 ${s.files.length}` : ''}</div></div></div>`).join('')
+            : '<div class="set-desc">书房暂无技能——在书房目录打开 .moonlybox/skills/&lt;技能名&gt;/SKILL.md（含 name/description 头部）即生效，随书房备份。</div>'
+        } else listHtml = '<div class="set-desc">技能清单读取失败。</div>'
+      } catch { listHtml = '<div class="set-desc">技能清单读取失败。</div>' }
+      panel('技能', '书房里的自定义技能：小月按需读取技能全文并照其中的流程执行。数据不出本机、随书房备份。', `
+        <div class="set-card"><div class="sc-main"><div class="sc-title">启用技能</div><div class="sc-desc">关闭后小月不加载技能清单与技能工具</div></div>
+          <button type="button" class="toggle ${openState ? 'on' : ''}" id="sp-sk-on"></button></div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px" id="sp-sk-list">${listHtml}</div>
       `)
+      $('sp-sk-on').onclick = async (e) => {
+        e.currentTarget.classList.toggle('on')
+        await saveAppSettings({ skills: { enabled: e.currentTarget.classList.contains('on') } })
+      }
     } else if (cat.id === 'websearch') {
       // #256.2 用户 5 点：URL 提取并入网络搜索分类（分组块）；选项类=自定义下拉
       const g = await loadAppSettings()

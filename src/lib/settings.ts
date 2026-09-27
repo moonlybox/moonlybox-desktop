@@ -64,6 +64,9 @@ export interface SettingsSchema {
     provider: string
     config: Record<string, string>
   }
+  skills: {
+    enabled: boolean // #285 技能系统总开关（书房 .moonlybox/skills/ 只读消费）
+  }
   memory: {
     enabled: boolean // 长期记忆开关
     /** #281 定稿：记忆模式唯一=本机内置+月忆增强；mode 字段=单选项下拉落点（现唯一取值 builtin_moonrecall，为将来受限扩展的挂载点） */
@@ -86,6 +89,7 @@ export const DEFAULT_SETTINGS: SettingsSchema = {
   websearch: { provider: '', config: {} },
   urlextract: { mode: 'local', provider: '', config: {} },
   docproc: { mode: 'local', provider: '', config: {} },
+  skills: { enabled: true },
   memory: { enabled: true, mode: 'builtin_moonrecall', injectLimit: 5000, syncToMoon: true },
 }
 

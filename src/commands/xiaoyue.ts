@@ -202,6 +202,7 @@ import { byokChatMessages, byokReady as byokReady2 } from '../lib/llm'
 import { buildMessages, appendTurn, summarizeDropped, chatWithRetry } from '../lib/chat-context'
 import { loadSettings } from '../lib/settings'
 import { localMemoryAdd, localMemorySearch, localMemoryContext } from '../lib/memory-local'
+import { skillToolDefs, skillsIndex, viewSkill } from '../lib/skills'
 import { webToolDefs, runWebTool } from '../lib/web-tools'
 import { listAllCustomTools, callCustomTool, enabledCustomServers } from '../lib/mcp-custom'
 import { getWorkspace, loadChat, appendTurn as wsAppendTurn, isUnderDirs, chatTurnsForContext, primaryDir } from '../lib/workspaces'
@@ -257,6 +258,9 @@ export async function runAgentTools(
   const memCfg = loadSettings().memory ?? { enabled: true, injectLimit: 5000 }
   const memOn = memCfg.enabled !== false
   const memLocal = true
+  // #285 技能系统：书房 .moonlybox/skills/ 只读消费（渐进披露——system 只注入索引，skill_view 拉全文）
+  const skillsOn = (loadSettings().skills ?? { enabled: true }).enabled !== false
+  const skillDefs = skillsOn ? skillToolDefs() : []
   // #279 内置网络工具定义（web_search 仅在配置了搜索服务商时装配；fetch_url 恒装配）
   const wDefs = webToolDefs()
   // #280 自定义 MCP：启用中的服务器工具并列装配（失败隔离——失败服务器只报告不阻塞）
@@ -271,6 +275,7 @@ export async function runAgentTools(
     `2. 参数从用户话里提取，缺关键参数先问；3. 操作完成后用一句话汇报结果；\n` +
     (memOn && memLocal ? `3.5. 用户陈述的长期事实/偏好会由记忆层静默沉淀（无需口头确认）；\n` : ``) +
     `4. 语气亲切简洁，中文回答。` +
+    (skillsOn ? `\n6. 用户书房有自定义技能（skill_list 可列出）；任务命中技能描述时先 skill_view 读取全文、按其中的流程与规范执行。` : ``) +
     (wsDirs.length ? `\n5. 当前工作空间「${wsRec!.name}」已挂载目录：${wsDirs.join('、')}（主目录：${wsMain}）。fs_list/fs_read/fs_write 工具仅可操作这些目录内的文件（相对路径基于主目录 ${wsMain}，其余目录传绝对路径）；超出范围的路径会被拒绝或需用户批准，不要尝试绕过。` : ``)
   // #256.3：上下文管理（设置可关）——buildMessages 组装历史/压缩，appendTurn 落账
   const sessionId = opts.sessionId ?? 'default'
@@ -288,6 +293,22 @@ export async function runAgentTools(
   // moonrecall 档=现远程 MoonLink 工具（云端 memory_entities 单源+确认制）
   const localToolsW: Record<string, (args: Record<string, unknown>) => Promise<string>> = {}
   for (const d of wDefs) localToolsW[d.name] = (args) => runWebTool(d.name, args)
+  // #285 技能工具执行器（只读：索引/全文/关联文件；vault 内数据不出本机）
+  if (skillsOn) {
+    const vr = defaultVaultRoot()
+    localToolsW['skill_list'] = async () => {
+      const idx = skillsIndex(vr)
+      return JSON.stringify({ ok: true, count: idx ? idx.split('\n').length : 0, skills: idx || '（书房暂无技能——把含 SKILL.md 的技能目录放进 书房/.moonlybox/skills/ 即生效）' })
+    }
+    localToolsW['skill_view'] = async (args) => {
+      const r = viewSkill(vr, String(args.name ?? ''))
+      return JSON.stringify(r.ok ? { ok: true, content: r.content.slice(0, 12_000) } : { ok: false, error: r.error })
+    }
+    localToolsW['skill_file'] = async (args) => {
+      const r = viewSkill(vr, String(args.name ?? ''), String(args.file ?? ''))
+      return JSON.stringify(r.ok ? { ok: true, path: r.path, content: r.content.slice(0, 12_000) } : { ok: false, error: r.error })
+    }
+  }
   // #280 自定义 MCP 工具执行器（catalog 闭包随本轮装配）
   for (const d of customDefs) localToolsW[d.name] = (args) => callCustomTool(d.name, args, customCat).then((r) => JSON.stringify({ ok: r.ok, content: r.text }))
   // #282 工作空间 fs 工具（仅工作空间对话装配）：路径必须落在挂载目录内——越界返回 needs_approval 交 confirm 批准
@@ -378,13 +399,21 @@ export async function runAgentTools(
     : {}
   const localTools = { ...baseLocalTools, ...localToolsW }
   // builtin 档：本地记忆上下文注入 system（Hermes 式 6000 字符护栏在 lib 内）
+  // #285 技能索引渐进披露：只注入名称+描述清单；小月按需 skill_view 拉全文照做
+  const skillIdx = skillsOn ? skillsIndex(defaultVaultRoot()) : ''
+  const skillBlock = skillIdx
+    ? `
+
+可用技能（用户书房自定义，回答前先对照是否有适用技能；有则先 skill_view 拉全文、照其中的流程执行）：
+${skillIdx}`
+    : ''
   const systemWithMemory =
     memOn && memLocal
       ? `${system}
 
 以下是已知的用户画像与长期记忆（本机记忆层），回答时自然运用，不要逐条复述：
-${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}`
-      : system
+${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}${skillBlock}`
+      : system + skillBlock
   for (const f of customCat.failures) console.log(`（自定义 MCP ${f.name} 连接失败：${f.error}）`)
   const result = await agentLoop({
     system: systemWithMemory,
@@ -396,6 +425,7 @@ ${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}`
       ...wDefs.map((d) => ({ ...d, annotations: { readOnlyHint: true } })),
       ...customDefs.map((d) => ({ ...d })),
       ...fsTools,
+      ...skillDefs,
     ],
     chat: async (messages, tools) => {
       // #283：对话走模型注册表（设置-对话默认模型；空/失效回落旧 byok）
