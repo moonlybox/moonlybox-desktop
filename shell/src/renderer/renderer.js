@@ -592,7 +592,7 @@ async function renderWork(nav, arg, label2) {
             <option value="time" ${av.theme === 'time' ? 'selected' : ''}>跟随时间（18:00-06:00 深色）</option>
           </select>
         </div>
-        <div class="set-field" style="max-width:320px"><label>语言 / Language</label>
+        <div class="set-field" style="max-width:320px"><label>语言</label>
           <select id="sp-lang" class="set-select">
             <option value="zh-CN" ${av.lang === 'zh-CN' || !av.lang ? 'selected' : ''}>中文简体</option>
             <option value="en" ${av.lang === 'en' ? 'selected' : ''}>English</option>
