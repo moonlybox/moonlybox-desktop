@@ -25,7 +25,7 @@ import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
 import { loadSettings, saveSettings, PLATFORM_PROVIDERS, WEBSEARCH_PROVIDERS, MESSAGING_PROVIDERS, MEMORY_PROVIDERS } from '../lib/settings'
-import { loadRegistry, addEntry, removeEntry, setEnabled, listCloudDirs, backupSync, BACKUP_EXTS } from '../lib/backup'
+import { addEntry, listCloudDirs, backupSync, backupSyncAll, BACKUP_EXTS, loadRegistry, setEnabled, removeEntry, setPolicies } from '../lib/backup'
 import { apiGet, apiPost } from '../lib/api'
 import { loadCredentials, saveCredentials, clearCredentials } from '../lib/auth'
 import { ensureClient, requestDeviceCode, pollToken, refreshAccessToken } from '../lib/device-flow'
@@ -310,7 +310,10 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           const directoryId = args.directoryId ? String(args.directoryId) : null
           const directoryName = String(args.directoryName ?? '书房根目录')
           if (!localPath) { code = 1; text = '本地目录必填' } else {
-            const entry = addEntry(localPath, directoryId, directoryName)
+            const entry = addEntry(localPath, directoryId, directoryName, {
+              onDelete: args.onDelete === 'keep' ? 'keep' : 'resync',
+              onConflict: args.onConflict === 'overwrite' ? 'overwrite' : 'rename',
+            })
             text = JSON.stringify({ ok: true, entry })
           }
         } else if (op1 === 'remove') {
@@ -323,8 +326,20 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           const dirs = await listCloudDirs()
           text = JSON.stringify({ ok: true, dirs })
         } else if (op1 === 'sync') {
-          const rep = await backupSync(String(args.id ?? ''))
-          text = JSON.stringify({ ok: true, report: rep })
+          const rep = args.all === true ? null : await backupSync(String(args.id ?? ''))
+          if (args.all === true) {
+            const reps = await backupSyncAll()
+            text = JSON.stringify({ ok: true, reports: reps })
+          } else {
+            text = JSON.stringify({ ok: true, report: rep })
+          }
+        } else if (op1 === 'policies') {
+          setPolicies(String(args.id ?? ''), {
+            onDelete: args.onDelete === 'keep' ? 'keep' : args.onDelete === 'resync' ? 'resync' : undefined,
+            onConflict: args.onConflict === 'overwrite' ? 'overwrite' : args.onConflict === 'rename' ? 'rename' : undefined,
+          })
+          const e = loadRegistry().entries.find((x) => x.id === String(args.id ?? ''))
+          text = JSON.stringify({ ok: true, entry: e })
         } else {
           code = 2
           text = `未知 backup op：${op1}`

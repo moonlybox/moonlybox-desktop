@@ -54,6 +54,17 @@ export async function apiGet<T = any>(path: string, opts?: { baseUrl?: string })
   return res.data as T
 }
 
+export async function apiPatch<T = any>(path: string, body?: unknown, opts?: { baseUrl?: string }): Promise<T> {
+  const { loadCredentials } = await import('./auth')
+  const creds = loadCredentials()
+  const res = await apiCall<T>('PATCH', `/api${path}`, body, { ...opts, token: creds?.accessToken })
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('未登录或登录已过期：先运行 `moonlybox login`')
+    throw new Error(`PATCH ${path} → ${res.status}`)
+  }
+  return res.data as T
+}
+
 export async function apiPost<T = any>(path: string, body?: unknown, opts?: { baseUrl?: string }): Promise<T> {
   const { loadCredentials } = await import('./auth')
   const creds = loadCredentials()

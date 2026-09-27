@@ -312,10 +312,11 @@ async function renderList(nav) {
       }
       body.innerHTML = ''
       for (const e of d.entries) {
+        const holdN = Object.values(e.files ?? {}).filter((f) => f.hold).length
         const el = document.createElement('div')
         el.className = 'tree-item' + (currentBkId === e.id ? ' active' : '')
         el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${e.localPath.split(/[\\/]/).pop()}</span>
-          <span class="muted" style="font-size:10.5px;flex:none">${e.enabled ? '启用' : '停用'}</span>`
+          <span class="muted" style="font-size:10.5px;flex:none">${e.enabled ? (holdN ? `${holdN} 项已停更` : '启用') : '停用'}</span>`
         el.onclick = () => { currentBkId = e.id; renderList('backup'); renderWork('backup', { id: e.id }) }
         body.appendChild(el)
       }
@@ -1080,6 +1081,20 @@ async function renderWork(nav, arg, label2) {
             <label>云端归属目录（同步目标）</label>
             <select id="bk-dir" class="set-select" style="max-width:340px"><option>加载中…</option></select>
           </div>
+          <div class="set-field">
+            <label>云端删除后（网页端删了这份文件）</label>
+            <select id="bk-ondel" class="set-select" style="max-width:340px">
+              <option value="resync">下次同步重新上传（备份目录为源）</option>
+              <option value="keep">不再同步该文件（保留云端删除动作）</option>
+            </select>
+          </div>
+          <div class="set-field">
+            <label>同名冲突（云端已有同名文档，如另一台电脑备份过）</label>
+            <select id="bk-onconf" class="set-select" style="max-width:340px">
+              <option value="rename">重命名上传（保留双方，推荐）</option>
+              <option value="overwrite">覆盖同名文档（以本地为准）</option>
+            </select>
+          </div>
           <div class="set-row">
             <button type="button" class="btn" id="bk-save">注册并立即同步</button>
             <span class="set-status" id="bk-status"></span>
@@ -1102,7 +1117,7 @@ async function renderWork(nav, arg, label2) {
         if (!localPath) { st.className = 'set-status err'; st.textContent = '先选择本地目录'; return }
         const dirId = sel.value || null
         const dirName = sel.options[sel.selectedIndex]?.text ?? '书房根目录'
-        const r = await window.moonlybox.rpc('backup', { op: 'add', localPath, directoryId: dirId, directoryName: dirName }, 15_000)
+        const r = await window.moonlybox.rpc('backup', { op: 'add', localPath, directoryId: dirId, directoryName: dirName, onDelete: $('bk-ondel').value, onConflict: $('bk-onconf').value }, 15_000)
         if (r.event !== 'done' || r.code !== 0) { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '注册失败'; return }
         const entry = JSON.parse(r.text).entry
         st.textContent = '已注册，首次同步中…'
@@ -1126,6 +1141,16 @@ async function renderWork(nav, arg, label2) {
           <div class="set-card"><div class="sc-main"><div class="sc-title">云端归属目录</div><div class="sc-desc">${e.directoryName}</div></div></div>
           <div class="set-card"><div class="sc-main"><div class="sc-title">启用备份</div><div class="sc-desc">停用后此目录不再参与同步（已上传内容保留在云端）</div></div>
             <button type="button" class="toggle ${e.enabled ? 'on' : ''}" id="bk-toggle"></button></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">云端删除后</div><div class="sc-desc">网页端删除此备份上传的文档后，下次同步的行为</div></div>
+            <select class="set-select" id="bk-ondel" style="max-width:220px">
+              <option value="resync"${e.onDelete !== 'keep' ? ' selected' : ''}>重新上传</option>
+              <option value="keep"${e.onDelete === 'keep' ? ' selected' : ''}>不再同步</option>
+            </select></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">同名冲突</div><div class="sc-desc">云端已有同名文档（如另一台电脑备份过）时</div></div>
+            <select class="set-select" id="bk-onconf" style="max-width:220px">
+              <option value="rename"${e.onConflict !== 'overwrite' ? ' selected' : ''}>重命名上传</option>
+              <option value="overwrite"${e.onConflict === 'overwrite' ? ' selected' : ''}>覆盖同名</option>
+            </select></div>
           <div class="set-card"><div class="sc-main"><div class="sc-title">上次同步</div><div class="sc-desc">${e.lastSyncAt ? new Date(e.lastSyncAt).toLocaleString() : '从未'}</div></div>
             <button type="button" class="btn" id="bk-sync">立即同步</button></div>
           <div class="set-row" style="margin-top:20px"><button type="button" class="btn ghost" id="bk-del" style="color:var(--err)">删除此备份目录</button></div>
@@ -1135,7 +1160,11 @@ async function renderWork(nav, arg, label2) {
         const rep = arg.justSynced
         const st = $('bk-detail-status')
         st.className = 'set-status ok'
-        st.textContent = `首次同步完成：上传 ${rep.uploaded.length}，跳过 ${rep.skipped.length}${rep.conflicts.length ? `，失败 ${rep.conflicts.length}` : ''}`
+        const parts = [`上传 ${rep.uploaded.length}`, `更新 ${rep.updated.length}`, `跳过 ${rep.skipped.length}`]
+        if (rep.cloudDeleted?.length) parts.push(`云端删除感知 ${rep.cloudDeleted.length}`)
+        if (rep.cloudUpdated?.length) parts.push(`云端更新采纳 ${rep.cloudUpdated.length}`)
+        if (rep.conflicts.length) parts.push(`需处理 ${rep.conflicts.length}`)
+        st.textContent = `同步完成：${parts.join('，')}`
       }
       $('bk-toggle').onclick = async (ev) => {
         ev.currentTarget.classList.toggle('on')
@@ -1149,9 +1178,20 @@ async function renderWork(nav, arg, label2) {
         if (rs.event === 'done' && rs.code === 0) {
           const rep = JSON.parse(rs.text).report
           st.className = 'set-status ok'
-          st.textContent = `完成：上传 ${rep.uploaded.length}，跳过 ${rep.skipped.length}${rep.conflicts.length ? `，失败 ${rep.conflicts.length}（${rep.conflicts[0].reason.slice(0, 60)}）` : ''}`
+          const parts = [`上传 ${rep.uploaded.length}`, `更新 ${rep.updated.length}`, `跳过 ${rep.skipped.length}`]
+          if (rep.cloudDeleted?.length) parts.push(`云端删除感知 ${rep.cloudDeleted.length}`)
+          if (rep.cloudUpdated?.length) parts.push(`云端更新采纳 ${rep.cloudUpdated.length}`)
+          if (rep.conflicts.length) parts.push(`需处理 ${rep.conflicts.length}（${rep.conflicts[0].reason.slice(0, 60)}）`)
+          st.textContent = `完成：${parts.join('，')}`
         } else { st.className = 'set-status err'; st.textContent = rs.message ?? rs.text ?? '同步失败' }
         renderList('backup')
+      }
+      $('bk-ondel').onchange = async (ev) => {
+        await window.moonlybox.rpc('backup', { op: 'policies', id: e.id, onDelete: ev.currentTarget.value }, 10_000)
+        renderList('backup')
+      }
+      $('bk-onconf').onchange = async (ev) => {
+        await window.moonlybox.rpc('backup', { op: 'policies', id: e.id, onConflict: ev.currentTarget.value }, 10_000)
       }
       $('bk-del').onclick = async () => {
         await window.moonlybox.rpc('backup', { op: 'remove', id: e.id }, 10_000)
