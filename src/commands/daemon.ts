@@ -20,6 +20,7 @@
 import { cmdXiaoyue } from '../commands/xiaoyue'
 import { runAgentTools } from '../commands/xiaoyue'
 import { byokReady, byokChat, loadByokMeta, saveByokMeta, saveByokKey, clearByok, loadByokKey } from '../lib/llm'
+import { saveProviderKey } from '../lib/web-tools'
 import { cmdSync } from '../commands/sync'
 import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
@@ -410,6 +411,17 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
               if (mp.custom && typeof mp.custom === 'object') clean.custom = mp.custom
               if (baseUrl && model) { clean.baseUrl = baseUrl; clean.model = model }
               patch.model = clean
+            }
+            // #279：搜索/URL 提取——节带 apiKey 时入钥匙串，settings.json 只落非敏感 config
+            for (const sec of ['websearch', 'urlextract'] as const) {
+              const sp = patch[sec] as Record<string, unknown> | undefined
+              if (sp && typeof sp === 'object') {
+                const apiKey = typeof sp.apiKey === 'string' ? sp.apiKey.trim() : ''
+                if (apiKey) saveProviderKey(sec, apiKey)
+                const clean: Record<string, unknown> = { ...sp }
+                delete clean.apiKey
+                patch[sec] = clean
+              }
             }
             const s = saveSettings(patch)
             text = JSON.stringify({ ok: true, settings: s })

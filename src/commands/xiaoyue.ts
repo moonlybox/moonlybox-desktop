@@ -202,6 +202,7 @@ import { byokChatMessages, byokReady as byokReady2 } from '../lib/llm'
 import { buildMessages, appendTurn, summarizeDropped, chatWithRetry } from '../lib/chat-context'
 import { loadSettings } from '../lib/settings'
 import { localMemoryAdd, localMemorySearch, localMemoryContext } from '../lib/memory-local'
+import { webToolDefs, runWebTool } from '../lib/web-tools'
 import { defaultVaultRoot } from '../lib/config'
 
 /** --tools 模式：Agent 循环（D9 装配）——LLM 可调 moonlink 29 工具（写操作确认制） */
@@ -237,11 +238,13 @@ export async function runAgentTools(
   const memCfg = loadSettings().memory ?? { enabled: true, provider: 'builtin' }
   const memOn = memCfg.enabled !== false
   const memLocal = memCfg.provider !== 'moonrecall'
+  // #279 内置网络工具定义（web_search 仅在配置了搜索服务商时装配；fetch_url 恒装配）
+  const wDefs = webToolDefs()
   const system =
     `你是「小月」，用户个人知识库（魔力宝盒）的操作助理。你可以调用 MoonLink 工具帮用户：\n` +
     `收藏网页（add_bookmark）、记便签（add_sticky）、记待办（add_todo/complete_todo）、` +
     (memOn ? `保存记忆（add_memory）、` : ``) +
-    `查询书房（search_library/search_bookmarks${memOn ? '/search_memory' : ''}）等。\n` +
+    `查询书房（search_library/search_bookmarks${memOn ? '/search_memory' : ''}）${wDefs.length ? '，并可联网：web_search 网络搜索、fetch_url 读取网页' : ''}等。\n` +
     `纪律：1. 用户意图涉及「记录/收藏/保存/查询」时主动调工具，不要只口头答应；\n` +
     `2. 参数从用户话里提取，缺关键参数先问；3. 操作完成后用一句话汇报结果；\n` +
     (memOn && memLocal ? `3.5. 用户陈述的长期事实/偏好会由记忆层静默沉淀（无需口头确认）；\n` : ``) +
@@ -260,7 +263,9 @@ export async function runAgentTools(
   // agentLoop.chat 签名=byokChatMessages——注入重试包装（#256.3 模型重试次数设置生效点）
   // #278 builtin 档=本地文件记忆层：add_memory/search_memory 本地劫持（数据不出本机）；
   // moonrecall 档=现远程 MoonLink 工具（云端 memory_entities 单源+确认制）
-  const localTools = memOn && memLocal
+  const localToolsW: Record<string, (args: Record<string, unknown>) => Promise<string>> = {}
+  for (const d of wDefs) localToolsW[d.name] = (args) => runWebTool(d.name, args)
+  const baseLocalTools: Record<string, (args: Record<string, unknown>) => Promise<string>> = memOn && memLocal
     ? {
         add_memory: async (args: Record<string, unknown>) => {
           const r = localMemoryAdd(defaultVaultRoot(), String(args.text ?? ''))
@@ -273,7 +278,8 @@ export async function runAgentTools(
           return JSON.stringify({ ok: true, count: hits.length, memories: hits })
         },
       }
-    : undefined
+    : {}
+  const localTools = { ...baseLocalTools, ...localToolsW }
   // builtin 档：本地记忆上下文注入 system（Hermes 式 6000 字符护栏在 lib 内）
   const systemWithMemory =
     memOn && memLocal
@@ -288,6 +294,7 @@ ${localMemoryContext(defaultVaultRoot())}`
     ready: true,
     excludeTools: memOn ? [] : ['add_memory', 'search_memory'],
     localTools,
+    builtinTools: wDefs.map((d) => ({ ...d, annotations: { readOnlyHint: true } })),
     chat: async (messages, tools) => {
       const r = await chatWithRetry(
         () => byokChatMessages(messages, tools as never),

@@ -914,8 +914,8 @@ async function renderWork(nav, arg, label2) {
         const b = $('sp-ws-baseUrl')
         if (b && b.value) config.baseUrl = b.value
         const k = $('sp-ws-apiKey')
-        if (k && k.value) config.apiKey = 'keychain:websearch'
-        const r = await saveAppSettings({ websearch: { provider: $('sp-ws-prov').value, config: { ...config, ...(k && !k.value && ws.config?.apiKey ? { apiKey: ws.config.apiKey } : {}) } } })
+        // #279：key 走节顶层 apiKey 字段→daemon 剥离入钥匙串（settings.json 不落 key 本体）
+        const r = await saveAppSettings({ websearch: { provider: $('sp-ws-prov').value, config, ...(k && k.value ? { apiKey: k.value } : {}) } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
@@ -950,9 +950,8 @@ async function renderWork(nav, arg, label2) {
         let patch
         if (mode === 'provider') {
           const config = { baseUrl: $('sp-ue-url')?.value ?? '' }
-          if ($('sp-ue-key')?.value) config.apiKey = 'keychain:urlextract'
-          else if (ue.config?.apiKey) config.apiKey = ue.config.apiKey
-          patch = { urlextract: { mode, provider: $('sp-ue-prov')?.value ?? 'jina', config } }
+          // #279：key 走节顶层 apiKey 字段→daemon 剥离入钥匙串
+          patch = { urlextract: { mode, provider: $('sp-ue-prov')?.value ?? 'jina', config }, ...($('sp-ue-key')?.value ? { apiKey: $('sp-ue-key').value } : {}) }
         } else {
           patch = { urlextract: { mode, provider: '', config: {} } }
         }

@@ -36,6 +36,8 @@ export interface AgentLoopDeps {
   excludeTools?: string[]
   /** #278 本地工具覆写：同名工具优先本地执行（如 builtin 记忆=本地文件层，不出域） */
   localTools?: Record<string, (args: Record<string, unknown>) => Promise<string>>
+  /** #279 内置工具定义（web_search/fetch_url 等，与 MoonLink 远程工具并列装配；执行走 localTools 同名键） */
+  builtinTools?: Array<{ name: string; title?: string; description?: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean }; inputSchema: unknown }>
 }
 
 export interface AgentLoopResult {
@@ -48,14 +50,17 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   const { system, question, ready, chat, confirm, say } = deps
   if (!ready) throw new Error('BYOK 未配置')
 
-  const all = await listTools()
+  const remote = await listTools()
   const exclude = new Set(deps.excludeTools ?? [])
-  const tools = exclude.size ? all.filter((t) => !exclude.has(t.name)) : all
+  const remoteFiltered = exclude.size ? remote.filter((t) => !exclude.has(t.name)) : remote
+  // #279 内置工具并列装配（重名时内置优先、远程同名剔除）
+  const builtinNames = new Set((deps.builtinTools ?? []).map((t) => t.name))
+  const tools = [...remoteFiltered.filter((t) => !builtinNames.has(t.name)), ...(deps.builtinTools ?? [])]
   const openaiTools = tools.map((t) => ({
     type: 'function' as const,
     function: { name: t.name, description: t.description ?? t.title ?? t.name, parameters: t.inputSchema },
   }))
-  say(`（已接入 MoonLink 工具 ${tools.length} 个）`)
+  say(`（已接入工具 ${tools.length} 个${builtinNames.size ? `，含内置 ${builtinNames.size} 个` : ''}）`)
 
   const messages: import('../lib/llm').ChatMessage[] = [
     { role: 'system', content: system },
