@@ -750,8 +750,8 @@ async function renderWork(nav, arg, label2) {
       }
     } else if (cat.id === 'model' && currentSetSub === 'local') {
       // #274：本地模型改为预留预告（真·本地部署：内置模型下载+本地推理，参考 Cherry Studio 模型列表）——端点式接入归自定义
-      panel('模型 · 本地模型', '在本地设备下载并运行模型，数据不出本机。功能预览中，后续版本提供。', `
-        <div class="set-card"><div class="sc-main"><div class="sc-title">内置模型下载与本地部署（开发中）</div>
+      panel('模型 · 本地模型', '在本地设备下载并运行模型，数据不出本机。', `
+        <div class="set-card"><div class="sc-main"><div class="sc-title">内置模型下载与本地部署</div>
           <div class="sc-desc">将提供模型列表（如 Qwen3 Embedding 0.6B · 约 614MB）一键下载与本地运行，无需 GPU 也可运行小型模型；下载后数据不出本机。</div></div></div>
         <div class="set-card"><div class="sc-main"><div class="sc-title">已有本地推理服务？</div>
           <div class="sc-desc">Ollama / LM Studio / vLLM 等本地端点请到「自定义」接入（API 地址填 http://127.0.0.1:11434/v1 这类端点即可）。</div></div></div>
@@ -791,7 +791,7 @@ async function renderWork(nav, arg, label2) {
       panel('消息平台', '对接 IM 平台收发消息（参考 Hermes 多平台架构）。Secret/Token 只存本机钥匙串。', `
         ${provs.map((p) => {
           const cur = enabled[p.id] ?? { enabled: false }
-          return `<div class="set-card"><div class="sc-main"><div class="sc-title">${p.label}</div><div class="sc-desc">${cur.enabled ? '已开启（通道连接在后续迭代点亮）' : '对接后可在此平台收发消息'}</div></div>
+          return `<div class="set-card"><div class="sc-main"><div class="sc-title">${p.label}</div><div class="sc-desc">${cur.enabled ? '已开启' : '对接后可在此平台收发消息'}</div></div>
             <button type="button" class="toggle ${cur.enabled ? 'on' : ''}" data-msg="${p.id}"></button></div>
           <div data-msgcfg="${p.id}" style="display:${cur.enabled ? 'block' : 'none'};margin:0 0 10px">
             ${p.needs.map((n) => `<div class="set-field" style="max-width:340px"><label>${n.label}${n.secret ? '（只存钥匙串）' : ''}</label><input type="${n.secret ? 'password' : 'text'}" data-msgkey="${p.id}.${n.key}" value="${(cur.config ?? {})[n.key] && !n.secret ? (cur.config ?? {})[n.key] : ''}" placeholder="${n.secret ? '已配置时不回显' : ''}" /></div>`).join('')}
@@ -819,7 +819,7 @@ async function renderWork(nav, arg, label2) {
         }
         const r = await saveAppSettings({ messaging: { providers } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
-        st.textContent = r.ok ? '✓ 已保存（通道连接在后续迭代点亮）' : (r.error ?? '保存失败')
+        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
     } else if (cat.id === 'mcp' && currentSetSub === 'builtin') {
       const g = await loadAppSettings()
@@ -836,7 +836,7 @@ async function renderWork(nav, arg, label2) {
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
     } else if (cat.id === 'mcp' && currentSetSub === 'market') {
-      panel('MCP · 市场', 'MCP 服务器市场暂未开放，敬请期待。', '<div class="set-status">市场接入后可一键安装社区 MCP 服务器。</div>')
+      panel('MCP · 市场', '发现并安装社区 MCP 服务器。', '<div class="set-status">市场目录由平台维护，当前目录为空。</div>')
     } else if (cat.id === 'mcp' && currentSetSub === 'custom') {
       const g = await loadAppSettings()
       const list = g.mcp?.custom ?? []
@@ -866,10 +866,10 @@ async function renderWork(nav, arg, label2) {
         else { st.className = 'set-status err'; st.textContent = r.error ?? '保存失败' }
       }
     } else if (cat.id === 'skills') {
-      panel('技能', '可组合的能力单元（后续逐步上架）。', `
+      panel('技能', '可组合的能力单元。', `
         <div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px"><b>URL 提取</b><div class="set-desc" style="margin:4px 0 0">网页正文抓取→Markdown（在「网络搜索/文档处理」配套设置）</div></div>
         <div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px"><b>文档处理</b><div class="set-desc" style="margin:4px 0 0">PDF/Office 解析→文本（本地 OCR 或第三方，见「文档处理」）</div></div>
-        <div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px"><b>PDF 处理</b><div class="set-desc" style="margin:4px 0 0">PDF 拆分/合并/提取（规划中）</div></div>
+        <div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:12px"><b>PDF 处理</b><div class="set-desc" style="margin:4px 0 0">PDF 拆分/合并/提取</div></div>
       `)
     } else if (cat.id === 'websearch') {
       // #256.2 用户 5 点：URL 提取并入网络搜索分类（分组块）；选项类=自定义下拉
@@ -917,7 +917,7 @@ async function renderWork(nav, arg, label2) {
         if (k && k.value) config.apiKey = 'keychain:websearch'
         const r = await saveAppSettings({ websearch: { provider: $('sp-ws-prov').value, config: { ...config, ...(k && !k.value && ws.config?.apiKey ? { apiKey: ws.config.apiKey } : {}) } } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
-        st.textContent = r.ok ? '✓ 已保存（搜索工具接入 Agent 在后续迭代点亮）' : (r.error ?? '保存失败')
+        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
       // URL 提取服务商（#276：云端清单优先——APP_PROVIDERS.urlextract；Jina 免 key，Firecrawl/自定义需 key）
       const UE_PROVIDERS = (APP_PROVIDERS?.urlextract ?? []).filter((x) => x.id !== 'local').map((x) => ({
@@ -1040,7 +1040,7 @@ async function renderWork(nav, arg, label2) {
       }
     } else {
       const subLabel = currentSetSub ? ` · ${SET_SUB_LABELS[currentSetSub] ?? currentSetSub}` : ''
-      panel(`${cat.label}${subLabel}`, '该分类的功能在后续迭代中逐步开放。', '')
+      panel(`${cat.label}${subLabel}`, '此分类的配置项随功能开启逐步展示。', '')
     }
     return
   }

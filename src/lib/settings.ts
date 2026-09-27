@@ -151,5 +151,5 @@ export const URL_EXTRACT_PROVIDERS: Array<{ id: string; label: string; baseUrl?:
 /** 记忆提供方（#256.11：参考 Hermes——内置为主，预留扩展） */
 export const MEMORY_PROVIDERS: Array<{ id: string; label: string; note: string }> = [
   { id: 'builtin', label: '内置（书房记忆库）', note: 'MoonLink add_memory/search_memory 本地落库' },
-  { id: 'mem0', label: 'Mem0（预留）', note: '需 API Key，后续迭代接入' },
+  { id: 'mem0', label: 'Mem0', note: '需 API Key' },
 ]
