@@ -1642,6 +1642,7 @@ function showWorkspaceDialog() {
     const r = await window.moonlybox.rpc('workspace', { op: 'create', name, dirs, primaryIndex: primaryIdx }, 15_000)
     if (r.event === 'done' && r.code === 0) {
       dlg.close(); dlg.remove()
+      await renderXiaoyueList() // #283.3：第二列会话列表刷新（原只重渲第三列工作台——新工作空间不出现）
       await renderWork('xiaoyue')
     } else { st.className = 'set-status err'; st.textContent = r.text || '创建失败' }
   }
