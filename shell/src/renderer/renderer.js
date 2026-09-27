@@ -651,12 +651,12 @@ async function renderWork(nav, arg, label2) {
       // #283：默认模型下拉=平台API/自定义/本地部署（预留）所有已启用实例分组列出
       const mm = g.model ?? {}
       const modelOpts =
-        `<optgroup label="平台 API"${(mm.providers ?? []).filter((x) => x.enabled).map((x) => {
+        `<optgroup label="平台 API">${(mm.providers ?? []).filter((x) => x.enabled).map((x) => {
           const pv = (APP_PROVIDERS?.platform ?? PLATFORM_PROVIDERS_FALLBACK).find((p) => p.id === x.providerId)
           return `<option value="platform:${x.id}" ${mm.default === `platform:${x.id}` ? 'selected' : ''}>${pv?.label ?? x.providerId} · ${x.model}</option>`
         }).join('')}</optgroup>` +
-        `<optgroup label="自定义"${(mm.custom ?? []).filter((x) => x.enabled).map((x) => `<option value="custom:${x.id}" ${mm.default === `custom:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>` +
-        `<optgroup label="本地部署（预留）"${(mm.local ?? []).filter((x) => x.enabled).map((x) => `<option value="local:${x.id}" ${mm.default === `local:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>`
+        `<optgroup label="自定义">${(mm.custom ?? []).filter((x) => x.enabled).map((x) => `<option value="custom:${x.id}" ${mm.default === `custom:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>` +
+        `<optgroup label="本地部署（预留）">${(mm.local ?? []).filter((x) => x.enabled).map((x) => `<option value="local:${x.id}" ${mm.default === `local:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>`
       panel('对话', '小月的上下文与重试行为。上下文仅存内存（本机），不落盘。', `
         <div class="set-field" style="margin-bottom:14px"><label>默认模型（小月对话/图示 AI 使用）</label>
           <select id="sp-chat-model" class="set-select set-select-sm" style="max-width:420px">
