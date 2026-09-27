@@ -555,7 +555,7 @@ async function renderWork(nav, arg, label2) {
         <div class="set-card"><div class="sc-main"><div class="sc-title">${label}</div><div class="sc-desc">${desc}</div></div>
           <button type="button" class="toggle ${on ? 'on' : ''}" id="${id}" aria-label="${label}"></button></div>`
       panel('通用', '基础行为设置。更改即时生效。', `
-        ${card('sp-launch', '开机启动', '登录系统后自动启动魔力宝盒（打包版生效）', !!gv.launchAtLogin)}
+        ${card('sp-launch', '开机启动', '登录系统后自动启动魔力宝盒（安装版生效）', !!gv.launchAtLogin)}
         ${card('sp-min', '启动时最小化到托盘', '开机/启动后不弹主窗口，仅在托盘待命', !!gv.launchMinimized)}
         ${card('sp-tray', '关闭时最小化到托盘', '点关闭按钮时隐藏到托盘而非退出（托盘图标可退出）', !!gv.closeToTray)}
         ${card('sp-awake', '运行任务时保持电脑唤醒', '小月执行任务期间阻止系统休眠', !!gv.keepAwake)}
