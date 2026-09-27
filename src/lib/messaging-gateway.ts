@@ -47,6 +47,8 @@ const TG_POLL_TIMEOUT_S = 30
 
 /** fetch 注入形态（生产=global fetch；e2e 注 mock——bun test 对 global.fetch 替换的时序不可靠） */
 export type FetchImpl = (url: string, init?: RequestInit) => Promise<Response>
+/** ws 注入形态（同上——生产=global WebSocket，e2e 注 mock 服务器） */
+export type WsImpl = new (url: string) => WebSocket
 
 export class TelegramAdapter implements PlatformAdapter {
   id = 'telegram'
@@ -132,6 +134,189 @@ export class TelegramAdapter implements PlatformAdapter {
   }
 }
 
+/* ============================ 钉钉（Stream 模式，零依赖自实现） ============================ */
+
+const DT_GATEWAY_URL = 'https://api.dingtalk.com/v1.0/gateway/connections/open'
+const DT_TOPIC_ROBOT = '/v1.0/im/bot/messages/get'
+
+/**
+ * 钉钉 Stream 模式适配器（协议照 dingtalk-stream 官方客户端实现取直）：
+ * open 领 endpoint+ticket → wss 连接 → SYSTEM ping 原样回执保活 → CALLBACK 机器人消息 →
+ * ws 回执 socketResponse（防服务端 60s 重试重推）→ 回复走机器人消息 API（单聊 oTo/群聊 group）。
+ */
+export class DingtalkAdapter implements PlatformAdapter {
+  id = 'dingtalk'
+  private ws: WebSocket | null = null
+  private stopped = false
+  private stopFns: Array<() => void> = []
+  /** accessToken 缓存（7200s 有效，内存缓存 1h） */
+  private token: string | null = null
+  private tokenAt = 0
+
+  constructor(
+    private clientId: string,
+    private clientSecret: string,
+    private fetchImpl: FetchImpl = global.fetch,
+    private wsImpl: WsImpl = WebSocket,
+  ) {}
+
+  private async api(url: string, body: Record<string, unknown>, headers?: Record<string, string>): Promise<any> {
+    const res = await this.fetchImpl(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Accept: 'application/json', ...(headers ?? {}) },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(`dingtalk ${new URL(url).pathname}: ${JSON.stringify(json).slice(0, 160)}`)
+    return json
+  }
+
+  /** 机器人消息 API 需要 accessToken（企业内部应用凭据换 token） */
+  private async accessToken(): Promise<string> {
+    if (this.token && Date.now() - this.tokenAt < 3_600_000) return this.token
+    const res = await this.fetchImpl(
+      `https://oapi.dingtalk.com/gettoken?appkey=${encodeURIComponent(this.clientId)}&appsecret=${encodeURIComponent(this.clientSecret)}`,
+      { signal: AbortSignal.timeout(30_000) },
+    )
+    const json = (await res.json()) as { access_token?: string }
+    if (!json.access_token) throw new Error('dingtalk gettoken 失败')
+    this.token = json.access_token
+    this.tokenAt = Date.now()
+    return this.token
+  }
+
+  async start(onMessage: (m: InboundMessage) => Promise<void>): Promise<() => void> {
+    this.stopped = false
+    void this.loop(onMessage)
+    return () => {
+      this.stopped = true
+      for (const fn of this.stopFns) fn()
+      try {
+        this.ws?.close()
+      } catch {
+        /* ignore */
+      }
+      this.ws = null
+    }
+  }
+
+  private async loop(onMessage: (m: InboundMessage) => Promise<void>): Promise<void> {
+    let backoff = 2
+    while (!this.stopped) {
+      try {
+        const open = (await this.api(DT_GATEWAY_URL, {
+          clientId: this.clientId,
+          clientSecret: this.clientSecret,
+          ua: 'moonlybox',
+          subscriptions: [{ type: 'CALLBACK', topic: DT_TOPIC_ROBOT }],
+          localIp: '',
+        })) as { endpoint?: string; ticket?: string }
+        if (!open.endpoint || !open.ticket) throw new Error('open 未返回 endpoint/ticket')
+        backoff = 2
+        await this.serve(`${open.endpoint}?ticket=${open.ticket}`, onMessage)
+      } catch (e: any) {
+        if (this.stopped) return
+        console.log(`（消息网关 dingtalk 连接失败：${String(e?.message ?? e).slice(0, 120)}，${backoff}s 后重试）`)
+        await new Promise((r) => setTimeout(r, backoff * 1000))
+        backoff = Math.min(backoff * 2, 120)
+      }
+    }
+  }
+
+  /** 单次 ws 会话：正常退回（服务端断/stop）后 loop 重新 open 领新 ticket */
+  private serve(url: string, onMessage: (m: InboundMessage) => Promise<void>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const ws = new this.wsImpl(url)
+      this.ws = ws
+      let settled = false
+      let keepalive: ReturnType<typeof setInterval> | null = null
+      const done = (err?: unknown) => {
+        if (settled) return
+        settled = true
+        if (keepalive) clearInterval(keepalive)
+        err ? reject(err) : resolve()
+      }
+      ws.onopen = () => {
+        // SYSTEM ping 保活：协议=收到 headers.topic=ping 的帧原样回 code 200（onSystem 分支处理）；这里兜底定时 ping 由服务端推
+      }
+      ws.onmessage = (ev) => {
+        void (async () => {
+          try {
+            const msg = JSON.parse(String(ev.data)) as { type?: string; headers?: Record<string, string>; data?: string; code?: number }
+            const topic = msg.headers?.topic ?? msg.headers?.type
+            if (msg.type === 'SYSTEM') {
+              if (topic === 'ping') {
+                ws.send(JSON.stringify({ code: 200, headers: msg.headers, message: 'OK', data: msg.data }))
+              }
+              return
+            }
+            if (msg.type === 'CALLBACK' && topic === DT_TOPIC_ROBOT) {
+              const messageId = msg.headers?.messageId ?? ''
+              try {
+                const payload = JSON.parse(msg.data ?? '{}') as {
+                  conversationId?: string
+                  conversationType?: string
+                  senderStaffId?: string
+                  senderNick?: string
+                  text?: { content?: string }
+                }
+                const text = (payload.text?.content ?? '').trim()
+                if (text && payload.senderStaffId) {
+                  await onMessage({
+                    platform: 'dingtalk',
+                    chatId: payload.conversationType === '1' ? `oTo:${payload.senderStaffId}` : `group:${payload.conversationId}`,
+                    sender: payload.senderNick,
+                    text,
+                  })
+                }
+                // 回执防重推（60s 重试）
+                ws.send(JSON.stringify({ code: 200, headers: { contentType: 'application/json', messageId }, message: 'OK', data: JSON.stringify({ response: 'OK' }) }))
+              } catch (e: any) {
+                console.log(`（消息网关 dingtalk 消息处理失败：${String(e?.message ?? e).slice(0, 120)}）`)
+                ws.send(JSON.stringify({ code: 200, headers: { contentType: 'application/json', messageId }, message: 'OK', data: JSON.stringify({ response: 'ERR' }) }))
+              }
+            }
+          } catch {
+            /* 非 JSON 帧忽略 */
+          }
+        })()
+      }
+      ws.onerror = (err) => done(err as unknown as Event)
+      ws.onclose = () => done()
+      this.stopFns.push(() => {
+        try {
+          ws.close()
+        } catch {
+          /* ignore */
+        }
+        done()
+      })
+    })
+  }
+
+  async send(chatId: string, text: string): Promise<void> {
+    const token = await this.accessToken()
+    const [mode, id] = chatId.includes(':') ? [chatId.slice(0, chatId.indexOf(':')), chatId.slice(chatId.indexOf(':') + 1)] : ['oTo', chatId]
+    const msgParam = JSON.stringify({ content: text })
+    if (mode === 'group') {
+      await this.api(`https://api.dingtalk.com/v1.0/robot/groupMessages/send?access_token=${token}`, {
+        robotCode: this.clientId,
+        openConversationId: id,
+        msgKey: 'sampleText',
+        msgParam,
+      })
+    } else {
+      await this.api(`https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend?access_token=${token}`, {
+        robotCode: this.clientId,
+        userIds: [id],
+        msgKey: 'sampleText',
+        msgParam,
+      })
+    }
+  }
+}
+
 /* ============================ 网关编排 ============================ */
 
 export interface GatewayStatus {
@@ -181,12 +366,14 @@ export function enabledPlatforms(): Array<{ id: string; config: PlatformConfig }
 }
 
 /** 已接入网关的平台（buildAdapter 有实现）；新平台接入时同步更新 */
-const GATEWAY_READY = ['telegram']
+const GATEWAY_READY = ['telegram', 'dingtalk']
 
-function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetchImpl?: FetchImpl): PlatformAdapter | null {
+function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetchImpl?: FetchImpl, wsImpl?: WsImpl): PlatformAdapter | null {
   switch (id) {
     case 'telegram':
       return config.botToken ? new TelegramAdapter(config.botToken, stateDir, fetchImpl) : null
+    case 'dingtalk':
+      return config.appKey && config.appSecret ? new DingtalkAdapter(config.appKey, config.appSecret, fetchImpl, wsImpl) : null
     default:
       return null // 飞书/钉钉/Slack/QQbot/企微/微信逐个迭代接入（未接入平台静默跳过）
   }
@@ -200,11 +387,12 @@ export async function startGateway(
   stateDir: string,
   onMessage: (m: InboundMessage) => Promise<string>,
   fetchImpl?: FetchImpl,
+  wsImpl?: WsImpl,
 ): Promise<GatewayStatus[]> {
   await stopGateway()
   const statuses: GatewayStatus[] = []
   for (const { id, config } of enabledPlatforms()) {
-    const adapter = buildAdapter(id, config, stateDir, fetchImpl)
+    const adapter = buildAdapter(id, config, stateDir, fetchImpl, wsImpl)
     if (!adapter) {
       statuses.push({ platform: id, running: false, error: '该平台暂未接入——本轮支持 Telegram' })
       continue
