@@ -559,7 +559,7 @@ async function renderWork(nav, arg, label2) {
         ${card('sp-min', '启动时最小化到托盘', '开机/启动后不弹主窗口，仅在托盘待命', !!gv.launchMinimized)}
         ${card('sp-tray', '关闭时最小化到托盘', '点关闭按钮时隐藏到托盘而非退出（托盘图标可退出）', !!gv.closeToTray)}
         ${card('sp-awake', '运行任务时保持电脑唤醒', '小月执行任务期间阻止系统休眠', !!gv.keepAwake)}
-        ${card('sp-watch', '剪贴板自动采集', '监听复制的文本/链接，存入收集箱', clipboardWatch)}
+        ${card('sp-watch', '剪贴板自动采集', '监听复制的文本/链接，存入收集箱；快捷键 Alt+Shift+C 可随时手动采集（不受此开关限制）', clipboardWatch)}
       `)
       const saveGeneral = async () => {
         const patch = {
