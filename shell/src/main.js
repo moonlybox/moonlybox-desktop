@@ -42,6 +42,7 @@ function applyLaunchAtLogin() {
 }
 // 关闭行为（#256.1）：closeToTray=true → close 事件拦截为 hide（托盘常驻）；false → 真销毁（D12 默认）
 let closeToTrayOn = false
+let silentLaunch = false // #267：静默启动态（托盘保活依据之一）
 // keepAwake（#256.1）：powerSaveBlocker 阻止系统休眠（运行任务期间）
 let psbId = null
 function setKeepAwake(on) {
@@ -318,7 +319,10 @@ function handleMoonlinkUrl(url) {
 
 const ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAEbUlEQVR42sWXXWxURRTHfzNzd1m27XbLR1ugLFtoSwGBrUEiQUUwih/RliggYGJfTDSGGOXFRx59U16MJhp5MREicR/Q+BFADB8aNCwYQ0uh37SlhdJtS7u79M7xoRV4ML23SQv/yXmZe+bMmTPn/M8dxX1IJOqjuWHeA+oQEkwnFCkgGcznQCp1cODe9ARWVdbXY+VjgSgzCAUDaPX+P00HDwIYgFXL6uutla8EQswwBEIi1JXMqWnru5VKqUSiPpobtC0zffL/i0QwosvNnPCaDwV5fqoGtFIorVBKoQBBpmoiZLNkHRFq/SxduCCfru5hjDYopdFK38sgASUWEYtr3ak4UasFmwBhMtn0ZIxPD7zAlk3lGGNwjIMxDqFgHo4JYIwzMTf+rap6CV42x2NmE44fN3871c7oiEvq7xsEndk8uvw5lpSuJuCEMCZI941GTl/8lkxuhLXrlrGmppKmxjZEvGOrlpfv8dRyjMHoAOHZEV55ei8NrWdp724kkxkGIFpYzLOPv8nhHz8ieydDOC9IOp1mzPW+Do0Ik4kCFJpQMI/tL+4jeewTLjf/SS47SlFRIeG8MIODN/n59JfUbd2LRnN7KINCj6eIh33tGSI1nulPbdzGr38cQqHR2uHtD15FoXGzgtEOQ7fTdPVdZmn56rtrlFLeERAmH0qBKEW8vIp0updIpIhnXnqMxfFiMiMuxgTQWqO1ZkyyzJtXAkohSo2v9RjaR7ISiUTpH+omkx1l5+53KS4pYn5JEeH80ASbKwIBh9HMEE7Q+CmAu6I9S0WEoYF+AiGDYOnsauSvs03kF4TYt38H1asXUbO+gvzILOYvKKGv/xpgJ3jB2wMzJ7pqvxd7V1bHCYULQODqlUts2LyVr784TNmSYuIVpZw/10C8cg0mYDh3+iSuuFjr4toxT4b0TEIrQl7BbH4/c4K1G9bT19vDse+T1GzcQmsbNLe4PLJuI6OZYX45+t345uJisVg/PFAZ2+GppbXG0QEihUXseectjn5zhIGb/ZTFyzGOpre7h3R/P66d2NwdY8zewVo7PQ4AGG0w2qE0VsbLu1/DcRzamlq4eO481zu6EGuxuFh3PPR+e4KqiG33dGBWKEQoHGJoYBCtHLTWLIrHWBxfTGdbB9daOxGxWGuxMkZBNEJmJEM2k/HBhD5qpWJlFbVv7JxIrByum6Oj+SpnTpykvbkZ183iujlcm8Nal9o9O6hcWeWrDp0ptXEBEcHF9aXrx7bj50fifuby6advfc1DhoOPWr3e2UVsaZwFZQs9G4yIEFsW54dDR/BjWy0t2+YrrvGqCp7YuoV5xSWT6t3ovc6pn47TevmKvzL068BMQYNcmFL7ml654ABJEdY+jNMrRVIl4nXR9BitiBQ+4N3ThQ5x0zPQkJlbWN0jInUP9O612nWpPZkyALcGG1LRyIo2YDMyw+9DpdJovaulI5m8+zgFGBhqSEXnrvgMV7IoKQJKp/kxeAHU5wT1663tydR/0/8CK0dxAWA3M5IAAAAASUVORK5CYII=' // 涌月漩 32px（brand/client/windows/moonlybox-32x32.png 内联——托盘需运行时可用，无文件 IO）
 
-app.whenReady().then(() => {
+// #267：托盘按需创建——closeToTray=true 或静默启动（launchMinimized 无窗可点）才有托盘；
+// 默认（closeToTray=false）关窗=退出应用，不留托盘（用户预期+D12 关窗真退出）
+function ensureTray() {
+  if (tray) return
   const icon = nativeImage.createFromDataURL(ICON)
   tray = new Tray(icon)
   tray.setToolTip('魔力宝盒')
@@ -329,6 +333,15 @@ app.whenReady().then(() => {
     { label: '退出', click: () => { app.isQuiting = true; app.quit() } },
   ]))
   tray.on('click', createWindow)
+}
+function destroyTray() {
+  if (!tray) return
+  tray.destroy()
+  tray = null
+}
+
+app.whenReady().then(() => {
+  // 托盘初始创建在启动设置读取后决定（见下方通用设置应用段）
 
   // IPC 白名单（preload 对应）
   // daemon RPC：{cmd:'xiaoyue', args:{q}} → 过程行推 renderer，done 返回全文
@@ -419,6 +432,9 @@ app.whenReady().then(() => {
   ipcMain.handle('shell:applyGeneral', (_e, general) => {
     const g = general || {}
     closeToTrayOn = !!g.closeToTray
+    // #267 托盘跟随开关实时增减
+    if (closeToTrayOn) ensureTray()
+    else if (!silentLaunch) destroyTray()
     setKeepAwake(!!g.keepAwake)
     if (g.clipboardWatch && !clipboardWatchOn) { clipboardWatchOn = true; startClipboardWatch() }
     else if (!g.clipboardWatch && clipboardWatchOn) { clipboardWatchOn = false; stopClipboardWatch() }
@@ -474,6 +490,9 @@ app.whenReady().then(() => {
     if (g.clipboardWatch) { clipboardWatchOn = true; startClipboardWatch() }
     // 启动时最小化到托盘：命令行/协议唤起（带参数）除外，静默启动不弹窗
     const silent = !!g.launchMinimized && !launchUrl && !process.argv.slice(1).some((a) => !a.startsWith('-'))
+    silentLaunch = silent
+    // #267 托盘按需：静默启动（无窗可点必须有托盘唤回）或 closeToTray 开启
+    if (silent || closeToTrayOn) ensureTray()
     if (!silent) createWindow()
   } catch { createWindow() }
 })
@@ -483,4 +502,7 @@ app.on('will-quit', () => {
   stopClipboardWatch()
 })
 
-app.on('window-all-closed', () => { /* 托盘常驻 */ })
+// #267：默认（closeToTray=false）关窗=退出应用（托盘不残留）；closeToTray=true 时窗口只 hide 不销毁，本事件不触发
+app.on('window-all-closed', () => {
+  if (!closeToTrayOn) app.quit()
+})
