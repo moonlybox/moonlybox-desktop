@@ -1453,6 +1453,8 @@ $('btn-avatar').onclick = async () => {
     const nickname = p?.nickname || d.email || '用户'
     const signature = p?.signature || ''
     const avatarUrl = p?.avatar || ''
+    // #262：profile 拉到真实头像 → rail 主界面头像同步更新（修「面板有头像、rail 还是字母」不同步）
+    applyRailAvatar(avatarUrl, d.email, true)
     const extSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.55"><path d="M7 17L17 7M9 7h8v8"/></svg>`
     const dlg = document.createElement('dialog')
     dlg.innerHTML = `
@@ -1542,6 +1544,23 @@ $('btn-upgrade').onclick = async () => {
 // ---------- 账号（头像点击=登录/账号面板） ----------
 let loginPolling = false
 
+// #262：rail 头像渲染统一入口（panel/登录流/启动共用；profile 数据就手时直接喂，避免二次 RPC）
+function applyRailAvatar(avatarUrl, email, loggedIn) {
+  const btn = $('btn-avatar')
+  if (!btn) return
+  if (loggedIn && email) {
+    if (avatarUrl) {
+      btn.innerHTML = `<img src="${avatarUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" referrerpolicy="no-referrer"/>`
+    } else {
+      btn.textContent = (email[0] ?? '?').toUpperCase()
+    }
+    btn.title = `已登录：${email}`
+  } else {
+    btn.textContent = '未'
+    btn.title = '未登录（点击登录）'
+  }
+}
+
 async function refreshAvatar() {
   const r = await window.moonlybox.rpc('auth', { op: 'whoami' }, 15_000)
   try {
@@ -1553,16 +1572,9 @@ async function refreshAvatar() {
         const pr = await window.moonlybox.rpc('auth', { op: 'profile' }, 25_000)
         avatarUrl = JSON.parse(pr.text).avatar || ''
       } catch {}
-      const btn = $('btn-avatar')
-      if (avatarUrl) {
-        btn.innerHTML = `<img src="${avatarUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover" referrerpolicy="no-referrer"/>`
-      } else {
-        btn.textContent = (d.email[0] ?? '?').toUpperCase()
-      }
-      btn.title = `已登录：${d.email}`
+      applyRailAvatar(avatarUrl, d.email, true)
     } else {
-      $('btn-avatar').textContent = '未'
-      $('btn-avatar').title = '未登录（点击登录）'
+      applyRailAvatar('', d.email, false)
     }
   } catch {}
 }

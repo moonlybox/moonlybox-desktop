@@ -206,11 +206,20 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             text = JSON.stringify({ ok: true, status: result.status })
           }
         } else if (op2 === 'whoami') {
-          const creds = loadCredentials()
+          let creds = loadCredentials()
+          // #262：token 过期且有 refresh_token → 懒续期（失败不阻塞，保持本地 loggedIn 态）
+          const exp = creds?.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt).getTime() : 0
+          if (creds?.accessToken && creds?.refreshToken && exp - Date.now() <= 60_000) {
+            try { creds = (await ensureFreshToken()).creds } catch {}
+          }
           text = JSON.stringify({ ok: true, email: creds?.accountEmail ?? null, userId: creds?.userId ?? null, loggedIn: !!creds?.accessToken })
         } else if (op2 === 'profile') {
           // 头像浮窗数据：/auth/me 全量（昵称/签名/头像 URL）——20s 超时
-          const creds = loadCredentials()
+          // #262：先 ensureFreshToken（过期自动续期落盘）——修复启动首拉头像/昵称因过期 token 401 降级为字母+邮箱
+          let creds: any = null
+          try {
+            creds = (await ensureFreshToken()).creds
+          } catch { creds = loadCredentials() }
           if (!creds?.accessToken) {
             code = 1
             text = '未登录'
