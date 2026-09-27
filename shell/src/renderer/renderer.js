@@ -1460,7 +1460,8 @@ async function renderXiaoyueList() {
     group.className = 'xy-ws-group'
     group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.join('\n')}">📁 ${ws.name}</span><span class="xy-ws-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="增加工作目录">＋</span><span class="xy-ws-del" style="color:var(--muted);cursor:pointer;padding:0 4px" title="删除工作空间">×</span></div>`
     group.querySelector('.xy-ws-add').onclick = async () => {
-      const dir = await window.moonlybox.pickFolder()
+      const r = await window.moonlybox.pickFolder()
+      const dir = r?.ok ? r.path : null
       if (!dir) return
       await window.moonlybox.rpc('workspace', { op: 'update', id: ws.id, addDir: dir }, 10_000)
       await renderXiaoyueList()
@@ -1510,7 +1511,8 @@ function showWorkspaceDialog() {
   dlg.showModal()
   const dirs = []
   dlg.querySelector('#ws-add-dir').onclick = async () => {
-    const dir = await window.moonlybox.pickFolder()
+    const r = await window.moonlybox.pickFolder()
+    const dir = r?.ok ? r.path : null
     if (!dir) return
     if (!dirs.includes(dir)) dirs.push(dir)
     dlg.querySelector('#ws-dirs').textContent = dirs.join('\n') || '尚未选择'
