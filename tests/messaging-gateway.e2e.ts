@@ -82,11 +82,11 @@ test('enabledPlatforms：未启用/缺凭据跳过', () => {
   expect(list.find((x) => x.id === 'slack')).toBeUndefined()
 })
 
-test('startGateway：未接入平台（feishu）失败隔离不炸网关', async () => {
-  saveSettings({ messaging: { providers: { feishu: { enabled: true, config: { appId: 'x' } } } } } as never)
+test('startGateway：未接入平台（slack）失败隔离不炸网关', async () => {
+  saveSettings({ messaging: { providers: { slack: { enabled: true, config: { botToken: 'x' } } } } } as never)
   const statuses = await startGateway(stateDir, async () => 'ok', mockFetch)
   expect(statuses.length).toBe(1)
-  expect(statuses[0]!.platform).toBe('feishu')
+  expect(statuses[0]!.platform).toBe('slack')
   expect(statuses[0]!.running).toBe(false)
   expect(statuses[0]!.error).toContain('暂未接入')
   await stopGateway()

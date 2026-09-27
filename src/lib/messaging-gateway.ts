@@ -489,6 +489,84 @@ export class QQBotAdapter implements PlatformAdapter {
   }
 }
 
+/* ============================ 飞书（官方 SDK 长连接，照 Hermes 验证过的通道形态） ============================ */
+
+/**
+ * 飞书适配器：官方 @larksuiteoapi/node-sdk WSClient（与 Hermes feishu 通道同款官方实现，
+ * ws 协议/断线重连/分片拼装由 SDK 托管）。收件=EventDispatcher im.message.receive_v1（文本）；
+ * 回复=client.im.message.reply（message_id 被动回复通道，text）。
+ * 体积实测：bundle 增量 ~0.7MB（tree-shake 后），推翻早前 30MB 盘面顾虑。
+ */
+export class FeishuAdapter implements PlatformAdapter {
+  id = 'feishu'
+  private client: import('@larksuiteoapi/node-sdk').Client | null = null
+  private wsClient: import('@larksuiteoapi/node-sdk').WSClient | null = null
+  private stopped = false
+
+  constructor(
+    private appId: string,
+    private appSecret: string,
+  ) {}
+
+  async start(onMessage: (m: InboundMessage) => Promise<void>): Promise<() => void> {
+    this.stopped = false
+    const lark = await import('@larksuiteoapi/node-sdk')
+    const dispatcher = new lark.EventDispatcher({})
+    dispatcher.register({
+      'im.message.receive_v1': async (data: any) => {
+        try {
+          const msg = data?.message
+          if (!msg?.message_id || msg.message_type !== 'text' || !msg.content) return
+          let text = ''
+          try {
+            text = String((JSON.parse(msg.content) as { text?: string }).text ?? '').trim()
+          } catch {
+            return
+          }
+          if (!text) return
+          text = text.replace(/^@_user_1\s*/, '').trim() // 群聊 @机器人前缀
+          await onMessage({
+            platform: 'feishu',
+            chatId: `fs:${msg.chat_id ?? ''}`,
+            sender: data?.sender?.sender_id?.user_id,
+            text,
+            replyTo: msg.message_id,
+          })
+        } catch (e: any) {
+          console.log(`（消息网关 feishu 消息处理失败：${String(e?.message ?? e).slice(0, 120)}）`)
+        }
+      },
+    })
+    this.client = new lark.Client({ appId: this.appId, appSecret: this.appSecret, domain: lark.Domain.Feishu })
+    this.wsClient = new lark.WSClient({ appId: this.appId, appSecret: this.appSecret, loggerLevel: lark.LoggerLevel.warn })
+    // SDK 内置断线重连；start 阻塞直至断开——detached 跑，错误只报告
+    void this.wsClient.start({ eventDispatcher: dispatcher }).catch((e: any) => {
+      if (!this.stopped) console.log(`（消息网关 feishu 连接退出：${String(e?.message ?? e).slice(0, 120)}）`)
+    })
+    console.log('（消息网关 feishu 已启动）')
+    return () => {
+      this.stopped = true
+      try {
+        this.wsClient?.close()
+      } catch {
+        /* ignore */
+      }
+      this.wsClient = null
+      this.client = null
+    }
+  }
+
+  async send(chatId: string, text: string, replyTo?: string): Promise<void> {
+    const messageId = replyTo ?? ''
+    if (!messageId || !this.client) throw new Error('飞书回复需要原始消息 id（被动回复通道）')
+    const r = await this.client.im.message.reply({
+      data: { content: JSON.stringify({ text }), msg_type: 'text' },
+      path: { message_id: messageId },
+    })
+    if ((r as any)?.code !== 0 && (r as any)?.msg) throw new Error(`飞书回复失败：${(r as any).msg}`)
+  }
+}
+
 /* ============================ 网关编排 ============================ */
 
 export interface GatewayStatus {
@@ -539,7 +617,7 @@ export function enabledPlatforms(): Array<{ id: string; config: PlatformConfig }
 }
 
 /** 已接入网关的平台（buildAdapter 有实现）；新平台接入时同步更新 */
-const GATEWAY_READY = ['telegram', 'dingtalk', 'qqbot']
+const GATEWAY_READY = ['telegram', 'dingtalk', 'qqbot', 'feishu']
 
 function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetchImpl?: FetchImpl, wsImpl?: WsImpl): PlatformAdapter | null {
   switch (id) {
@@ -549,6 +627,8 @@ function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetc
       return config.appKey && config.appSecret ? new DingtalkAdapter(config.appKey, config.appSecret, fetchImpl, wsImpl) : null
     case 'qqbot':
       return config.appId && config.appSecret ? new QQBotAdapter(config.appId, config.appSecret, fetchImpl, wsImpl) : null
+    case 'feishu':
+      return config.appId && config.appSecret ? new FeishuAdapter(config.appId, config.appSecret) : null
     default:
       return null // 飞书/钉钉/Slack/QQbot/企微/微信逐个迭代接入（未接入平台静默跳过）
   }
