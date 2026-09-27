@@ -354,9 +354,21 @@ export async function runAgentTools(
     ? {
         add_memory: async (args: Record<string, unknown>) => {
           const r = localMemoryAdd(defaultVaultRoot(), String(args.text ?? ''))
-          return r.ok
-            ? JSON.stringify({ ok: true, duplicated: r.duplicated, layer: 'local', message: r.duplicated ? '已存在，跳过' : '已沉淀到本机记忆' })
-            : JSON.stringify({ ok: false, message: '空文本' })
+          if (!r.ok) return JSON.stringify({ ok: false, message: '空文本' })
+          // #284：同步到月忆——本机沉淀成功（非重复）且开关开启时，同文上行云端 quick-capture 候选池。
+          // 确认制：云端候选池用户确认后才进正式记忆；上行失败不阻断本机记忆（静默，仅活动流一行）。
+          let moonNote = ''
+          if (!r.duplicated && memCfg.syncToMoon) {
+            try {
+              const { apiPost } = await import('../lib/api')
+              await apiPost('/memory/quick-capture', { text: String(args.text ?? '').trim().slice(0, 1000) })
+              moonNote = '；已同步到月忆候选池'
+            } catch (e: any) {
+              moonNote = '；月忆同步失败（不影响本机记忆）'
+              console.log(`⚠ 月忆同步失败：${String(e?.message ?? e)}`)
+            }
+          }
+          return JSON.stringify({ ok: true, duplicated: r.duplicated, layer: 'local', message: r.duplicated ? '已存在，跳过' : `已沉淀到本机记忆${moonNote}` })
         },
         search_memory: async (args: Record<string, unknown>) => {
           const hits = localMemorySearch(defaultVaultRoot(), String(args.query ?? ''))

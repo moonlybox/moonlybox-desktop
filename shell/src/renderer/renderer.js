@@ -1136,6 +1136,8 @@ async function renderWork(nav, arg, label2) {
       panel('记忆', '长期记忆：小月跨会话记住关键信息。模式为本机内置+月忆（MoonRecall）增强——记忆沉淀在书房目录（明文可编辑、随书房备份），月忆作为云端增强逐步生效。', `
         <div class="set-card"><div class="sc-main"><div class="sc-title">启用长期记忆</div><div class="sc-desc">对话中的关键事实自动沉淀到本机记忆层，跨会话可 recall</div></div>
           <button type="button" class="toggle ${mm.enabled !== false ? 'on' : ''}" id="sp-mm-on"></button></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">同步到月忆</div><div class="sc-desc">本机沉淀的记忆条目同时上行到云端月忆候选池，你确认后才进入云端正式记忆（跨设备可用）</div></div>
+          <button type="button" class="toggle ${mm.syncToMoon ? 'on' : ''}" id="sp-mm-sync"></button></div>
         <div class="set-field"><label>记忆模式</label>
           <select id="sp-mm-mode" class="set-select set-select-sm">
             <option value="builtin_moonrecall" selected>本机内置 + 月忆（MoonRecall）增强</option>
@@ -1149,10 +1151,11 @@ async function renderWork(nav, arg, label2) {
         <div class="set-row"><button type="button" class="btn" id="sp-mm-save">保存</button><span class="set-status" id="sp-mm-status"></span></div>
       `)
       $('sp-mm-on').onclick = (e) => { e.currentTarget.classList.toggle('on'); $('sp-mm-save').click() }
+      $('sp-mm-sync').onclick = (e) => { e.currentTarget.classList.toggle('on'); $('sp-mm-save').click() }
       $('sp-mm-save').onclick = async () => {
         const st = $('sp-mm-status'); st.className = 'set-status'; st.textContent = '保存中…'
         const limit = Math.max(500, Math.floor(Number($('sp-mm-limit').value) || 5000))
-        const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').classList.contains('on'), mode: $('sp-mm-mode').value, injectLimit: limit } })
+        const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').classList.contains('on'), mode: $('sp-mm-mode').value, injectLimit: limit, syncToMoon: $('sp-mm-sync').classList.contains('on') } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
