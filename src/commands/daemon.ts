@@ -312,7 +312,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           if (!localPath) { code = 1; text = '本地目录必填' } else {
             const entry = addEntry(localPath, directoryId, directoryName, {
               onDelete: args.onDelete === 'keep' ? 'keep' : 'resync',
-              onConflict: 'rename',
+              onConflict: args.onConflict === 'overwrite' ? 'overwrite' : 'rename', // overwrite 引擎侧拒绝（#259）；UI 只发 rename
               claims: args.claims && typeof args.claims === 'object' && !Array.isArray(args.claims) ? (args.claims as Record<string, string>) : undefined,
             })
             text = JSON.stringify({ ok: true, entry })
@@ -341,6 +341,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         } else if (op1 === 'policies') {
           setPolicies(String(args.id ?? ''), {
             onDelete: args.onDelete === 'keep' ? 'keep' : args.onDelete === 'resync' ? 'resync' : undefined,
+            onConflict: args.onConflict === 'rename' ? 'rename' : undefined,
           })
           const e = loadRegistry().entries.find((x) => x.id === String(args.id ?? ''))
           text = JSON.stringify({ ok: true, entry: e })

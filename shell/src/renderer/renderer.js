@@ -1089,8 +1089,11 @@ async function renderWork(nav, arg, label2) {
             </select>
           </div>
           <div class="set-field">
-            <label>同名冲突（云端已有同名文档，如另一台电脑备份过）</label>
-            <p class="set-desc" style="margin:4px 0 0">自动重命名上传（如「笔记 2」），保留双方、互不覆盖。</p>
+            <label>同名策略（云端已有同名文档，如另一台电脑备份过）</label>
+            <select id="bk-onconf" class="set-select" style="max-width:340px">
+              <option value="rename" selected>重命名上传（保留双方，互不覆盖）</option>
+            </select>
+            <p class="set-desc" style="margin:4px 0 0">同名文档上传为「笔记 2」，双方并存；重装/换机需接管云端同名文档时，注册后走「同名认领」确认。</p>
           </div>
           <div class="set-row">
             <button type="button" class="btn" id="bk-save">注册并立即同步</button>
@@ -1150,7 +1153,7 @@ async function renderWork(nav, arg, label2) {
           }
         }
         st.textContent = '注册中…'
-        const r = await window.moonlybox.rpc('backup', { op: 'add', localPath, directoryId: dirId, directoryName: dirName, onDelete: $('bk-ondel').value, ...(claims ? { claims } : {}) }, 15_000)
+        const r = await window.moonlybox.rpc('backup', { op: 'add', localPath, directoryId: dirId, directoryName: dirName, onDelete: $('bk-ondel').value, onConflict: $('bk-onconf').value, ...(claims ? { claims } : {}) }, 15_000)
         if (r.event !== 'done' || r.code !== 0) { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '注册失败'; return }
         const entry = JSON.parse(r.text).entry
         st.textContent = '已注册，首次同步中…'
@@ -1179,7 +1182,10 @@ async function renderWork(nav, arg, label2) {
               <option value="resync"${e.onDelete !== 'keep' ? ' selected' : ''}>重新上传</option>
               <option value="keep"${e.onDelete === 'keep' ? ' selected' : ''}>不再同步</option>
             </select></div>
-          <div class="set-card"><div class="sc-main"><div class="sc-title">同名冲突</div><div class="sc-desc">云端已有同名文档时自动重命名上传（如「笔记 2」），保留双方、互不覆盖</div></div></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">同名策略</div><div class="sc-desc">云端已有同名文档时（重装认领走「同名认领」一次性确认，不在此列）</div></div>
+            <select class="set-select" id="bk-onconf" style="max-width:220px">
+              <option value="rename" selected>重命名上传（保留双方）</option>
+            </select></div>
           <div class="set-card"><div class="sc-main"><div class="sc-title">上次同步</div><div class="sc-desc">${e.lastSyncAt ? new Date(e.lastSyncAt).toLocaleString() : '从未'}</div></div>
             <button type="button" class="btn" id="bk-sync">立即同步</button></div>
           <div class="set-row" style="margin-top:20px"><button type="button" class="btn ghost" id="bk-del" style="color:var(--err)">删除此备份目录</button></div>
