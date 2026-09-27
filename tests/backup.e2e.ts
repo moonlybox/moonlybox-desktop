@@ -151,18 +151,25 @@ describe('#258 备份策略引擎', () => {
     expect(cloudDocs.get('tw_1').version).toBe(3)
   })
 
-  test('同名冲突-overwrite：PATCH 云端同名文档并认领 docId', async () => {
+  test('#259 overwrite 禁用：addEntry/setPolicies 拒绝，存量条目兜底 rename', async () => {
     cloudDocs.set('tw_2', { id: 'tw_2', title: '报道', version: 5, directoryId: 'dirD', status: 'active', kind: 'note' })
+    // add 拒绝
     const local = mkLocal({ '报道.md': '本地覆盖版' })
-    const e = addEntry(local, 'dirD', '另一目录', { onConflict: 'overwrite' })
+    expect(() => addEntry(local, 'dirD', '另一目录', { onConflict: 'overwrite' })).toThrow('同名覆盖已停用')
+    // 存量条目（直写账本模拟旧配置）→ sync 兜底 rename，云端同名不被碰
+    const e = addEntry(local, 'dirD', '另一目录')
+    const reg = loadRegistry()
+    reg.entries[0].onConflict = 'overwrite' // 模拟 #259 之前的存量配置
+    fs.writeFileSync(process.env.XDG_CONFIG_HOME + '/moonlybox/backups.json', JSON.stringify(reg))
+    calls.length = 0
     const rep = await backupSync(e.id)
-    expect(rep.uploaded[0]).toContain('覆盖')
-    const patch = calls.find((c) => c.m === 'PATCH')
-    expect(patch!.p).toBe('/library/tw_2')
-    expect(cloudDocs.get('tw_2').version).toBe(6)
-    const rec = Object.values(loadRegistry().entries[0].files)[0] as any
-    expect(rec.docId).toBe('tw_2')
-    expect(rec.docVersion).toBe(6)
+    expect(rep.uploaded[0]).toContain('2」')
+    const post = calls.find((c) => c.m === 'POST')
+    expect(post!.body.title).toBe('报道 2')
+    expect(calls.some((c) => c.m === 'PATCH')).toBe(false)
+    expect(cloudDocs.get('tw_2').version).toBe(5)
+    // setPolicies 拒绝
+    expect(() => setPolicies(e.id, { onConflict: 'overwrite' })).toThrow('同名覆盖已停用')
   })
 
   test('vault 目录防护：拒绝注册书房内部路径', () => {
@@ -172,12 +179,12 @@ describe('#258 备份策略引擎', () => {
     fs.rmSync('/tmp/fake-vault-z', { recursive: true, force: true })
   })
 
-  test('setPolicies 落盘', () => {
+  test('setPolicies 落盘（#259 后仅 onDelete）', () => {
     const local = mkLocal({ 'a.md': 'x' })
     const e = addEntry(local, null, '根')
-    setPolicies(e.id, { onDelete: 'keep', onConflict: 'overwrite' })
+    setPolicies(e.id, { onDelete: 'keep' })
     const e2 = loadRegistry().entries[0]
     expect(e2.onDelete).toBe('keep')
-    expect(e2.onConflict).toBe('overwrite')
+    expect(e2.onConflict).toBe('rename')
   })
 })

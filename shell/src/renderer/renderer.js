@@ -1090,10 +1090,7 @@ async function renderWork(nav, arg, label2) {
           </div>
           <div class="set-field">
             <label>同名冲突（云端已有同名文档，如另一台电脑备份过）</label>
-            <select id="bk-onconf" class="set-select" style="max-width:340px">
-              <option value="rename">重命名上传（保留双方，推荐）</option>
-              <option value="overwrite">覆盖同名文档（以本地为准）</option>
-            </select>
+            <p class="set-desc" style="margin:4px 0 0">自动重命名上传（如「笔记 2」），保留双方、互不覆盖。</p>
           </div>
           <div class="set-row">
             <button type="button" class="btn" id="bk-save">注册并立即同步</button>
@@ -1117,7 +1114,7 @@ async function renderWork(nav, arg, label2) {
         if (!localPath) { st.className = 'set-status err'; st.textContent = '先选择本地目录'; return }
         const dirId = sel.value || null
         const dirName = sel.options[sel.selectedIndex]?.text ?? '书房根目录'
-        const r = await window.moonlybox.rpc('backup', { op: 'add', localPath, directoryId: dirId, directoryName: dirName, onDelete: $('bk-ondel').value, onConflict: $('bk-onconf').value }, 15_000)
+        const r = await window.moonlybox.rpc('backup', { op: 'add', localPath, directoryId: dirId, directoryName: dirName, onDelete: $('bk-ondel').value }, 15_000)
         if (r.event !== 'done' || r.code !== 0) { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '注册失败'; return }
         const entry = JSON.parse(r.text).entry
         st.textContent = '已注册，首次同步中…'
@@ -1146,11 +1143,7 @@ async function renderWork(nav, arg, label2) {
               <option value="resync"${e.onDelete !== 'keep' ? ' selected' : ''}>重新上传</option>
               <option value="keep"${e.onDelete === 'keep' ? ' selected' : ''}>不再同步</option>
             </select></div>
-          <div class="set-card"><div class="sc-main"><div class="sc-title">同名冲突</div><div class="sc-desc">云端已有同名文档（如另一台电脑备份过）时</div></div>
-            <select class="set-select" id="bk-onconf" style="max-width:220px">
-              <option value="rename"${e.onConflict !== 'overwrite' ? ' selected' : ''}>重命名上传</option>
-              <option value="overwrite"${e.onConflict === 'overwrite' ? ' selected' : ''}>覆盖同名</option>
-            </select></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">同名冲突</div><div class="sc-desc">云端已有同名文档时自动重命名上传（如「笔记 2」），保留双方、互不覆盖</div></div></div>
           <div class="set-card"><div class="sc-main"><div class="sc-title">上次同步</div><div class="sc-desc">${e.lastSyncAt ? new Date(e.lastSyncAt).toLocaleString() : '从未'}</div></div>
             <button type="button" class="btn" id="bk-sync">立即同步</button></div>
           <div class="set-row" style="margin-top:20px"><button type="button" class="btn ghost" id="bk-del" style="color:var(--err)">删除此备份目录</button></div>
@@ -1190,9 +1183,7 @@ async function renderWork(nav, arg, label2) {
         await window.moonlybox.rpc('backup', { op: 'policies', id: e.id, onDelete: ev.currentTarget.value }, 10_000)
         renderList('backup')
       }
-      $('bk-onconf').onchange = async (ev) => {
-        await window.moonlybox.rpc('backup', { op: 'policies', id: e.id, onConflict: ev.currentTarget.value }, 10_000)
-      }
+
       $('bk-del').onclick = async () => {
         await window.moonlybox.rpc('backup', { op: 'remove', id: e.id }, 10_000)
         currentBkId = null

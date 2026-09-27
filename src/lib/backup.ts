@@ -90,6 +90,8 @@ export function addEntry(
   directoryName: string,
   opts?: { onDelete?: BackupOnDelete; onConflict?: BackupOnConflict },
 ): BackupEntry {
+  // #259：同名覆盖（overwrite）已禁用——双机同目录会轮流静默覆盖且被「云端编辑采纳」洗白；一律 rename
+  if (opts?.onConflict === 'overwrite') throw new Error('同名覆盖已停用：同名冲突一律重命名上传（双机备份互不覆盖）')
   const reg = loadRegistry()
   if (reg.entries.some((e) => e.localPath === localPath)) throw new Error('该目录已注册备份')
   if (!fs.existsSync(localPath) || !fs.statSync(localPath).isDirectory()) throw new Error('本地目录不存在')
@@ -140,6 +142,8 @@ export function setPolicies(
   id: string,
   patch: { onDelete?: BackupOnDelete; onConflict?: BackupOnConflict },
 ): void {
+  // #259：overwrite 禁止写入（存量条目由 backupSync 兜底按 rename 执行）
+  if (patch.onConflict === 'overwrite') throw new Error('同名覆盖已停用：同名冲突一律重命名上传（双机备份互不覆盖）')
   mutateEntry(id, (e) => {
     if (patch.onDelete) e.onDelete = patch.onDelete
     if (patch.onConflict) e.onConflict = patch.onConflict
@@ -316,30 +320,17 @@ export async function backupSync(id: string): Promise<BackupReport> {
       const title = name.replace(/\.(md|txt)$/i, '').slice(0, 200)
       const twin = [...cloud.values()].find((c) => c.title === title && (c.directoryId ?? null) === (entry.directoryId ?? null))
       if (twin) {
-        if (entry.onConflict === 'overwrite') {
-          // 覆盖：认领这份云端同名文档为备份目标（PATCH 更新它）
-          const res = await apiPatch<any>(`/library/${twin.id}`, {
-            content: stripped,
-            message: '备份同步（同名覆盖）',
-          })
-          const doc = res.data?.document
-          if (!doc?.id) throw new Error(res.message ?? '覆盖失败')
-          entry.files[abs] = { sha256: hash, docId: doc.id, docVersion: Number(doc.version ?? 1), uploadedAt: new Date().toISOString() }
-          dirty = true
-          report.uploaded.push(`${name}（覆盖同名「${twin.title}」）`)
-        } else {
-          // rename：标题加后缀上传为新文档
-          const res = await apiPost<any>('/library', {
-            title: `${title} 2`,
-            content: stripped,
-            ...(entry.directoryId ? { directoryId: entry.directoryId } : {}),
-          })
-          const doc = res.data?.document
-          if (!doc?.id) throw new Error(res.message ?? '上传失败')
-          entry.files[abs] = { sha256: hash, docId: doc.id, docVersion: Number(doc.version ?? 1), uploadedAt: new Date().toISOString() }
-          dirty = true
-          report.uploaded.push(`${name}（同名已存在，上传为「${title} 2」）`)
-        }
+        // #259：同名冲突一律 rename（overwrite 已禁用——存量条目 onConflict=overwrite 也按 rename 兜底）
+        const res = await apiPost<any>('/library', {
+          title: `${title} 2`,
+          content: stripped,
+          ...(entry.directoryId ? { directoryId: entry.directoryId } : {}),
+        })
+        const doc = res.data?.document
+        if (!doc?.id) throw new Error(res.message ?? '上传失败')
+        entry.files[abs] = { sha256: hash, docId: doc.id, docVersion: Number(doc.version ?? 1), uploadedAt: new Date().toISOString() }
+        dirty = true
+        report.uploaded.push(`${name}（同名已存在，上传为「${title} 2」）`)
         continue
       }
       const res = await apiPost<any>('/library', {
