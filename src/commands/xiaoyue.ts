@@ -390,7 +390,11 @@ ${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}`
         () => byokChatMessages(messages, tools as never),
         (attempt, total, err) => console.log(`（LLM 调用失败，重试 ${attempt}/${total}：${err.slice(0, 80)}）`),
       )
-      return r.ok ? { ok: true, text: (r as { text?: string }).text } : { ok: false as const, error: r.error }
+      // #280.3.2：【真根因修复】toolCalls 必须透传——原 `{ ok, text }` 把 tool_calls 静默丢弃，
+      // LLM 请求调工具被无视→循环空转 6 轮→空回答（deepwiki 三轮「无后续输出」的真正根因）
+      if (!r.ok) return { ok: false as const, error: r.error }
+      const rr = r as { text?: string; toolCalls?: import('../lib/llm').ToolCallRequest[] }
+      return { ok: true, text: rr.text, toolCalls: rr.toolCalls }
     },
     confirm,
     say: (line) => console.log(line),
