@@ -386,7 +386,7 @@ async function renderList(nav) {
     body.innerHTML = `
       <div style="padding:8px 8px 4px;display:flex;gap:6px">
         <button class="btn" id="xy-new-ws" style="flex:1;font-size:12px">＋ 工作空间</button>
-        <button class="btn ghost" id="xy-new-chat" style="flex:1;font-size:12px">＋ 对话</button>
+        <button class="btn ghost" id="xy-new-chat" style="flex:1;font-size:12px" title="${xyActiveWorkspace ? '将在当前选中的工作空间下新建对话' : '将新建无工作空间对话（无本地文件访问）'}">＋ 对话</button>
       </div>
       <div id="xy-list" style="flex:1;overflow-y:auto;padding:4px 8px 12px"></div>`
     $('xy-new-ws').onclick = () => showWorkspaceDialog()
@@ -1551,7 +1551,17 @@ async function renderXiaoyueList() {
   for (const ws of wss) {
     const group = document.createElement('div')
     group.className = 'xy-ws-group'
-    group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.map((d, i) => (i === (ws.primaryIndex ?? 0) ? `【主】${d}` : d)).join('\n')}">📁 ${ws.name}</span><span class="xy-ws-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="增加工作目录">＋</span><span class="xy-ws-del" style="color:var(--muted);cursor:pointer;padding:0 4px" title="删除工作空间">×</span></div>`
+    group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.map((d, i) => (i === (ws.primaryIndex ?? 0) ? `【主】${d}` : d)).join('\n')}">📁 ${ws.name}</span><span class="xy-ws-chat" style="color:var(--muted);cursor:pointer;padding:0 4px" title="在此工作空间新建对话">💬＋</span><span class="xy-ws-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="增加工作目录">＋</span><span class="xy-ws-del" style="color:var(--muted);cursor:pointer;padding:0 4px" title="删除工作空间">×</span></div>`
+    group.querySelector('.xy-ws-chat').onclick = async () => {
+      const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: ws.id }, 15_000)
+      if (r.event === 'done' && r.code === 0) {
+        xyActiveChat = JSON.parse(r.text).chat.id
+        xyActiveWorkspace = ws.id
+        await renderWork('xiaoyue')
+        await renderWork('xiaoyue', { chat: xyActiveChat })
+        await renderXiaoyueList()
+      }
+    }
     group.querySelector('.xy-ws-add').onclick = async () => {
       const r = await window.moonlybox.pickFolder()
       const dir = r?.ok ? r.path : null
@@ -1582,8 +1592,18 @@ async function renderXiaoyueList() {
   const free = chats.filter((c) => !c.workspaceId)
   const freeGroup = document.createElement('div')
   freeGroup.className = 'xy-ws-group'
-  freeGroup.innerHTML = `<div class="tree-item" style="font-weight:600">💬 对话<span class="set-desc" style="margin-left:6px;font-weight:400">无工作空间</span></div>`
+  freeGroup.innerHTML = `<div class="tree-item" style="font-weight:600">💬 对话<span class="set-desc" style="margin-left:6px;font-weight:400">无工作空间</span><span class="xy-free-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="新建无工作空间对话">＋</span></div>`
   box.appendChild(freeGroup)
+  freeGroup.querySelector('.xy-free-add').onclick = async () => {
+    const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: null }, 15_000)
+    if (r.event === 'done' && r.code === 0) {
+      xyActiveChat = JSON.parse(r.text).chat.id
+      xyActiveWorkspace = null
+      await renderWork('xiaoyue')
+      await renderWork('xiaoyue', { chat: xyActiveChat })
+      await renderXiaoyueList()
+    }
+  }
   for (const c of free) box.appendChild(chatItem(c, null))
 }
 
