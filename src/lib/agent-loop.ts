@@ -32,6 +32,10 @@ export interface AgentLoopDeps {
   confirm: (toolName: string, argsJson: string) => Promise<boolean>
   /** 活动流输出 */
   say: (line: string) => void
+  /** #278 记忆开关：不装配的工具名（如 add_memory/search_memory） */
+  excludeTools?: string[]
+  /** #278 本地工具覆写：同名工具优先本地执行（如 builtin 记忆=本地文件层，不出域） */
+  localTools?: Record<string, (args: Record<string, unknown>) => Promise<string>>
 }
 
 export interface AgentLoopResult {
@@ -44,7 +48,9 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   const { system, question, ready, chat, confirm, say } = deps
   if (!ready) throw new Error('BYOK 未配置')
 
-  const tools = await listTools()
+  const all = await listTools()
+  const exclude = new Set(deps.excludeTools ?? [])
+  const tools = exclude.size ? all.filter((t) => !exclude.has(t.name)) : all
   const openaiTools = tools.map((t) => ({
     type: 'function' as const,
     function: { name: t.name, description: t.description ?? t.title ?? t.name, parameters: t.inputSchema },
@@ -74,6 +80,15 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       try { args = JSON.parse(tc.function.arguments || '{}') } catch { /* 空/坏参按空对象 */ }
       const argsJson = JSON.stringify(args)
 
+      const localFn = deps.localTools?.[tc.function.name]
+      if (localFn) {
+        // #278 本地覆写（builtin 记忆=本地文件层）：不经远程 tools/call
+        let out: string
+        try { out = await localFn(args) } catch (e: any) { out = `本地执行失败：${String(e?.message ?? e)}` }
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: out })
+        used.push({ name: tc.function.name, ok: !out.startsWith('本地执行失败') })
+        continue
+      }
       if (!meta) {
         messages.push({ role: 'tool', tool_call_id: tc.id, content: `未知工具：${tc.function.name}` })
         used.push({ name: tc.function.name, ok: false })
