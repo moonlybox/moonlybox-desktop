@@ -44,7 +44,7 @@ $('win-close').onclick = () => window.moonlybox.winClose()
 // 图标单一源：path 数据（lucide 风格描边）——rail/页帧 tab/云端列共用（index.html rail 由 JS 注入，杜绝两处漂移）
 const ICON_PATHS = {
   vault: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
-  backup: '<path d="M12 2v8"/><path d="m8 6 4 4 4-4"/><rect x="4" y="13" width="16" height="8" rx="2"/><path d="M4 17h16"/>',
+  backup: '<path d="M4 16.2A4.5 4.5 0 0 1 6.6 8a6 6 0 0 1 11.6 1.6A4 4 0 0 1 18 17.5"/><path d="M12 12v9"/><path d="m8 16 4-4 4 4"/>',
   cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
   diagram: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
   xiaoyue: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
@@ -1093,7 +1093,7 @@ async function renderWork(nav, arg, label2) {
             <select id="bk-onconf" class="set-select" style="max-width:340px">
               <option value="rename" selected>重命名上传（保留双方，互不覆盖）</option>
             </select>
-            <p class="set-desc" style="margin:4px 0 0">同名文档上传为「笔记 2」，双方并存；重装/换机需接管云端同名文档时，注册后走「同名认领」确认。</p>
+            <p class="set-desc" style="margin:4px 0 0">同名文档上传为「笔记 2」，双方并存；重装/换机需接管云端同名文档时，新建时会先出现「同名认领」确认。</p>
           </div>
           <div class="set-row">
             <button type="button" class="btn" id="bk-save">注册并立即同步</button>
@@ -1182,7 +1182,7 @@ async function renderWork(nav, arg, label2) {
               <option value="resync"${e.onDelete !== 'keep' ? ' selected' : ''}>重新上传</option>
               <option value="keep"${e.onDelete === 'keep' ? ' selected' : ''}>不再同步</option>
             </select></div>
-          <div class="set-card"><div class="sc-main"><div class="sc-title">同名策略</div><div class="sc-desc">云端已有同名文档时（重装认领走「同名认领」一次性确认，不在此列）</div></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">同名策略</div><div class="sc-desc">云端已有同名文档时重命名上传（重装认领走新建时的「同名认领」一次性确认，不在此列）</div></div>
             <select class="set-select" id="bk-onconf" style="max-width:220px">
               <option value="rename" selected>重命名上传（保留双方）</option>
             </select></div>
