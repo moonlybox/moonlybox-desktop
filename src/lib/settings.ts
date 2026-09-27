@@ -16,7 +16,6 @@ export interface SettingsSchema {
     closeToTray: boolean // 关闭时最小化到托盘（#268 默认 true；false=真退出）
     keepAwake: boolean // 运行任务时保持电脑唤醒（powerSaveBlocker）
     clipboardWatch: boolean // 剪贴板自动采集（原 T3 开关迁入）
-    toolsEnabled: boolean // 工具（管家模式）开关
   }
   appearance: {
     theme: 'dark' | 'light' | 'system' | 'time' // 色彩风格（time=跟随时间 18:00-06:00 深色）
@@ -38,7 +37,7 @@ export interface SettingsSchema {
     providers: Record<string, { enabled: boolean; config: Record<string, string> }> // 平台 id → 配置
   }
   mcp: {
-    builtinEnabled: boolean // 内置 MoonLink MCP（工具/管家模式）总开关
+    builtinEnabled: boolean // 内置 MoonLink MCP（工具/管家模式）总开关——#269 自通用 toolsEnabled 升格而来
     custom: Array<{ name: string; url: string; apiKey: string | null; enabled: boolean }>
   }
   websearch: {
@@ -63,7 +62,7 @@ export interface SettingsSchema {
 }
 
 export const DEFAULT_SETTINGS: SettingsSchema = {
-  general: { launchAtLogin: false, launchMinimized: false, closeToTray: true, keepAwake: false, clipboardWatch: false, toolsEnabled: true },
+  general: { launchAtLogin: false, launchMinimized: false, closeToTray: true, keepAwake: false, clipboardWatch: false },
   appearance: { theme: 'system', lang: 'zh-CN', zoom: 100 },
   chat: { contextEnabled: true, autoCompress: true, compressThreshold: 80, compressTarget: 20, maxRetries: 10 },
   model: { provider: '', custom: null },
@@ -90,6 +89,11 @@ export function loadSettings(): SettingsSchema {
   const out = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as SettingsSchema
   for (const k of Object.keys(DEFAULT_SETTINGS) as Array<keyof SettingsSchema>) {
     if (file[k] && typeof file[k] === 'object') Object.assign(out[k] as object, file[k])
+  }
+  // #269 迁移：老版本 general.toolsEnabled → mcp.builtinEnabled（升格后字段归属 MCP；用户已落盘的值不丢）
+  const legacy = (file as any).general?.toolsEnabled
+  if (legacy !== undefined && (file as any).mcp?.builtinEnabled === undefined) {
+    ;(out as any).mcp.builtinEnabled = !!legacy
   }
   return out
 }

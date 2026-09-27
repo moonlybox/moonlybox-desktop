@@ -96,7 +96,6 @@ const SETTINGS_CATS = [
 const SET_SUB_LABELS = { platform: '平台 API', local: '本地模型', custom: '自定义', builtin: '内置', market: '市场' }
 let currentSetCat = 'general'
 let currentSetSub = null
-let toolsEnabled = true // 工具（管家模式）开关——原 set-tools checkbox 迁入通用面板
 let clipboardWatch = false; // 剪贴板自动采集（启动默认关，与 T3 行为一致；面板开关即时生效）——分号必须：下行 IIFE 以 ( 开头（ASI 陷阱 #253.20）
 
 // ---------- #256 设置中心运行态（daemon settings 通道单源；localStorage 只做快照缓存） ----------
@@ -560,7 +559,6 @@ async function renderWork(nav, arg, label2) {
         ${card('sp-min', '启动时最小化到托盘', '开机/启动后不弹主窗口，仅在托盘待命', !!gv.launchMinimized)}
         ${card('sp-tray', '关闭时最小化到托盘', '点关闭按钮时隐藏到托盘而非退出（托盘图标可退出）', !!gv.closeToTray)}
         ${card('sp-awake', '运行任务时保持电脑唤醒', '小月执行任务期间阻止系统休眠', !!gv.keepAwake)}
-        ${card('sp-tools', '工具（管家模式）', '小月可调用工具代你执行写操作（写操作仍需确认）', toolsEnabled)}
         ${card('sp-watch', '剪贴板自动采集', '监听复制的文本/链接，存入收集箱', clipboardWatch)}
       `)
       const saveGeneral = async () => {
@@ -573,7 +571,6 @@ async function renderWork(nav, arg, label2) {
           },
         }
         const r = await saveAppSettings(patch)
-        toolsEnabled = $('sp-tools').classList.contains('on')
         clipboardWatch = $('sp-watch').classList.contains('on')
         window.moonlybox.setClipboardWatch(clipboardWatch)
         // main 侧行为同步（托盘/唤醒/开机启动）
@@ -850,8 +847,8 @@ async function renderWork(nav, arg, label2) {
     } else if (cat.id === 'mcp' && currentSetSub === 'builtin') {
       const g = await loadAppSettings()
       panel('MCP · 内置', 'Model Context Protocol 服务器——给小月接入外部工具与数据源的标准协议。内置服务器为魔力宝盒自带的 MoonLink（书房/收藏/便签/待办/记忆等 29 个工具）。', `
-        <div class="set-card"><div class="sc-main"><div class="sc-title">MoonLink（魔力宝盒内置）</div>
-          <div class="sc-desc">内置的唯一 MCP 服务器：把书房检索、收藏、便签、待办、记忆等能力以标准 MCP 工具暴露给小月（即「工具/管家模式」）</div></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">工具（管家模式）· MoonLink（魔力宝盒内置）</div>
+          <div class="sc-desc">小月能否调用工具代你执行任务（总闸）：关闭后小月纯对话，不装配 MoonLink 工具；开启后写操作仍逐一确认。原「通用」分类的此项已升格至此统一管理。</div></div>
           <button type="button" class="toggle ${g.mcp?.builtinEnabled !== false ? 'on' : ''}" id="sp-mcp-builtin"></button></div>
         <div class="set-status" id="sp-mcp-status"></div>
       `)
@@ -1424,7 +1421,8 @@ function bindChat() {
     $('q').value = ''
     $('btn-ask').disabled = true
     log(`\n你> ${q}`)
-    const tools = toolsEnabled
+    // #269：工具（管家模式）归 MCP 分类——mcp.builtinEnabled 总闸
+    const tools = APP_SETTINGS?.mcp?.builtinEnabled !== false
     const r = await window.moonlybox.rpc('xiaoyue', tools ? { q, tools: true } : { q }, 300_000)
     $('btn-ask').disabled = false
     log(r.event === 'done' && r.code === 0 ? `小月> ${r.text}` : `⚠ ${r.message ?? r.text}`)
