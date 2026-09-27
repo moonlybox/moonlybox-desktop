@@ -102,6 +102,17 @@ describe('mcp-custom 客户端', () => {
     expect(cat.tools.length).toBeGreaterThanOrEqual(3)
   })
 
+  test('listAllCustomTools 60s 缓存：第二次调用不打网络', async () => {
+    ;(await import('../src/lib/mcp-custom')).resetCatalogCache()
+    const before = calls
+    const cat1 = await listAllCustomTools()
+    const mid = calls
+    const cat2 = await listAllCustomTools()
+    expect(calls).toBe(mid) // 缓存命中，无新请求
+    expect(cat2.tools.map((t) => t.name)).toEqual(cat1.tools.map((t) => t.name))
+    expect(mid).toBeGreaterThan(before)
+  })
+
   test('callCustomTool：远程执行回文本', async () => {
     const cat = await listAllCustomTools()
     const r = await callCustomTool('get_weather', { city: '杭州' }, cat)

@@ -113,13 +113,13 @@ async function rpcRaw(srv: CustomServerCfg, method: string, params?: unknown, ti
   return { status: res.status, json }
 }
 
-async function rpc<T = any>(srv: CustomServerCfg, method: string, params?: unknown): Promise<T> {
-  let { status, json } = await rpcRaw(srv, method, params)
+async function rpc<T = any>(srv: CustomServerCfg, method: string, params?: unknown, timeoutMs = 20_000): Promise<T> {
+  let { status, json } = await rpcRaw(srv, method, params, timeoutMs)
   // 会话失效 → 重新 initialize 重放一次
   if ((status === 404 || status === 400) && method !== 'initialize' && !json?.result) {
     sessions.delete(srv.name)
     await initializeServer(srv)
-    ;({ json } = await rpcRaw(srv, method, params))
+    ;({ json } = await rpcRaw(srv, method, params, timeoutMs))
   }
   if (json?.error) {
     throw new Error(`MCP ${method} 失败 (${json.error.code}): ${json.error.message}`)
@@ -169,41 +169,64 @@ export interface McpCustomCatalog {
   failures: Array<{ name: string; error: string }>
 }
 
-/** 拉全部已启用自定义服务器的工具清单（单服务器失败不拖垮整体） */
+/**
+ * 拉全部已启用自定义服务器的工具清单（并行化——单服务器失败不拖垮整体）。
+ * #280.1：结果缓存 60s TTL——Agent 每轮装配都调本函数，远程 tools/list 不重复打（服务器改动经 resetServerSession+缓存自然过期）。
+ */
+let catalogCache: { at: number; cat: McpCustomCatalog } | null = null
+const CATALOG_TTL_MS = 60_000
+
+export function resetCatalogCache(): void {
+  catalogCache = null
+}
+
 export async function listAllCustomTools(timeoutMs = 12_000): Promise<McpCustomCatalog> {
+  if (catalogCache && Date.now() - catalogCache.at < CATALOG_TTL_MS) return catalogCache.cat
   const servers = enabledCustomServers()
   const tools: McpCustomTool[] = []
   const failures: Array<{ name: string; error: string }> = []
   const seenNames = new Set<string>()
-  for (const srv of servers) {
-    try {
-      const initRace = Promise.race([
-        initializeServer(srv),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('连接超时')), timeoutMs)),
-      ])
-      await initRace
-      const result = await rpc<{ tools?: Array<any> }>(srv, 'tools/list', {})
-      for (const t of result?.tools ?? []) {
-        let name = String(t.name ?? '')
-        if (!name) continue
-        if (seenNames.has(name)) name = `mcp${tools.length}__${t.name}`
-        seenNames.add(name)
-        tools.push({
-          name,
-          title: t.title,
-          description: t.description,
-          annotations: t.annotations,
-          inputSchema: t.inputSchema ?? { type: 'object', properties: {} },
-          server: srv.name,
-          remoteName: t.name,
-        })
+  const results = await Promise.allSettled(
+    servers.map(async (srv) => {
+      try {
+        await Promise.race([
+          initializeServer(srv),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('连接超时')), timeoutMs)),
+        ])
+        const result = await rpc<{ tools?: Array<any> }>(srv, 'tools/list', {})
+        return { srv, tools: result?.tools ?? [] }
+      } catch (e: any) {
+        sessions.delete(srv.name)
+        throw Object.assign(new Error(String(e?.message ?? e).slice(0, 160)), { serverName: srv.name })
       }
-    } catch (e: any) {
-      failures.push({ name: srv.name, error: String(e?.message ?? e).slice(0, 160) })
-      sessions.delete(srv.name)
+    }),
+  )
+  for (const r of results) {
+    if (r.status === 'rejected') {
+      const reason = r.reason as any
+      failures.push({ name: reason?.serverName ?? '未知服务器', error: String(reason?.message ?? reason).slice(0, 160) })
+      continue
+    }
+    const { srv, tools: list } = r.value
+    for (const t of list) {
+      let name = String(t.name ?? '')
+      if (!name) continue
+      if (seenNames.has(name)) name = `mcp${tools.length}__${t.name}`
+      seenNames.add(name)
+      tools.push({
+        name,
+        title: t.title,
+        description: t.description,
+        annotations: t.annotations,
+        inputSchema: t.inputSchema ?? { type: 'object', properties: {} },
+        server: srv.name,
+        remoteName: t.name,
+      })
     }
   }
-  return { tools, failures }
+  const cat = { tools, failures }
+  catalogCache = { at: Date.now(), cat }
+  return cat
 }
 
 /** 远程执行自定义服务器工具（按装配名反查 server+remoteName） */
@@ -214,7 +237,7 @@ export async function callCustomTool(name: string, args: Record<string, unknown>
   const srv = enabledCustomServers().find((s) => s.name === tool.server)
   if (!srv) return { ok: false, text: `自定义 MCP 服务器已停用：${tool.server}` }
   try {
-    const result = await rpc<any>(srv, 'tools/call', { name: tool.remoteName, arguments: args })
+    const result = await rpc<any>(srv, 'tools/call', { name: tool.remoteName, arguments: args }, 60_000)
     const content = Array.isArray(result?.content) ? result.content.map((c: any) => c?.text ?? '').filter(Boolean).join('\n') : JSON.stringify(result ?? {})
     return { ok: !result?.isError, text: content || '（空结果）' }
   } catch (e: any) {

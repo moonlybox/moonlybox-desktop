@@ -21,7 +21,7 @@ import { cmdXiaoyue } from '../commands/xiaoyue'
 import { runAgentTools } from '../commands/xiaoyue'
 import { byokReady, byokChat, loadByokMeta, saveByokMeta, saveByokKey, clearByok, loadByokKey } from '../lib/llm'
 import { saveProviderKey } from '../lib/web-tools'
-import { saveMcpKey } from '../lib/mcp-custom'
+import { saveMcpKey, resetCatalogCache } from '../lib/mcp-custom'
 import { cmdSync } from '../commands/sync'
 import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
@@ -427,6 +427,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             // #280：自定义 MCP——条目带 apiKey 时入钥匙串（account=mcp:<name>），settings.json 只落 keyStored 布尔
             const mc = patch.mcp as Record<string, unknown> | undefined
             if (mc && typeof mc === 'object' && Array.isArray(mc.custom)) {
+              resetCatalogCache() // #280.1：配置改动立即生效（清 60s 清单缓存）
               mc.custom = (mc.custom as Array<Record<string, unknown>>).map((entry) => {
                 const apiKey = typeof entry.apiKey === 'string' ? entry.apiKey.trim() : ''
                 const name = String(entry.name ?? '')
