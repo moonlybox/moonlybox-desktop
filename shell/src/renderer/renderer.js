@@ -184,11 +184,21 @@ for (const b of document.querySelectorAll('#rail .rail-btn')) {
     tip.textContent = text
     tip.classList.add('show')
     const r = el.getBoundingClientRect()
-    // 默认右侧弹出（rail 窄栏贴左边）；越界回退左侧
     const tw = tip.offsetWidth, th = tip.offsetHeight
-    let x = r.right + 8, y = r.top + r.height / 2 - th / 2
-    if (x + tw > window.innerWidth - 8) x = r.left - tw - 8
-    y = Math.max(8, Math.min(window.innerHeight - th - 8, y))
+    // #265：标题栏（顶部）元素 → 下方弹出水平居中；其余（rail 窄栏）右侧弹出、越界回退左侧
+    if (el.closest('#titlebar')) {
+      let x = r.left + r.width / 2 - tw / 2
+      x = Math.max(8, Math.min(window.innerWidth - tw - 8, x))
+      const y = r.bottom + 8
+      tip.style.left = x + 'px'
+      tip.style.top = y + 'px'
+    } else {
+      let x = r.right + 8, y = r.top + r.height / 2 - th / 2
+      if (x + tw > window.innerWidth - 8) x = r.left - tw - 8
+      y = Math.max(8, Math.min(window.innerHeight - th - 8, y))
+      tip.style.left = x + 'px'
+      tip.style.top = y + 'px'
+    }
     tip.style.left = x + 'px'
     tip.style.top = y + 'px'
     cur = el
