@@ -681,7 +681,7 @@ async function renderWork(nav, arg, label2) {
       const provs = APP_PROVIDERS?.platform ?? []
       const mp = g.model ?? {}
       const curUrl = mp.baseUrl ?? ''
-      panel('模型 · 平台 API（BYOK）', '按平台提供商列出——选商、填 Key 即成。Key 只存本机钥匙串，永不上传、不落明文文件。', `
+      panel('模型 · 平台 API（BYOK）', '使用平台提供商的 API Key 接入。Key 只存本机钥匙串，永不上传、不落明文文件。', `
         <div class="set-field"><label>平台提供商</label>
           <select id="sp-prov" class="set-select set-select-sm">
             <option value="">— 选择提供商 —</option>
