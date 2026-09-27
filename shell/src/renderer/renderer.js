@@ -36,7 +36,7 @@ const ICON_RESTORE = '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" heig
 window.moonlybox.onWinState?.((st) => {
   const btn = $('win-max')
   btn.innerHTML = st?.maximized ? ICON_RESTORE : ICON_MAX
-  btn.title = st?.maximized ? '还原' : '最大化'
+  btn.dataset.tip = st?.maximized ? '还原' : '最大化'
 })
 $('win-close').onclick = () => window.moonlybox.winClose()
 
@@ -1511,15 +1511,15 @@ function setUpgradeState(state, version) {
   if (state === 'available') {
     dot.style.display = 'block'; btn.classList.remove('ready'); btn.classList.add('active')
     text.textContent = '更新中'
-    btn.title = `新版本 v${version} 后台下载中…`
+    btn.dataset.tip = `新版本 v${version} 后台下载中…`
   } else if (state === 'ready') {
     dot.style.display = 'block'; btn.classList.add('ready', 'active')
     text.textContent = '重启更新'
-    btn.title = `v${version} 已就绪，点击安装并重启`
+    btn.dataset.tip = `v${version} 已就绪，点击安装并重启`
   } else {
     dot.style.display = 'none'; btn.classList.remove('ready', 'active')
     text.textContent = ''
-    btn.title = '检查更新'
+    btn.dataset.tip = '检查更新'
   }
 }
 window.moonlybox.onUpdateReady((msg) => setUpgradeState('ready', msg.version))
@@ -1562,10 +1562,11 @@ function applyRailAvatar(avatarUrl, email, loggedIn) {
     } else {
       btn.textContent = (email[0] ?? '?').toUpperCase()
     }
-    btn.title = `已登录：${email}`
+    // #266：动态状态走 data-tip（单例浮层），不写原生 title——否则与 data-tip 浮层双重提示
+    btn.dataset.tip = `已登录：${email}`
   } else {
     btn.textContent = '未'
-    btn.title = '未登录（点击登录）'
+    btn.dataset.tip = '未登录（点击登录）'
   }
 }
 
