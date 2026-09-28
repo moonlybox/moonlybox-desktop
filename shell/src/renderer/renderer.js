@@ -339,7 +339,7 @@ async function renderList(nav) {
         const holdN = Object.values(e.files ?? {}).filter((f) => f.hold).length
         const el = document.createElement('div')
         el.className = 'tree-item' + (currentBkId === e.id ? ' active' : '')
-        el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${e.localPath.split(/[\\/]/).pop()}</span>
+        el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">📁 ${e.localPath.split(/[\\/]/).pop()}</span>
           <span class="muted" style="font-size:10.5px;flex:none">${e.enabled ? (holdN ? `${holdN} 项已停更` : '启用') : '停用'}</span>`
         el.onclick = () => { currentBkId = e.id; renderList('backup'); renderWork('backup', { id: e.id }) }
         body.appendChild(el)
@@ -444,7 +444,7 @@ async function renderTree(container, rel, depth) {
     el.dataset.rel = relPath
     if (item.dir) {
       const collapsed = treeCollapsed.has(relPath)
-      el.innerHTML = `<span class="tw" style="display:inline-block;width:14px;cursor:pointer;text-align:center;color:var(--muted)">${collapsed ? '▸' : '▾'}</span><span style="margin-left:2px">${item.name}</span>`
+      el.innerHTML = `<span class="tw" style="display:inline-block;width:14px;cursor:pointer;text-align:center;color:var(--muted)">${collapsed ? '▸' : '▾'}</span><span style="margin-left:2px">📁</span><span style="margin-left:4px">${item.name}</span>`
       el.onclick = async () => {
         container.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
         el.classList.add('active')
