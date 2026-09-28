@@ -85,15 +85,15 @@ const SETTINGS_CATS = [
   { id: 'appearance', label: '外观' },
   { id: 'library', label: '文档库' },
   { id: 'chat', label: '对话' },
-  { id: 'model', label: '模型', subs: ['platform', 'local', 'custom'] },
+  { id: 'model', label: '模型', subs: ['platform', 'custom', 'local'] }, // #310.2：平台API→自定义→本地部署
   { id: 'messaging', label: '消息平台' },
-  { id: 'mcp', label: 'MCP', subs: ['builtin', 'market', 'custom'] },
+  { id: 'mcp', label: 'MCP', subs: ['builtin', 'custom', 'market'] }, // #310.2：内置→自定义→市场
   { id: 'skills', label: '技能' },
   { id: 'websearch', label: '网络搜索' },
   { id: 'docproc', label: '文档处理' },
   { id: 'memory', label: '记忆' },
 ]
-const SET_SUB_LABELS = { platform: '平台 API', local: '本地模型', custom: '自定义', builtin: '内置', market: '市场' }
+const SET_SUB_LABELS = { platform: '平台 API', local: '本地部署', custom: '自定义', builtin: '内置', market: '市场' }
 let currentSetCat = 'general'
 let currentSetSub = null
 let clipboardWatch = false; // 剪贴板自动采集（启动默认关，与 T3 行为一致；面板开关即时生效）——分号必须：下行 IIFE 以 ( 开头（ASI 陷阱 #253.20）
@@ -909,7 +909,7 @@ async function renderWork(nav, arg, label2) {
       }
     } else if (cat.id === 'model' && currentSetSub === 'local') {
       // #274：本地模型改为预留预告（真·本地部署：内置模型下载+本地推理，参考 Cherry Studio 模型列表）——端点式接入归自定义
-      panel('模型 · 本地模型', '在本地设备下载并运行模型，数据不出本机。', `
+      panel('模型 · 本地部署', '在本地设备下载并运行模型，数据不出本机。', `
         <div class="set-card"><div class="sc-main"><div class="sc-title">内置模型下载与本地部署</div>
           <div class="sc-desc">将提供模型列表（如 Qwen3 Embedding 0.6B · 约 614MB）一键下载与本地运行，无需 GPU 也可运行小型模型；下载后数据不出本机。</div></div></div>
         <div class="set-card"><div class="sc-main"><div class="sc-title">已有本地推理服务？</div>
@@ -1316,8 +1316,8 @@ async function renderWork(nav, arg, label2) {
 } else if (cat.id === 'memory') {
       const g = await loadAppSettings()
       const mm = g.memory ?? {}
-      panel('记忆', '长期记忆：小月跨会话记住关键信息。模式为本机内置+月忆（MoonRecall）增强——记忆沉淀在书房目录（明文可编辑、随书房备份），月忆作为云端增强逐步生效。', `
-        <div class="set-card"><div class="sc-main"><div class="sc-title">启用长期记忆</div><div class="sc-desc">对话中的关键事实自动沉淀到本机记忆层，跨会话可 recall</div></div>
+      panel('记忆', '持久记忆：小月跨会话记住关键信息。模式为本机内置+月忆（MoonRecall）增强——记忆沉淀在书房目录（明文可编辑、随书房备份），月忆作为云端增强逐步生效。', `
+        <div class="set-card"><div class="sc-main"><div class="sc-title">启用持久记忆</div><div class="sc-desc">对话中的关键事实自动沉淀到本机记忆层，跨会话可 recall</div></div>
           <button type="button" class="toggle ${mm.enabled !== false ? 'on' : ''}" id="sp-mm-on"></button></div>
         <div class="set-card"><div class="sc-main"><div class="sc-title">同步到月忆</div><div class="sc-desc">本机沉淀的记忆条目同时上行到云端月忆候选池，你确认后才进入云端正式记忆（跨设备可用）</div></div>
           <button type="button" class="toggle ${mm.syncToMoon !== false ? 'on' : ''}" id="sp-mm-sync"></button></div>
@@ -1751,7 +1751,7 @@ async function renderWork(nav, arg, label2) {
   }
   if (nav === 'help' && arg === 'about') {
     const v = await window.moonlybox.versions()
-    w.innerHTML = `<div style="padding:20px" class="mono">壳 v${v.shell} · 内核 v${v.kernel}<br/><br/><button class="btn ghost" id="btn-check2">检查更新</button></div>`
+    w.innerHTML = `<div style="padding:20px" class="mono">壳 v${v.shellVersion} · 内核 v${v.kernelVersion}<br/><br/><button class="btn ghost" id="btn-check2">检查更新</button></div>`
     $('btn-check2').onclick = () => window.moonlybox.updateCheck()
     return
   }
