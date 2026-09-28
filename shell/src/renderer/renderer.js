@@ -491,7 +491,7 @@ async function renderList(nav) {
     }
     await renderXiaoyueList()
   } else if (nav === 'help') {
-    for (const [label, fn] of [['🧠 内核状态', () => renderWork('help', 'kernel')], ['ℹ️ 关于', () => renderWork('help', 'about')]]) {
+    for (const [label, fn] of [['📝 问题反馈', () => renderWork('help', 'feedback')], ['🧠 内核状态', () => renderWork('help', 'kernel')], ['ℹ️ 关于', () => renderWork('help', 'about')]]) {
       const el = document.createElement('div')
       el.className = 'tree-item'
       el.textContent = label
@@ -1169,11 +1169,19 @@ async function renderWork(nav, arg, label2) {
       panel('技能', '书房里的自定义技能：小月按需读取技能全文并照其中的流程执行。数据不出本机、随书房备份。', `
         <div class="set-card"><div class="sc-main"><div class="sc-title">启用技能</div><div class="sc-desc">关闭后小月不加载技能清单与技能工具</div></div>
           <button type="button" class="toggle ${openState ? 'on' : ''}" id="sp-sk-on"></button></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn ghost" id="sp-sk-open" style="font-size:12px;padding:5px 10px">📁 打开技能目录</button><span class="set-desc" style="align-self:center">在书房 .moonlybox/skills/&lt;技能名&gt;/ 放置 SKILL.md 即生效</span></div>
         <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px" id="sp-sk-list">${listHtml}</div>
       `)
       $('sp-sk-on').onclick = async (e) => {
         e.currentTarget.classList.toggle('on')
         await saveAppSettings({ skills: { enabled: e.currentTarget.classList.contains('on') } })
+      }
+      // #310.3：打开技能目录（书房 vault/.moonlybox/skills）——未选书房时提示
+      $('sp-sk-open').onclick = async () => {
+        const vault = await window.moonlybox.vaultGet()
+        if (!vault) { $('sp-sk-open').textContent = '⚠ 先在 设置 → 通用 选择书房目录'; return }
+        const err = await window.moonlybox.openPath(vault + '/.moonlybox/skills')
+        if (err) $('sp-sk-open').textContent = '⚠ 打开失败：' + err
       }
     } else if (cat.id === 'websearch') {
       // #256.2 用户 5 点：URL 提取并入网络搜索分类（分组块）；选项类=自定义下拉
@@ -1749,9 +1757,57 @@ async function renderWork(nav, arg, label2) {
     w.innerHTML = `<div style="padding:20px" class="mono">内核：${r.event === 'done' ? '✓ 已连接（daemon pong）' : '✗ ' + (r.message ?? '未连接')}<br/>vault：${await window.moonlybox.vaultGet() ?? '未选择'}</div>`
     return
   }
+  if (nav === 'help' && arg === 'feedback') {
+    // #310.3：问题反馈=内嵌云端 /feedback（登录态注入同 cloud 模式）；失败给外链兜底（与头像菜单一致）
+    const gen = ++renderGen
+    const genValid = () => gen === renderGen && $('fb-wv') !== null
+    w.innerHTML = `<div style="flex:1;display:flex;position:relative;background:var(--bg)">
+      <webview id="fb-wv" style="flex:1;width:100%;height:100%;opacity:0;transition:opacity .25s" src="about:blank"></webview>
+      <div id="fb-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+        <div style="width:34px;height:34px;border:3px solid color-mix(in srgb, var(--accent) 25%, transparent);border-top-color:var(--accent);border-radius:50%;animation:cloudspin .8s linear infinite"></div>
+      </div>
+    </div>`
+    let webBase = 'https://moonlybox.cn'
+    let token = null
+    try {
+      const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
+      if (!genValid()) return
+      if (r.event === 'done' && r.code === 0) {
+        const parsed = JSON.parse(r.text)
+        webBase = parsed.data?.webBase ?? parsed.webBase ?? webBase
+        token = parsed.token ?? null
+      }
+    } catch {}
+    if (!genValid()) return
+    const wv = $('fb-wv')
+    if (!wv) return
+    let injected = false
+    wv.addEventListener('dom-ready', async () => {
+      if (injected || !genValid()) return
+      const cur = wv.getURL() || ''
+      if (!cur.startsWith(webBase)) return
+      injected = true
+      try {
+        if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
+      } catch {}
+      if (!genValid()) return
+      const sep = '/feedback'.includes('?') ? '&' : '?'
+      await wv.loadURL(`${webBase}/feedback${sep}mb_theme=${resolveThemeDark()}`)
+    })
+    wv.addEventListener('did-finish-load', () => {
+      if (!genValid()) return
+      setTimeout(() => {
+        if (!genValid()) return
+        wv.style.opacity = '1'
+        $('fb-loading')?.remove()
+      }, 450)
+    })
+    wv.src = webBase + '/login' // 先同源域（localStorage 注入需同源），dom-ready 后跳 /feedback
+    return
+  }
   if (nav === 'help' && arg === 'about') {
     const v = await window.moonlybox.versions()
-    w.innerHTML = `<div style="padding:20px" class="mono">壳 v${v.shellVersion} · 内核 v${v.kernelVersion}<br/><br/><button class="btn ghost" id="btn-check2">检查更新</button></div>`
+    w.innerHTML = `<div style="padding:20px" class="mono">GUI v${v.shellVersion} · 内核 v${v.kernelVersion}<br/><br/><button class="btn ghost" id="btn-check2">检查更新</button></div>`
     $('btn-check2').onclick = () => window.moonlybox.updateCheck()
     return
   }

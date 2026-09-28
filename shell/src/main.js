@@ -358,6 +358,10 @@ app.whenReady().then(() => {
     if (r.canceled || !r.filePaths?.[0]) return { ok: false }
     return { ok: true, path: r.filePaths[0] }
   })
+  // #310.3：打开本机目录/文件（技能目录等）
+  ipcMain.handle('shell:openPath', async (_e, p) => {
+    try { return await shell.openPath(String(p || '')) } catch (e) { return String(e?.message ?? e) }
+  })
   // #307：原生模态确认框（替换 renderer window.confirm——同步阻塞弄脏焦点系统）
   ipcMain.handle('shell:confirmBox', async (_e, { message, title }) => {
     if (!win) return false

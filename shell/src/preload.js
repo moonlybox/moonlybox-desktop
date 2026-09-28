@@ -38,4 +38,6 @@ contextBridge.exposeInMainWorld('moonlybox', {
   pickFolder: () => ipcRenderer.invoke('shell:pickFolder'),
   // #307：确认弹窗走主进程原生模态（renderer window.confirm 同步阻塞会弄脏焦点系统——删除后所有输入框无法聚焦）
   confirmBox: (message, title) => ipcRenderer.invoke('shell:confirmBox', { message, title }),
+  // #310.3：打开本机目录/文件（技能目录等）——shell.openPath，返回 '' 为成功
+  openPath: (p) => ipcRenderer.invoke('shell:openPath', p),
 })
