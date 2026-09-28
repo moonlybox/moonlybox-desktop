@@ -2425,6 +2425,13 @@ function renderConfirmBar(rpcId, payload) {
 
 // ---------- 对话 Markdown 渲染（#288：marked vendor+sanitize+mermaid 回填；图示页 mdToHtml 同逻辑全局化） ----------
 function renderMarkdownSafe(src) {
+  // #308.2：对话输出空白行压缩——LLM 常输出段间多空行/纯空格行（渲染成整行空白）；
+  // 行尾空白全去、连续 2+ 空行压成 1 行、只含空白的行删除（保留单个空行=markdown 段落分隔语义）
+  src = String(src ?? '')
+    .split(/\r\n|\r|\n/)
+    .map((l) => l.replace(/\s+$/, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
   const mermaidBlocks = []
   const staged = src.replace(/```mermaid[^\n]*\n([\s\S]*?)```/g, (_m, code) => {
     mermaidBlocks.push(code)

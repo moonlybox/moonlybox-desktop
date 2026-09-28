@@ -255,6 +255,8 @@
   .msg.ai .msg-bubble p:empty { margin: 0; height: 0; }
   .msg.ai .msg-bubble ul, .msg.ai .msg-bubble ol { margin: 2px 0 4px; padding-left: 18px; }
   .msg.ai .msg-bubble li { margin: 1px 0; }
+  .msg.ai .msg-bubble li > p { margin: 0; } /* 松散列表（项间空行）li 内 <p> 不再撑距 */
+  .msg.ai .msg-bubble br + br { display: none; } /* 连续 <br> 折叠为一个换行 */
   .msg.ai .msg-bubble code { background: rgba(127,127,127,.16); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
   .msg.ai .msg-bubble pre { background: rgba(0,0,0,.22); padding: 8px 10px; border-radius: 8px; overflow-x: auto; margin: 4px 0; }
   .msg.ai .msg-bubble pre code { background: transparent; padding: 0; }
