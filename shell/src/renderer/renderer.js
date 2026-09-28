@@ -1882,7 +1882,8 @@ async function renderWork(nav, arg, label2) {
         $('fb-loading')?.remove()
       }, 450)
     })
-    wv.src = webBase + '/login' // 先同源域（localStorage 注入需同源），dom-ready 后跳 /feedback
+    // #310.8：terms/feedback 均为云端公开路由——直接加载目标页（同源注入 token 即可，无需先跳 /login 绕路；未登录 token=null 照常显示公开内容）
+    wv.src = `${webBase}/${arg === 'terms' ? 'terms' : 'feedback'}?mb_theme=${resolveThemeDark()}&embed=1`
     return
   }
   if (nav === 'help' && arg === 'about') {
