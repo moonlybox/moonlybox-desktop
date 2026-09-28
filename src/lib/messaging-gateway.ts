@@ -1065,6 +1065,178 @@ export class SlackAdapter implements PlatformAdapter {
   }
 }
 
+/* ============================ Email（IMAP 轮询收 + SMTP 发，行为照 Hermes email adapter） ============================ */
+
+/**
+ * Email 适配器：用户发邮件给小月——IMAP 周期轮询收（UNSEEN），SMTP 发回复（线程头 In-Reply-To/References）。
+ * 协议依赖 imapflow（IMAP 客户端）+ mailparser（MIME 解析）+ nodemailer（SMTP 发送），bundle 增量 ~2.5MB。
+ * 行为照 Hermes plugins/platforms/email：
+ * - 自动发件人过滤（noreply/mailer-daemon 类地址 + Auto-Submitted/Precedence: bulk 类头）防回环省 token
+ * - 自己发给自己的回环跳过；seen-UID 去重（上限 2000，过半裁剪）
+ * - 回复主题=「Re: 原主题」、正文前缀「[Subject: X]」（原主题非 Re: 开头时）——收件人上下文清晰
+ * - SMTP 安全：465=隐式 TLS，587=STARTTLS，其余按配置
+ * 凭据：address+password+imapHost+smtpHost（端口/安全可省，默认 993/587）。
+ */
+
+const EMAIL_NOREPLY_PATTERNS = ['noreply', 'no-reply', 'no_reply', 'donotreply', 'do-not-reply', 'mailer-daemon', 'postmaster', 'bounce', 'notifications@', 'automated@', 'auto-confirm', 'auto-reply', 'automailer']
+const EMAIL_POLL_INTERVAL_MS = 15_000
+const EMAIL_SEEN_UIDS_MAX = 2000
+
+export function emailIsAutomated(fromAddr: string, headers: Record<string, string>): boolean {
+  const a = fromAddr.toLowerCase()
+  if (EMAIL_NOREPLY_PATTERNS.some((p) => a.includes(p))) return true
+  // Auto-Submitted 非 no / Precedence bulk|list|junk / X-Auto-Response-Suppress 有值 = 自动邮件
+  const auto = headers['auto-submitted']
+  if (auto && auto.toLowerCase() !== 'no') return true
+  const prec = headers['precedence']
+  if (prec && ['bulk', 'list', 'junk'].includes(prec.toLowerCase())) return true
+  if (headers['x-auto-response-suppress']) return true
+  return false
+}
+
+export function emailStripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<p[^>]*>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+export class EmailAdapter implements PlatformAdapter {
+  id = 'email'
+  private stopped = false
+  /** 收件人 → {subject, messageId}（回复线程语境） */
+  private threadContext = new Map<string, { subject: string; messageId: string }>()
+  private seenUids = new Set<string>()
+
+  constructor(
+    private address: string,
+    private password: string,
+    private imapHost: string,
+    private imapPort: number,
+    private smtpHost: string,
+    private smtpPort: number,
+  ) {}
+
+  async start(onMessage: (m: InboundMessage) => Promise<void>): Promise<() => void> {
+    this.stopped = false
+    const { ImapFlow } = await import('imapflow')
+    const poll = async () => {
+      while (!this.stopped) {
+        const client = new ImapFlow({
+          host: this.imapHost,
+          port: this.imapPort || 993,
+          secure: (this.imapPort || 993) === 993,
+          auth: { user: this.address, pass: this.password },
+          logger: false,
+        } as any)
+        try {
+          await client.connect()
+          const lock = await client.getMailboxLock('INBOX')
+          try {
+            // 本轮首连：把存量邮件标 seen（只处理新到的）
+            const found = await client.search({ seen: false }, { uid: true })
+            const uids = Array.isArray(found) ? found : []
+            for (const uid of uids) {
+              if (this.stopped) break
+              const key = String(uid)
+              if (this.seenUids.has(key)) continue
+              const msg = await client.fetchOne(String(uid), { uid: true, source: true, envelope: true }, { uid: true })
+              const source = (msg as any)?.source as Buffer | undefined
+              if (!source) continue
+              this.seenUids.add(key)
+              if (this.seenUids.size > EMAIL_SEEN_UIDS_MAX) {
+                const sorted = [...this.seenUids].sort((a, b) => Number(a) - Number(b))
+                this.seenUids = new Set(sorted.slice(-EMAIL_SEEN_UIDS_MAX / 2))
+              }
+              try {
+                await this.handleRaw(source, onMessage)
+              } catch (e: any) {
+                console.log(`（消息网关 email 消息处理失败：${String(e?.message ?? e).slice(0, 120)}）`)
+              }
+            }
+          } finally {
+            lock.release()
+          }
+          await client.logout()
+        } catch (e: any) {
+          if (!this.stopped) console.log(`（消息网关 email 轮询失败：${String(e?.message ?? e).slice(0, 120)}）`)
+          try { client.close() } catch { /* ignore */ }
+        }
+        // 轮询间隔（分片 sleep 以便 stop 快速生效）
+        for (let i = 0; i < EMAIL_POLL_INTERVAL_MS / 500 && !this.stopped; i++) {
+          await new Promise((r) => setTimeout(r, 500))
+        }
+      }
+    }
+    void poll()
+    console.log('（消息网关 email 已启动）')
+    return () => {
+      this.stopped = true
+      this.threadContext.clear()
+      this.seenUids.clear()
+    }
+  }
+
+  private async handleRaw(raw: Buffer, onMessage: (m: InboundMessage) => Promise<void>): Promise<void> {
+    // @ts-expect-error mailparser 无类型声明（bundle 实测正常）
+    const { simpleParser } = await import('mailparser')
+    const parsed = await simpleParser(raw as any)
+    const fromAddr = String(parsed.from?.value?.[0]?.address ?? '').toLowerCase()
+    const fromName = String(parsed.from?.value?.[0]?.name ?? '')
+    if (!fromAddr || fromAddr === this.address.toLowerCase()) return // 空发件人/自己回环
+    const headers: Record<string, string> = {}
+    for (const [k, v] of Object.entries(parsed.headers ?? {})) {
+      if (typeof v === 'string') headers[k.toLowerCase()] = v
+      else if (v && typeof v === 'object' && 'text' in (v as any)) headers[k.toLowerCase()] = String((v as any).text ?? '')
+    }
+    if (emailIsAutomated(fromAddr, headers)) return
+    const subject = String(parsed.subject ?? '').trim()
+    let body = String(parsed.text ?? '').trim()
+    if (!body && parsed.html) body = emailStripHtml(String(parsed.html))
+    if (!body) return
+    const messageId = String(parsed.messageId ?? '')
+    this.threadContext.set(fromAddr, { subject: subject || '(no subject)', messageId })
+    const text = `[Subject: ${subject || '(no subject)'}]\n\n${body}` // 主题入正文（小月知道用户在说什么）
+    await onMessage({ platform: 'email', chatId: `email:${fromAddr}`, sender: fromName || fromAddr, text, replyTo: messageId })
+  }
+
+  async send(chatId: string, text: string, replyTo?: string): Promise<void> {
+    const nodemailer = await import('nodemailer')
+    const to = chatId.startsWith('email:') ? chatId.slice(6) : chatId
+    const ctx = this.threadContext.get(to)
+    const originalSubject = ctx?.subject ?? '魔力宝盒'
+    const subject = originalSubject.startsWith('Re:') ? originalSubject : `Re: ${originalSubject}`
+    // 回复正文剥掉 [Subject: X] 前缀——邮件读者只关心回答本身
+    const body = text.startsWith('[Subject: ') ? text.slice(text.indexOf(']\n\n') + 3).trim() : text
+    const transport = nodemailer.createTransport({
+      host: this.smtpHost,
+      port: this.smtpPort || 587,
+      secure: (this.smtpPort || 587) === 465, // 465=隐式 TLS；587 走 STARTTLS（nodemailer 默认 requireTLS）
+      auth: { user: this.address, pass: this.password },
+    } as any)
+    const inReplyTo = replyTo || ctx?.messageId || undefined
+    try {
+      await transport.sendMail({
+        from: this.address,
+        to,
+        subject,
+        text: body,
+        inReplyTo,
+        references: inReplyTo,
+      })
+    } finally {
+      transport.close()
+    }
+  }
+}
+
 /* ============================ 网关编排 ============================ */
 
 export interface GatewayStatus {
@@ -1079,7 +1251,7 @@ const SECRET_KEYS: Record<string, string[]> = {
   // 平台 id → secret 字段清单（面板 needs.secret=true 的键；token 类）
   feishu: ['appSecret'],
   wecom: ['secret'], // 企微 AI Bot（openws 通道）：bot_id + secret（非传统自建应用 corpSecret）
-  weixin: ['token'], // 个人微信 iLink Bot：扫码登录获得，长期有效；accountId 落 settings.json\n  slack: ['botToken', 'appToken'], // 双 token：bot(xoxb-) + app-level(xapp-, connections:write)
+  weixin: ['token'], // 个人微信 iLink Bot：扫码登录获得，长期有效；accountId 落 settings.json\n  slack: ['botToken', 'appToken'], // 双 token：bot(xoxb-) + app-level(xapp-, connections:write)\n  email: ['password'], // 邮箱密码/授权码（QQ/163 类=授权码非登录密码）；其余字段落 settings.json
   dingtalk: ['appSecret'],
   telegram: ['botToken'],
   qqbot: ['appSecret'],
@@ -1116,7 +1288,7 @@ export function enabledPlatforms(): Array<{ id: string; config: PlatformConfig }
 }
 
 /** 已接入网关的平台（buildAdapter 有实现）；新平台接入时同步更新 */
-const GATEWAY_READY = ['telegram', 'dingtalk', 'qqbot', 'feishu', 'wecom', 'weixin', 'slack']
+const GATEWAY_READY = ['telegram', 'dingtalk', 'qqbot', 'feishu', 'wecom', 'weixin', 'slack', 'email']
 
 function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetchImpl?: FetchImpl, wsImpl?: WsImpl): PlatformAdapter | null {
   switch (id) {
@@ -1134,6 +1306,10 @@ function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetc
       return config.token && config.accountId ? new WeixinAdapter(config.token, config.accountId, fetchImpl) : null
     case 'slack':
       return config.botToken && config.appToken ? new SlackAdapter(config.botToken, config.appToken, fetchImpl, wsImpl) : null
+    case 'email':
+      return config.address && config.password && config.imapHost && config.smtpHost
+        ? new EmailAdapter(config.address, config.password, config.imapHost, Number(config.imapPort || 993), config.smtpHost, Number(config.smtpPort || 587))
+        : null
     default:
       return null // 飞书/钉钉/Slack/QQbot/企微/微信逐个迭代接入（未接入平台静默跳过）
   }

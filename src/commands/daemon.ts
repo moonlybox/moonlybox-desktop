@@ -624,7 +624,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             const mg = patch.messaging as Record<string, unknown> | undefined
             if (mg && typeof mg === 'object' && mg.providers && typeof mg.providers === 'object') {
               const { Entry } = require('@napi-rs/keyring') as typeof import('@napi-rs/keyring')
-              const MSG_SECRET_KEYS: Record<string, string[]> = { feishu: ['appSecret'], wecom: ['secret'], weixin: ['token'], dingtalk: ['appSecret'], telegram: ['botToken'], qqbot: ['appSecret'], slack: ['botToken', 'appToken'] }
+              const MSG_SECRET_KEYS: Record<string, string[]> = { feishu: ['appSecret'], wecom: ['secret'], weixin: ['token'], dingtalk: ['appSecret'], telegram: ['botToken'], qqbot: ['appSecret'], slack: ['botToken', 'appToken'], email: ['password'] }
               for (const [pid, pv] of Object.entries(mg.providers as Record<string, any>)) {
                 if (!pv || typeof pv !== 'object') continue
                 const cfgIn = (pv.config ?? {}) as Record<string, unknown>

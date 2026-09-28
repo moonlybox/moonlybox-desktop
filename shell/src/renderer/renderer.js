@@ -897,7 +897,7 @@ async function renderWork(nav, arg, label2) {
       const g = await loadAppSettings()
       const provs = APP_PROVIDERS?.messaging ?? []
       const enabled = g.messaging?.providers ?? {}
-      panel('消息平台', '对接 IM 平台，让你在小月里远程收发消息与操作。Token/Secret 只存本机钥匙串。已支持飞书、钉钉、QQ 机器人、Telegram、企业微信（AI 机器人）、Slack；个人微信走 iLink 机器人身份（扫码登录，多数账号单聊可用）。', `
+      panel('消息平台', '对接 IM 平台，让你在小月里远程收发消息与操作。Token/Secret 只存本机钥匙串。已支持飞书、钉钉、QQ 机器人、Telegram、企业微信（AI 机器人）、Slack、Email（邮件收发）；个人微信走 iLink 机器人身份（扫码登录，多数账号单聊可用）。', `
         ${provs.map((p) => {
           const cur = enabled[p.id] ?? { enabled: false }
           return `<div class="set-card"><div class="sc-main"><div class="sc-title">${p.label}</div><div class="sc-desc">${cur.enabled ? '已开启' : '对接后可在此平台收发消息'}</div></div>

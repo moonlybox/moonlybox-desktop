@@ -171,6 +171,7 @@ export const MESSAGING_PROVIDERS: Array<{ id: string; label: string; needs: Arra
   { id: 'qqbot', label: 'QQ 机器人', needs: [{ key: 'appId', label: 'AppID' }, { key: 'appSecret', label: 'AppSecret', secret: true }] },
   { id: 'telegram', label: 'Telegram Bot', needs: [{ key: 'botToken', label: 'Bot Token', secret: true }] },
   { id: 'slack', label: 'Slack', needs: [{ key: 'botToken', label: 'Bot Token (xoxb-)', secret: true }, { key: 'appToken', label: 'App-Level Token (xapp-)', secret: true }] },
+  { id: 'email', label: 'Email（邮件）', needs: [{ key: 'address', label: '邮箱地址' }, { key: 'password', label: '密码 / 授权码', secret: true }, { key: 'imapHost', label: 'IMAP 服务器（如 imap.qq.com）' }, { key: 'imapPort', label: 'IMAP 端口（默认 993）' }, { key: 'smtpHost', label: 'SMTP 服务器（如 smtp.qq.com）' }, { key: 'smtpPort', label: 'SMTP 端口（默认 587，465=SSL）' }] },
 ]
 
 /** URL 提取服务商（#256.9：本地 Readability 或服务商；Jina 免 Key） */
