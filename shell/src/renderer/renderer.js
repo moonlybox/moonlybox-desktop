@@ -444,7 +444,7 @@ async function renderList(nav) {
           menu.querySelector('.dg-del').onclick = async (e2) => {
             e2.stopPropagation()
             closeCtxMenu(menu)
-            if (!window.confirm(`删除图示「${it.title}」？将移入回收站（30 天内可在云端书房恢复）。`)) return
+            if (!(await mbConfirm(`删除图示「${it.title}」？将移入回收站（30 天内可在云端书房恢复）。`))) return
             const rr = await window.moonlybox.rpc('diagram', { op: 'delete', id: it.id }, 30_000)
             if (rr.event === 'done' && rr.code === 0 && JSON.parse(rr.text).ok !== false) {
               void renderList('diagram')
@@ -1760,6 +1760,19 @@ function closeCtxMenu(menu) {
   menu.remove()
 }
 
+// ---------- 确认弹窗（#307.2）：主进程原生模态——window.confirm 同步阻塞弄脏焦点系统（删除后输入框全部无法聚焦）
+async function mbConfirm(message) {
+  try {
+    const ok = await window.moonlybox.confirmBox(message, '魔力宝盒')
+    if (!ok) return false
+    window.focus()
+    ensureFocusAlive()
+    return true
+  } catch {
+    return window.confirm(message) // 桥异常兜底
+  }
+}
+
 // ---------- 焦点复位（#307）：confirm/删除 DOM 后 activeElement 可能残留在已断链节点——
 // 此后 click 聚焦任何 input 失灵（焦点系统脏）。重渲入口统一自愈：断链则 blur 归还 body。
 function ensureFocusAlive() {
@@ -2034,7 +2047,7 @@ async function renderXiaoyueList() {
       menu.querySelector('.xy-mi-del').onclick = async (e2) => {
         e2.stopPropagation()
         closeCtxMenu(menu)
-        if (!window.confirm(`删除对话「${c.title}」？`)) return
+        if (!(await mbConfirm(`删除对话「${c.title}」？`))) return
         await window.moonlybox.rpc('workspace', { op: 'deleteChat', id: c.id }, 10_000)
         if (xyActiveChat === c.id) { xyActiveChat = null; await renderWork('xiaoyue') }
         await renderXiaoyueList()
@@ -2118,7 +2131,7 @@ async function renderXiaoyueList() {
       menu.querySelector('.xy-mi-del').onclick = async (e2) => {
         e2.stopPropagation()
         closeCtxMenu(menu)
-        if (!window.confirm(`删除工作空间「${ws.name}」？其下对话将变为无工作空间对话（历史保留）。`)) return
+        if (!(await mbConfirm(`删除工作空间「${ws.name}」？其下对话将变为无工作空间对话（历史保留）。`))) return
         await window.moonlybox.rpc('workspace', { op: 'delete', id: ws.id }, 10_000)
         await renderXiaoyueList()
       }

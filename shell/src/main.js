@@ -358,6 +358,15 @@ app.whenReady().then(() => {
     if (r.canceled || !r.filePaths?.[0]) return { ok: false }
     return { ok: true, path: r.filePaths[0] }
   })
+  // #307：原生模态确认框（替换 renderer window.confirm——同步阻塞弄脏焦点系统）
+  ipcMain.handle('shell:confirmBox', async (_e, { message, title }) => {
+    if (!win) return false
+    const r = await dialog.showMessageBox(win, {
+      type: 'question', message: String(message || ''), title: String(title || '魔力宝盒'),
+      buttons: ['取消', '确定'], defaultId: 1, cancelId: 0, noLink: true,
+    })
+    return r.response === 1
+  })
   ipcMain.handle('vault:pick', async () => {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: '选择书房（本地 vault）目录' })
     if (r.canceled || !r.filePaths?.[0]) return { ok: false }

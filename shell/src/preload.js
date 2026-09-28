@@ -36,4 +36,6 @@ contextBridge.exposeInMainWorld('moonlybox', {
   applyGeneral: (general) => ipcRenderer.invoke('shell:applyGeneral', general),
   // #257：通用目录选择（备份目录场景——不落 vault 配置）
   pickFolder: () => ipcRenderer.invoke('shell:pickFolder'),
+  // #307：确认弹窗走主进程原生模态（renderer window.confirm 同步阻塞会弄脏焦点系统——删除后所有输入框无法聚焦）
+  confirmBox: (message, title) => ipcRenderer.invoke('shell:confirmBox', { message, title }),
 })
