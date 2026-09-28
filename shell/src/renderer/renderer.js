@@ -380,14 +380,18 @@ async function renderList(nav) {
     newBtn.className = 'tree-item'
     newBtn.style.color = 'var(--accent)'
     newBtn.textContent = '＋ 新建图示'
-    newBtn.onclick = () => renderWork('diagram', {}) // #294：空态页=快捷新建页（模板网格+名称就地填），无需弹窗
+    newBtn.onclick = () => {
+      body.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active')) // #302：新建=离开编辑态，清选中高亮
+      renderWork('diagram', {})
+    }
     body.appendChild(newBtn)
     const r = await window.moonlybox.rpc('diagram', { op: 'list' }, 30_000)
     try {
       const items = JSON.parse(r.text).data.diagrams || []
       for (const it of items) {
         const el = document.createElement('div')
-        el.className = 'tree-item'
+        // #302：选中态=正在编辑的草稿（dgCurrentId 对齐）——打开行时 DOM 级切换高亮（不重渲列表）
+        el.className = 'tree-item' + (it.id && it.id === dgCurrentId ? ' active' : '')
         el.style.position = 'relative'
         // #292：图标=图示类型（存档标签优先，内容嗅探兜底）——草稿半透明+title 标状态，废除 📝/📚（风格与小月/文档统一）
         // #300：悬停显示最后修改时间（居右）+「⋯」更多菜单（行级：删除）
@@ -403,7 +407,11 @@ async function renderList(nav) {
           el.querySelector('.dg-more').style.display = 'none'
           // #301：菜单挂 body——移出行不关菜单（移向菜单必经行外），关闭靠 document click / 再点 ⋯ / 行滚出视口
         }
-        el.onclick = () => renderWork('diagram', it)
+        el.onclick = () => {
+          body.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
+          el.classList.add('active')
+          renderWork('diagram', it)
+        }
         // ⋯ 更多菜单：#301 改挂 body+fixed 定位——行内 absolute 会被 .list-body overflow-y:auto 裁剪（菜单只能显示半截）
         el.querySelector('.dg-more').onclick = (e) => {
           e.stopPropagation()
@@ -1930,6 +1938,7 @@ function bindDiagramWorkbench(existing, pick) {
       $('dg-code').value = JSON.parse(r.text).source
       dgCurrentId = null
       $('dg-state').textContent = '✓ AI 已生成'
+      document.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active')) // #302：AI 新内容未保存，清列表选中高亮
       render()
     } else $('dg-state').textContent = 'AI 生成失败：' + (r.text || r.message)
   }
