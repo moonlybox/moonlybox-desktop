@@ -401,17 +401,26 @@ async function renderList(nav) {
         el.onmouseleave = () => {
           el.querySelector('.dg-time').style.display = 'none'
           el.querySelector('.dg-more').style.display = 'none'
-          el.querySelector('.dg-menu')?.remove()
+          // #301：菜单挂 body——移出行不关菜单（移向菜单必经行外），关闭靠 document click / 再点 ⋯ / 行滚出视口
         }
         el.onclick = () => renderWork('diagram', it)
-        // ⋯ 更多菜单：行内 absolute 弹层（点开才出现；目前仅「删除」）
+        // ⋯ 更多菜单：#301 改挂 body+fixed 定位——行内 absolute 会被 .list-body overflow-y:auto 裁剪（菜单只能显示半截）
         el.querySelector('.dg-more').onclick = (e) => {
           e.stopPropagation()
-          const old = el.querySelector('.dg-menu')
-          if (old) { old.remove(); return }
+          const existed = document.querySelector('.dg-menu')
+          if (existed) { existed.remove(); return }
           const menu = document.createElement('div')
           menu.className = 'dg-menu'
-          menu.style.cssText = 'position:absolute;right:6px;top:calc(100% - 2px);z-index:50;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:96px;box-shadow:0 8px 24px rgba(0,0,0,.35)'
+          const rect = el.getBoundingClientRect()
+          menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:112px;box-shadow:0 8px 24px rgba(0,0,0,.35)'
+          // 默认锚在行下方右对齐；底部放不下则翻转到行上方
+          menu.style.visibility = 'hidden'
+          document.body.appendChild(menu)
+          const mh = menu.offsetHeight
+          const below = rect.bottom + 2 + mh <= window.innerHeight - 8
+          menu.style.left = `${Math.min(rect.right - 118, window.innerWidth - 126)}px`
+          menu.style.top = `${below ? rect.bottom + 2 : rect.top - mh - 2}px`
+          menu.style.visibility = ''
           menu.innerHTML = `<div class="dg-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err,#f87171)">删除</div>`
           menu.querySelector('.dg-del').onclick = async (e2) => {
             e2.stopPropagation()
@@ -426,9 +435,10 @@ async function renderList(nav) {
               if (st) st.textContent = '删除失败：' + (rr.text || rr.message)
             }
           }
-          el.appendChild(menu)
-          // 点外部关闭
-          const close = (e3) => { if (!menu.contains(e3.target)) { menu.remove(); document.removeEventListener('click', close) } }
+          // 点外部/列表滚动关闭（menu 已挂 document.body）
+          const close = (e3) => { if (!menu.contains(e3.target)) { menu.remove(); document.removeEventListener('click', close); lb?.removeEventListener('scroll', close) } }
+          const lb = el.closest('.list-body')
+          lb?.addEventListener('scroll', close, { once: true })
           setTimeout(() => document.addEventListener('click', close), 0)
         }
         body.appendChild(el)
