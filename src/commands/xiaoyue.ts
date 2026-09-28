@@ -204,6 +204,7 @@ import { loadSettings } from '../lib/settings'
 import { localMemoryAdd, localMemorySearch, localMemoryContext } from '../lib/memory-local'
 import { skillToolDefs, skillsIndex, viewSkill } from '../lib/skills'
 import { webToolDefs, runWebTool } from '../lib/web-tools'
+import { docToolDefs, runDocTool } from '../lib/doc-tools'
 import { listAllCustomTools, callCustomTool, enabledCustomServers } from '../lib/mcp-custom'
 import { getWorkspace, loadChat, appendTurn as wsAppendTurn, isUnderDirs, chatTurnsForContext, primaryDir } from '../lib/workspaces'
 import * as fs from 'node:fs'
@@ -263,6 +264,8 @@ export async function runAgentTools(
   const skillDefs = skillsOn ? skillToolDefs() : []
   // #279 内置网络工具定义（web_search 仅在配置了搜索服务商时装配；fetch_url 恒装配）
   const wDefs = webToolDefs()
+  // #287 文档处理：doc_read 恒装配（本地档零网络可用；provider 档按设置分发）
+  const dDefs = docToolDefs()
   // #280 自定义 MCP：启用中的服务器工具并列装配（失败隔离——失败服务器只报告不阻塞）
   const customCat = await listAllCustomTools()
   const customDefs = customCat.tools
@@ -270,7 +273,7 @@ export async function runAgentTools(
     `你是「小月」，用户个人知识库（魔力宝盒）的操作助理。你可以调用 MoonLink 工具帮用户：\n` +
     `收藏网页（add_bookmark）、记便签（add_sticky）、记待办（add_todo/complete_todo）、` +
     (memOn ? `保存记忆（add_memory）、` : ``) +
-    `查询书房（search_library/search_bookmarks${memOn ? '/search_memory' : ''}）${wDefs.length ? '，并可联网：web_search 网络搜索、fetch_url 读取网页' : ''}${customDefs.length ? `，以及自定义 MCP 服务器工具（${enabledCustomServers().map((s) => s.name).join('、')}）` : ''}等。\n` +
+    `查询书房（search_library/search_bookmarks${memOn ? '/search_memory' : ''}）${wDefs.length ? '，并可联网：web_search 网络搜索、fetch_url 读取网页' : ''}，可读文档：doc_read（txt/md/PDF/docx/html）${customDefs.length ? `，以及自定义 MCP 服务器工具（${enabledCustomServers().map((s) => s.name).join('、')}）` : ''}等。\n` +
     `纪律：1. 用户意图涉及「记录/收藏/保存/查询」时主动调工具，不要只口头答应；\n` +
     `2. 参数从用户话里提取，缺关键参数先问；3. 操作完成后用一句话汇报结果；\n` +
     (memOn && memLocal ? `3.5. 用户陈述的长期事实/偏好会由记忆层静默沉淀（无需口头确认）；\n` : ``) +
@@ -293,6 +296,7 @@ export async function runAgentTools(
   // moonrecall 档=现远程 MoonLink 工具（云端 memory_entities 单源+确认制）
   const localToolsW: Record<string, (args: Record<string, unknown>) => Promise<string>> = {}
   for (const d of wDefs) localToolsW[d.name] = (args) => runWebTool(d.name, args)
+  for (const d of dDefs) localToolsW[d.name] = (args) => runDocTool(d.name, args)
   // #285 技能工具执行器（只读：索引/全文/关联文件；vault 内数据不出本机）
   if (skillsOn) {
     const vr = defaultVaultRoot()

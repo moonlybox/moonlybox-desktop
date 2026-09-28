@@ -1201,7 +1201,7 @@ async function renderWork(nav, arg, label2) {
         let html = ''
         if (pv.baseUrl) html += `<div class="set-field" style="max-width:400px"><label>API 地址（选商自动填）</label><input id="sp-dp-url" value="${pv.baseUrl}" ${pv.local ? 'readonly' : ''} /></div>`
         else html += `<div class="set-field" style="max-width:400px"><label>API 地址</label><input id="sp-dp-url" value="${dp.config?.baseUrl && dp.provider === pv.id ? dp.config.baseUrl : ''}" placeholder="本地引擎无需地址" ${pv.local && !pv.baseUrl ? 'readonly' : ''} /></div>`
-        if (pv.needsKey) html += `<div class="set-field" style="max-width:400px"><label>API Key（只存钥匙串）</label><input type="password" id="sp-dp-key" placeholder="${dp.config?.apiKey ? '已配置，不回显' : ''}" /></div>`
+        if (pv.needsKey) html += `<div class="set-field" style="max-width:400px"><label>API Key（只存钥匙串）</label><input type="password" id="sp-dp-key" placeholder="${dp.config?.keyStored ? '已配置，不回显' : ''}" /></div>`
         box.innerHTML = html
       }
       $('sp-dp-prov').onchange = renderDpCfg
@@ -1213,8 +1213,8 @@ async function renderWork(nav, arg, label2) {
         const b = $('sp-dp-url')
         if (b && b.value) config.baseUrl = b.value
         const k = $('sp-dp-key')
-        if (k && k.value) config.apiKey = 'keychain:docproc'
-        else if (dp.config?.apiKey && dp.provider === pv.id) config.apiKey = dp.config.apiKey
+        if (k && k.value) config.apiKey = k.value // #287：真 key 发 daemon→剥离入钥匙串 docproc-key（哨兵形态进不了钥匙串）
+        else if (dp.config?.keyStored && dp.provider === pv.id) config.keyStored = true
         const r = await saveAppSettings({ docproc: { mode: pv.local ? 'local' : 'provider', provider: pv.id, config } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')

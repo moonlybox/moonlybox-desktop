@@ -619,6 +619,26 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
                 patch[sec] = clean
               }
             }
+            // #287：文档处理——config.apiKey（真明文）剥入 docproc-key 钥匙串；旧哨兵 keychain:docproc 形态=保持已存标记不动
+            {
+              const dp = patch.docproc as Record<string, any> | undefined
+              if (dp && typeof dp === 'object' && dp.config && typeof dp.config === 'object') {
+                const apiKey = typeof dp.config.apiKey === 'string' ? dp.config.apiKey.trim() : ''
+                if (apiKey && !apiKey.startsWith('keychain:')) {
+                  const { Entry } = require('@napi-rs/keyring') as typeof import('@napi-rs/keyring')
+                  new Entry('moonlybox', 'docproc-key').setPassword(apiKey)
+                }
+                const cleanCfg: Record<string, unknown> = { ...dp.config }
+                if (apiKey && !apiKey.startsWith('keychain:')) {
+                  cleanCfg.keyStored = true
+                  delete cleanCfg.apiKey
+                } else if (apiKey.startsWith('keychain:')) {
+                  cleanCfg.keyStored = true
+                  delete cleanCfg.apiKey
+                }
+                dp.config = cleanCfg
+              }
+            }
             // #286：消息平台——secret 字段（token 类）剥入钥匙串（account=msg:<platform>:<key>），
             // settings.json 只落非敏感 config + keyStored 标记；明文/旧哨兵形态都处理
             const mg = patch.messaging as Record<string, unknown> | undefined
