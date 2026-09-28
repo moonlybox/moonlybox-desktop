@@ -1691,8 +1691,12 @@ async function renderWork(nav, arg, label2) {
       </div>`
     const renderGrid = () => { grid.innerHTML = DG_TEMPLATES.map(tplCard).join('') }
     renderGrid()
-    grid.querySelectorAll('[data-tpl]').forEach((el) => {
-      el.onclick = () => { picked = el.dataset.tpl; renderGrid() }
+    // #310：事件委托——原实现重建 innerHTML 后不重绑，第二次点击落在无 onclick 的新元素上完全失效
+    grid.addEventListener('click', (e) => {
+      const cell = e.target.closest('[data-tpl]')
+      if (!cell) return
+      picked = cell.dataset.tpl
+      renderGrid()
     })
     const quickCreate = () => {
       const title = $('dg-quick-title').value.trim()
@@ -2097,7 +2101,8 @@ async function renderXiaoyueList() {
   const freeGroup = document.createElement('div')
   freeGroup.className = 'xy-ws-group'
   // #303：组头副标签改内联样式（原 .set-desc 行高致「无工作空间」与主文字不齐平）
-  freeGroup.innerHTML = `<div class="tree-item" style="font-weight:600">💬 对话<span style="margin-left:6px;font-weight:400;font-size:11px;color:var(--muted)">无工作空间</span><span class="xy-free-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="新建无工作空间对话">＋</span></div>`
+  // #310：＋ 居右——与工作空间组头（名称 flex:1 → 图标居右）同构
+  freeGroup.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💬 对话<span style="margin-left:6px;font-weight:400;font-size:11px;color:var(--muted)">无工作空间</span></span><span class="xy-free-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="新建无工作空间对话">＋</span></div>`
   box.appendChild(freeGroup)
   freeGroup.querySelector('.xy-free-add').onclick = async () => {
     if (xyCreating) return // #305 防重入
