@@ -821,6 +821,7 @@ async function renderWork(nav, arg, label2) {
           <label>书房目录（Vault）</label>
           <div class="set-row" style="margin:0"><input id="sp-vault" readonly placeholder="未选择" style="flex:1" /><button type="button" class="btn ghost" id="sp-vault-pick">选择…</button></div>
         </div>
+        <div class="set-row" style="margin:0"><button type="button" class="btn ghost" id="sp-vault-migrate" style="font-size:12px">📦 迁移到新目录…</button><span class="set-desc" style="align-self:center">整体复制到新目录（目标目录需为空），完成后自动切换并重启内核</span></div>
         <div class="set-status" id="sp-vault-status"></div>
       `)
       $('sp-vault').value = (await window.moonlybox.vaultGet()) ?? ''
@@ -830,6 +831,49 @@ async function renderWork(nav, arg, label2) {
           $('sp-vault').value = r.root
           $('sp-vault-status').className = 'set-status ok'
           $('sp-vault-status').textContent = '✓ 已保存（内核重启后生效）'
+        }
+      }
+      // #310.10：迁移弹窗——选目录→弹窗内执行（目标非空阻断/不支持覆盖）→成功自动切换+内核重启
+      $('sp-vault-migrate').onclick = () => {
+        const dlg = document.createElement('dialog')
+        dlg.innerHTML = `
+          <div class="dlg-body" style="min-width:460px">
+            <div class="sc-title" style="font-size:15px;font-weight:600;margin-bottom:8px">迁移书房目录</div>
+            <div class="set-desc" style="margin-bottom:12px;line-height:1.7">当前：${$('sp-vault').value ?? '（未选择）'}<br/>迁移会把当前书房的<b>全部内容</b>复制到新目录，完成后自动切换并重启内核；原目录保留不动（作为迁移前备份）。</div>
+            <div class="set-field"><label>新目录（必须为空或不存在）</label>
+              <div class="set-row" style="margin:0"><input id="mg-target" readonly placeholder="点击右侧选择…" style="flex:1" /><button type="button" class="btn ghost" id="mg-pick">选择…</button></div>
+            </div>
+            <div class="set-status" id="mg-status" style="margin-top:10px"></div>
+            <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="mg-go" disabled>开始迁移</button><button class="btn ghost" id="mg-cancel">取消</button></div>
+          </div>`
+        document.body.appendChild(dlg)
+        dlg.showModal()
+        dlg.querySelector('#mg-cancel').onclick = () => { dlg.close(); dlg.remove() }
+        dlg.querySelector('#mg-pick').onclick = async () => {
+          const r = await window.moonlybox.pickFolder()
+          if (r?.ok) {
+            dlg.querySelector('#mg-target').value = r.path
+            dlg.querySelector('#mg-go').disabled = false
+          }
+        }
+        dlg.querySelector('#mg-go').onclick = async (e) => {
+          const btn = e.currentTarget
+          const st = dlg.querySelector('#mg-status')
+          btn.disabled = true
+          st.className = 'set-status'
+          st.textContent = '迁移中…（取决于书房大小，请勿关闭应用）'
+          const r = await window.moonlybox.vaultMigrate(dlg.querySelector('#mg-target').value)
+          if (r.ok) {
+            st.className = 'set-status ok'
+            st.textContent = `✓ 迁移完成（${r.files} 项）——已切换到 ${r.root}，内核重启中…`
+            $('sp-vault').value = r.root
+            currentSetCat = 'library'; currentSetSub = null
+            setTimeout(() => { dlg.close(); dlg.remove(); renderList('settings'); renderWork('settings') }, 1600)
+          } else {
+            st.className = 'set-status err'
+            st.textContent = '✗ ' + (r.message ?? '迁移失败')
+            btn.disabled = false
+          }
         }
       }
     } else if (cat.id === 'model' && currentSetSub === 'platform') {

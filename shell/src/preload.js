@@ -40,6 +40,8 @@ contextBridge.exposeInMainWorld('moonlybox', {
   confirmBox: (message, title) => ipcRenderer.invoke('shell:confirmBox', { message, title }),
   // #310.3：打开本机目录/文件（技能目录等）——shell.openPath，返回 '' 为成功
   openPath: (p) => ipcRenderer.invoke('shell:openPath', p),
+  // #310.10：书房迁移（老→新目录；目标非空阻断）
+  vaultMigrate: (target) => ipcRenderer.invoke('vault:migrate', target),
   // #310.7：调试日志镜像/日志目录打开/环境信息/自动更新开关
   debugLog: (line) => ipcRenderer.invoke('shell:debugLog', line),
   openLogDir: () => ipcRenderer.invoke('shell:openLogDir'),

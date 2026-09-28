@@ -394,6 +394,35 @@ app.whenReady().then(() => {
     })
     return r.response === 1
   })
+  // #310.10：书房迁移——老目录内容整体复制到新目录（目标已存在任何内容=阻断，不支持覆盖）；完成后写 vault.json+env+重启内核
+  ipcMain.handle('vault:migrate', async (_e, target) => {
+    const from = configuredVault()
+    const to = String(target || '').trim()
+    if (!from) return { ok: false, message: '当前未配置书房目录' }
+    if (!to) return { ok: false, message: '目标目录为空' }
+    const absTo = path.resolve(to)
+    if (absTo === path.resolve(from)) return { ok: false, message: '目标目录与当前目录相同' }
+    if (absTo.startsWith(path.resolve(from) + path.sep) || path.resolve(from).startsWith(absTo + path.sep)) return { ok: false, message: '目标目录不能是当前目录的子/父目录' }
+    try {
+      if (fs.existsSync(absTo)) {
+        const entries = fs.readdirSync(absTo)
+        if (entries.length) return { ok: false, message: `目标目录已存在且非空（${entries.length} 项）——不支持覆盖迁移，请选择空目录` }
+      }
+      fs.mkdirSync(absTo, { recursive: true })
+      fs.cpSync(from, absTo, { recursive: true, verbatimSymlinks: false })
+      const copied = fs.readdirSync(absTo)
+      if (!copied.length) return { ok: false, message: '迁移后新目录为空——源目录可能不可读' }
+      const cfgDir = process.env.MOONLYBOX_CONFIG_HOME || path.join(os.homedir(), '.config', 'moonlybox')
+      fs.mkdirSync(cfgDir, { recursive: true })
+      fs.writeFileSync(path.join(cfgDir, 'vault.json'), JSON.stringify({ root: absTo }, null, 2) + '\n')
+      process.env.MOONLYBOX_VAULT = absTo
+      // 内核重启：杀旧 daemon（下次 RPC ensureDaemon 以新 env 拉起）
+      try { if (daemon && daemon.exitCode === null) daemon.kill() } catch {}
+      return { ok: true, root: absTo, files: copied.length }
+    } catch (e) {
+      return { ok: false, message: String(e?.message ?? e) }
+    }
+  })
   ipcMain.handle('vault:pick', async () => {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: '选择书房（本地 vault）目录' })
     if (r.canceled || !r.filePaths?.[0]) return { ok: false }
