@@ -35,7 +35,7 @@ import { defaultVaultRoot, configDir } from '../lib/config'
 import * as path from 'node:path'
 import { resolveProviders } from '../lib/providers'
 import { addEntry, listCloudDirs, backupSync, backupSyncAll, BACKUP_EXTS, loadRegistry, setEnabled, removeEntry, setPolicies, checkTwin } from '../lib/backup'
-import { apiGet, apiPost } from '../lib/api'
+import { apiGet, apiPost, apiDelete } from '../lib/api'
 import { loadCredentials, saveCredentials, clearCredentials } from '../lib/auth'
 import { ensureClient, requestDeviceCode, pollToken, refreshAccessToken } from '../lib/device-flow'
 import type { CommandOptions } from '../lib/runner'
@@ -755,6 +755,10 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           text = JSON.stringify(res)
         } else if (op === 'activate') {
           const res = await apiPost<any>(`/library/diagrams/${encodeURIComponent(String(args.id ?? ''))}/activate`)
+          text = JSON.stringify(res)
+        } else if (op === 'delete') {
+          // #300：删除图示=复用书房文档删除（DELETE /library/{id}，软删进回收站 30 天可恢复）
+          const res = await apiDelete<any>(`/library/${encodeURIComponent(String(args.id ?? ''))}`)
           text = JSON.stringify(res)
         } else if (op === 'get') {
           const res = await apiGet<any>(`/library/diagrams/${encodeURIComponent(String(args.id ?? ''))}`)

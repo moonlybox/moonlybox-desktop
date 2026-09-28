@@ -388,10 +388,49 @@ async function renderList(nav) {
       for (const it of items) {
         const el = document.createElement('div')
         el.className = 'tree-item'
+        el.style.position = 'relative'
         // #292：图标=图示类型（存档标签优先，内容嗅探兜底）——草稿半透明+title 标状态，废除 📝/📚（风格与小月/文档统一）
-        el.innerHTML = `<span style="opacity:${it.state === 'draft' ? '.55' : '1'}">${dgTypeIcon(it)}</span> <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(it.title).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>`
+        // #300：悬停显示最后修改时间（居右）+「⋯」更多菜单（行级：删除）
+        const fmtTime = (() => { try { const d = new Date(it.updatedAt); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` } catch { return '' } })()
+        el.innerHTML = `<span style="opacity:${it.state === 'draft' ? '.55' : '1'}">${dgTypeIcon(it)}</span> <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(it.title).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span><span class="dg-time" style="display:none;font-size:10.5px;color:var(--muted);flex:none">${fmtTime}</span><span class="dg-more" style="display:none;cursor:pointer;padding:0 4px;color:var(--muted);flex:none" title="更多">⋯</span>`
         el.title = `${it.state === 'draft' ? '草稿' : '已存书房'} · ${it.diagramType ?? sniffDiagramType(it.content) ?? '未知类型'}`
+        el.onmouseenter = () => {
+          el.querySelector('.dg-time').style.display = ''
+          el.querySelector('.dg-more').style.display = ''
+        }
+        el.onmouseleave = () => {
+          el.querySelector('.dg-time').style.display = 'none'
+          el.querySelector('.dg-more').style.display = 'none'
+          el.querySelector('.dg-menu')?.remove()
+        }
         el.onclick = () => renderWork('diagram', it)
+        // ⋯ 更多菜单：行内 absolute 弹层（点开才出现；目前仅「删除」）
+        el.querySelector('.dg-more').onclick = (e) => {
+          e.stopPropagation()
+          const old = el.querySelector('.dg-menu')
+          if (old) { old.remove(); return }
+          const menu = document.createElement('div')
+          menu.className = 'dg-menu'
+          menu.style.cssText = 'position:absolute;right:6px;top:calc(100% - 2px);z-index:50;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:96px;box-shadow:0 8px 24px rgba(0,0,0,.35)'
+          menu.innerHTML = `<div class="dg-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err,#f87171)">删除</div>`
+          menu.querySelector('.dg-del').onclick = async (e2) => {
+            e2.stopPropagation()
+            menu.remove()
+            if (!window.confirm(`删除图示「${it.title}」？将移入回收站（30 天内可在云端书房恢复）。`)) return
+            const rr = await window.moonlybox.rpc('diagram', { op: 'delete', id: it.id }, 30_000)
+            if (rr.event === 'done' && rr.code === 0 && JSON.parse(rr.text).ok !== false) {
+              void renderList('diagram')
+              if (typeof dgCurrentId === 'string' && dgCurrentId === it.id) renderWork('diagram', {})
+            } else {
+              const st = $('dg-state')
+              if (st) st.textContent = '删除失败：' + (rr.text || rr.message)
+            }
+          }
+          el.appendChild(menu)
+          // 点外部关闭
+          const close = (e3) => { if (!menu.contains(e3.target)) { menu.remove(); document.removeEventListener('click', close) } }
+          setTimeout(() => document.addEventListener('click', close), 0)
+        }
         body.appendChild(el)
       }
       if (!items.length) body.insertAdjacentHTML('beforeend', '<div class="muted" style="padding:10px">暂无图示</div>')
