@@ -1790,6 +1790,19 @@ function ensureFocusAlive() {
   requestAnimationFrame(sweep)
 }
 
+// #307.3：焦点强重置——脏态下（activeElement 卡死/点击聚焦无效）按 dialog 开合同等效果重置焦点环：
+// 依次尝试 blur 当前 → body 拿焦点 → 目标元素 focus；document.activeElement 不达目标时由 Chromium 重置收尾。
+function forceFocus(el) {
+  if (!el) return
+  try {
+    const ae = document.activeElement
+    if (ae && ae !== el && ae !== document.body) ae.blur?.()
+    if (!document.body.hasAttribute('tabindex')) document.body.setAttribute('tabindex', '-1')
+    document.body.focus({ preventScroll: true })
+    el.focus({ preventScroll: true })
+  } catch {}
+}
+
 // ---------- 图示类型嗅探（#292）：代码首关键词 → DG_TEMPLATES key（存书房标签同源） ----------
 function sniffDiagramType(code) {
   const head = String(code ?? '').replace(/^\s*```(?:mermaid)?/, '').trimStart().split(/\s/)[0] ?? ''
@@ -2391,8 +2404,11 @@ function bindChat(chatInfo) {
   }
   $('btn-ask').onclick = ask
   // #305：绑定完成即聚焦输入框（连续渲染后可直接输入；输入法状态不打断）
-  setTimeout(() => { const q = $('q'); if (q && !q.disabled) q.focus() }, 50)
+  // #307.3：focus 换 forceFocus——删除/confirm 等操作后焦点系统脏态下普通 focus() 会被忽略
+  setTimeout(() => { const q = $('q'); if (q && !q.disabled) forceFocus(q) }, 50)
   $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') ask() })
+  // #307.3：点击输入框时若焦点系统脏（点了没反应），pointerdown 内先强重置再聚焦——同点击动作内自愈
+  $('q').addEventListener('pointerdown', () => { const q = $('q'); if (q && !q.disabled) forceFocus(q) })
   // #282：恢复历史轮次（#288：气泡形态）
   if (meta?.turns?.length) {
     const sep = document.createElement('div')
