@@ -479,6 +479,32 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         }
         break
       }
+      case 'candidates': {
+        // #289 记忆候选池（云端 candidate 态实体）：list=候选列表；decide=confirm/drop 裁决
+        try {
+          const op5 = String((args as Record<string, unknown>).op ?? 'list')
+          if (op5 === 'list') {
+            const status = String(args.status ?? 'candidate')
+            const res = await apiGet<any>(`/memory/candidates?status=${encodeURIComponent(status)}`)
+            code = 0
+            text = JSON.stringify({ ok: true, items: res?.data?.items ?? [] })
+          } else if (op5 === 'decide') {
+            const res = await apiPost<any>('/memory/correct', {
+              id: String(args.id ?? ''),
+              action: String(args.action ?? 'confirm'),
+            })
+            code = 0
+            text = JSON.stringify({ ok: !!res?.ok, entity: res?.data?.entity ?? null })
+          } else {
+            code = 1
+            text = `candidates: 未知 op ${op5}`
+          }
+        } catch (e: any) {
+          code = 1
+          text = String(e?.message ?? e)
+        }
+        break
+      }
       case 'backup': {
       // #257 备份目录：list/add/remove/toggle/dirs（云端目录树平铺）/sync（上行到归属目录）
       try {

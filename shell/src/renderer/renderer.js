@@ -1238,6 +1238,11 @@ async function renderWork(nav, arg, label2) {
           <div class="set-desc" style="margin-top:4px">每次对话注入小月的记忆上下文上限，超出按新旧保留截断。默认 5000。</div>
         </div>
         <div class="set-row"><button type="button" class="btn" id="sp-mm-save">保存</button><span class="set-status" id="sp-mm-status"></span></div>
+        <div style="border-top:1px solid var(--border);margin:14px 0 10px"></div>
+        <div class="sc-title" style="margin-bottom:2px">云端候选池</div>
+        <div class="set-desc" style="margin-bottom:8px">对话沉淀的候选记忆（含重复命中的合并建议）在此确认后进入云端正式记忆；未登录或未开启同步时为空。</div>
+        <div class="set-status" id="sp-mm-cand-state"></div>
+        <div id="sp-mm-cand-body" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
       `)
       $('sp-mm-on').onclick = (e) => { e.currentTarget.classList.toggle('on'); $('sp-mm-save').click() }
       $('sp-mm-sync').onclick = (e) => { e.currentTarget.classList.toggle('on'); $('sp-mm-save').click() }
@@ -1248,6 +1253,57 @@ async function renderWork(nav, arg, label2) {
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
       }
+      // #289 云端候选池：candidate 态实体列表+确认/丢弃（登录态经 daemon apiGet/apiPost；未登录自然报未登录错误）
+      const mmBox = $('sp-mm-cand-body')
+      const mmState = $('sp-mm-cand-state')
+      const TYPE_LABELS = { fact: '事实', opinion: '观点', preference: '偏好', goal: '目标', project: '项目', person: '人物', action: '行动' }
+      const loadCandidates = async () => {
+        if (!mmBox) return
+        mmState.textContent = '加载中…'
+        const r = await window.moonlybox.rpc('candidates', { op: 'list' }, 20_000)
+        if (!(r.event === 'done' && r.code === 0)) {
+          mmState.textContent = `✗ ${r.message ?? r.text ?? '加载失败'}`
+          mmBox.innerHTML = ''
+          return
+        }
+        const items = JSON.parse(r.text).items ?? []
+        if (!items.length) {
+          mmState.textContent = '候选池为空——对话中沉淀的候选记忆会出现在这里，确认后进入云端正式记忆。'
+          mmBox.innerHTML = ''
+          return
+        }
+        mmState.textContent = `${items.length} 条待确认`
+        mmBox.innerHTML = items.map((it) => {
+          const sugg = (() => { try { return (JSON.parse(it.attributes ?? '{}')?.suggested ?? []) } catch { return [] } })()
+          const suggHtml = sugg.length ? `<div class="set-desc" style="margin:3px 0 0 26px">合并建议：${sugg.map((s) => `「${String(s).slice(0, 40)}」`).join('、')}</div>` : ''
+          return `<div class="set-card" data-mmid="${it.id}" style="flex-direction:column;align-items:stretch"><div style="display:flex;align-items:center;gap:8px">
+            <span class="set-desc" style="flex:0 0 auto">${TYPE_LABELS[it.type] ?? it.type ?? '—'}</span>
+            <span style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(it.subject ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>
+            <button type="button" class="btn" style="font-size:11.5px;padding:3px 10px" data-mmact="confirm">确认</button>
+            <button type="button" class="btn ghost" style="font-size:11.5px;padding:3px 10px" data-mmact="drop">丢弃</button>
+          </div>${suggHtml}</div>`
+        }).join('')
+        mmBox.querySelectorAll('[data-mmact]').forEach((btn) => {
+          btn.onclick = async () => {
+            const card = btn.closest('[data-mmid]')
+            const id = card?.dataset.mmid
+            if (!id) return
+            btn.disabled = true
+            const act = btn.dataset.mmact
+            const rr = await window.moonlybox.rpc('candidates', { op: 'decide', id, action: act }, 20_000)
+            if (rr.event === 'done' && rr.code === 0 && JSON.parse(rr.text).ok) {
+              card.remove()
+              const left = mmBox.querySelectorAll('[data-mmid]').length
+              mmState.textContent = left ? `${left} 条待确认` : '已全部处理完 ✓'
+              if (!left) mmBox.innerHTML = ''
+            } else {
+              btn.disabled = false
+              mmState.textContent = `✗ ${rr.message ?? '操作失败'}`
+            }
+          }
+        })
+      }
+      void loadCandidates()
         } else {
       const subLabel = currentSetSub ? ` · ${SET_SUB_LABELS[currentSetSub] ?? currentSetSub}` : ''
       panel(`${cat.label}${subLabel}`, '此分类的配置项随功能开启逐步展示。', '')
