@@ -372,7 +372,12 @@ async function renderList(nav) {
     newBtn.className = 'tree-item'
     newBtn.style.color = 'var(--accent)'
     newBtn.textContent = '＋ 新建图示'
-    newBtn.onclick = () => renderWork('diagram', {})
+    newBtn.onclick = async () => {
+      // #293：新建直达模板弹窗（不再先进空态页再点一次）
+      let pick = null
+      try { pick = await showDiagramTemplateDialog() } catch { return }
+      await renderWork('diagram', { __tpl: pick })
+    }
     body.appendChild(newBtn)
     const r = await window.moonlybox.rpc('diagram', { op: 'list' }, 30_000)
     try {
@@ -1575,23 +1580,25 @@ async function renderWork(nav, arg, label2) {
         </div>
         <div id="dg-err" style="display:none;padding:8px 16px;font-size:12px;color:var(--err);border-top:1px solid var(--border)"></div>
       </div>`
+    const openEditor = (existing, pick) => {
+      $('dg-empty').style.display = 'none'
+      $('dg-editor').style.display = 'flex'
+      $('dg-editor').style.flexDirection = 'column'
+      bindDiagramWorkbench(existing, pick)
+    }
     const newRow = $('dg-new')
     if (newRow) {
       newRow.onclick = async () => {
         let pick = null
         try { pick = await showDiagramTemplateDialog() } catch { return } // 取消=留在空态
-        $('dg-empty').style.display = 'none'
-        $('dg-editor').style.display = 'flex'
-        $('dg-editor').style.flexDirection = 'column'
-        bindDiagramWorkbench(null, pick)
+        openEditor(null, pick)
       }
     }
-    // arg=打开已有图示 → 直接进编辑器；无 arg → 空态（按钮隐藏）
-    if (arg?.id) {
-      $('dg-empty').style.display = 'none'
-      $('dg-editor').style.display = 'flex'
-      $('dg-editor').style.flexDirection = 'column'
-      bindDiagramWorkbench(arg)
+    // arg.__tpl=侧栏新建选完模板直达编辑器；arg.id=打开已有图示；否则空态（按钮隐藏）
+    if (arg?.__tpl) {
+      openEditor(null, arg.__tpl)
+    } else if (arg?.id) {
+      openEditor(arg)
     } else {
       const hide = ['dg-save', 'dg-activate', 'dg-ai']
       for (const id of hide) { const el = $(id); if (el) el.style.display = 'none' }
