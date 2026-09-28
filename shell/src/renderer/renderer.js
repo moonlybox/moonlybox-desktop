@@ -1869,9 +1869,12 @@ async function renderWork(nav, arg, label2) {
       injected = true
       try {
         if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
+        // #310.9：语言跟随客户端（appearance.lang zh-CN→zh）——云端页内嵌语言一致
+        const lang = (APP_SETTINGS?.appearance?.lang === 'en') ? 'en' : 'zh'
+        await wv.executeJavaScript(`localStorage.setItem('mf_lang', ${JSON.stringify(lang)}); 'ok'`)
       } catch {}
       if (!genValid()) return
-      // #310.4/.6：embed=1——AppShell 嵌入模式（#253.36），隐藏云端主菜单只渲染页面本体（与云端功能内嵌同约定）
+      // #310.4/.6：embed=1——AppShell 嵌入模式（#253.36）+PublicPageShell 嵌入模式（#310.9）——云端主菜单与页面自有头/脚都隐藏
       await wv.loadURL(`${webBase}/${arg === 'terms' ? 'terms' : 'feedback'}?mb_theme=${resolveThemeDark()}&embed=1`)
     })
     wv.addEventListener('did-finish-load', () => {
