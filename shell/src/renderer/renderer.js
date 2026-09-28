@@ -144,6 +144,14 @@ function applyThemeSettings() {
   const zoom = Math.min(200, Math.max(100, Number(ap.zoom ?? 100)))
   document.body.style.zoom = zoom / 100
 }
+// #296：解析当前主题为实际明暗两值（dark/light）——传云端内嵌用（请求级，不写用户云端设置）
+function resolveThemeDark() {
+  const mode = APP_SETTINGS?.appearance?.theme ?? 'system'
+  if (mode === 'dark') return 'dark'
+  if (mode === 'light') return 'light'
+  if (mode === 'time') return (new Date().getHours() >= 18 || new Date().getHours() < 6) ? 'dark' : 'light'
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
 // 跟随时间：每 10 分钟校一次主题（分号必须：下行 IIFE 以 ( 开头——ASI 陷阱 #253.20 同款）
 setInterval(() => { if (APP_SETTINGS?.appearance?.theme === 'time') applyThemeSettings() }, 10 * 60 * 1000);
 
@@ -1548,7 +1556,9 @@ async function renderWork(nav, arg, label2) {
         }, 450)
       }
       wv.addEventListener('did-finish-load', reveal)
-      await wv.loadURL(webBase + path)
+      // #296：客户端主题以请求级参数传云端（mb_theme=dark|light 两值）——云端按本次请求加载，不影响用户云端主题设置
+      const sep = path.includes('?') ? '&' : '?'
+      await wv.loadURL(`${webBase}${path}${sep}mb_theme=${resolveThemeDark()}`)
     })
     wv.src = webBase + '/login' // 先加载域（localStorage 注入需同源），dom-ready 后跳目标路由
     return
