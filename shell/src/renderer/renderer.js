@@ -2169,6 +2169,21 @@ function showWorkspaceDialog() {
     const r = await window.moonlybox.rpc('workspace', { op: 'create', name, dirs, primaryIndex: primaryIdx }, 15_000)
     if (r.event === 'done' && r.code === 0) {
       dlg.close(); dlg.remove()
+      // #306：创建工作空间的默认后续=顺便新建对话（打开+聚焦），用户切换功能回来对话保留（chats 持久化）
+      const wsId = JSON.parse(r.text).workspace?.id ?? null
+      xyActiveWorkspace = wsId
+      if (wsId && !xyCreating) {
+        xyCreating = true
+        try {
+          const rc = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: wsId }, 15_000)
+          if (rc.event === 'done' && rc.code === 0) {
+            xyActiveChat = JSON.parse(rc.text).chat.id
+            await renderXiaoyueList()
+            await renderWork('xiaoyue', { chat: xyActiveChat }) // bindChat 尾部自动聚焦输入框（#305）
+            return
+          }
+        } finally { xyCreating = false }
+      }
       await renderXiaoyueList() // #283.3：第二列会话列表刷新（原只重渲第三列工作台——新工作空间不出现）
       await renderWork('xiaoyue')
     } else { st.className = 'set-status err'; st.textContent = r.text || '创建失败' }
