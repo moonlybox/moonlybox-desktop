@@ -362,6 +362,29 @@ app.whenReady().then(() => {
   ipcMain.handle('shell:openPath', async (_e, p) => {
     try { return await shell.openPath(String(p || '')) } catch (e) { return String(e?.message ?? e) }
   })
+  // #310.7：调试日志——debug.enabled 时 daemon stdout 全量镜像落 userData/mb-debug.log；导出=打开日志目录
+  ipcMain.handle('shell:debugLog', (_e, line) => {
+    try {
+      const fs = require('fs')
+      const dir = app.getPath('userData')
+      if (!fs.existsSync(dir)) return
+      fs.appendFileSync(path.join(dir, 'mb-debug.log'), `[${new Date().toISOString()}] ${String(line ?? '')}\n`)
+    } catch {}
+  })
+  ipcMain.handle('shell:openLogDir', async () => {
+    try {
+      const dir = app.getPath('userData')
+      await shell.openPath(dir)
+      return ''
+    } catch (e) { return String(e?.message ?? e) }
+  })
+  ipcMain.handle('shell:envInfo', () => ({
+    packaged: app.isPackaged,
+    platform: process.platform,
+    electron: process.versions.electron,
+    node: process.versions.node,
+    locale: app.getLocale(),
+  }))
   // #307：原生模态确认框（替换 renderer window.confirm——同步阻塞弄脏焦点系统）
   ipcMain.handle('shell:confirmBox', async (_e, { message, title }) => {
     if (!win) return false

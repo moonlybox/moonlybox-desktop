@@ -95,6 +95,13 @@ const SETTINGS_CATS = [
 ]
 const SET_SUB_LABELS = { platform: '平台 API', local: '本地部署', custom: '自定义', builtin: '内置', market: '市场' }
 let currentHelpArg = 'about' // #310.5：帮助侧栏选中态跟踪（默认=关于）
+let _dbgOn = null; let _dbgAt = 0
+async function debugMirror() { // #310.7：调试开关缓存查询
+  if (_dbgOn !== null && Date.now() - _dbgAt < 10_000) return _dbgOn
+  try { const gs = await loadAppSettings(); _dbgOn = (gs.debug ?? {}).enabled === true } catch { _dbgOn = false }
+  _dbgAt = Date.now()
+  return _dbgOn
+}
 let currentSetCat = 'general'
 let currentSetSub = null
 let clipboardWatch = false; // 剪贴板自动采集（启动默认关，与 T3 行为一致；面板开关即时生效）——分号必须：下行 IIFE 以 ( 开头（ASI 陷阱 #253.20）
@@ -493,7 +500,7 @@ async function renderList(nav) {
     await renderXiaoyueList()
   } else if (nav === 'help') {
     // #310.5：帮助项选中态——currentHelpArg 跟踪当前项，DOM 级切换（点击换 active，不重渲侧栏）
-    for (const [arg, label, fn] of [['terms', '📜 条款', () => renderWork('help', 'terms')], ['feedback', '📝 问题反馈', () => renderWork('help', 'feedback')], ['kernel', '🧠 内核状态', () => renderWork('help', 'kernel')], ['about', 'ℹ️ 关于', () => renderWork('help', 'about')]]) {
+    for (const [arg, label, fn] of [['terms', '📜 条款', () => renderWork('help', 'terms')], ['feedback', '📝 问题反馈', () => renderWork('help', 'feedback')], ['debug', '🐞 调试', () => renderWork('help', 'debug')], ['cloudaddr', '🌐 云端地址', () => renderWork('help', 'cloudaddr')], ['kernel', '🧠 内核状态', () => renderWork('help', 'kernel')], ['about', 'ℹ️ 关于', () => renderWork('help', 'about')]]) {
       const el = document.createElement('div')
       el.className = 'tree-item' + (currentHelpArg === arg ? ' active' : '')
       el.textContent = label
@@ -1760,6 +1767,71 @@ async function renderWork(nav, arg, label2) {
     return
   }
   if (nav === 'help' && !arg) return renderWork('help', currentHelpArg || 'about') // #310.5：进帮助默认打开上次/关于
+  if (nav === 'help' && arg === 'debug') {
+    // #310.7：调试模式（dev 默认开/安装包默认关，可手动改）+日志导出；开启时内核 log/stderr 全量镜像 userData/mb-debug.log
+    const env = await window.moonlybox.envInfo().catch(() => null)
+    const gs = await loadAppSettings()
+    const defOn = env ? !env.packaged : false
+    const on = (gs.debug ?? { enabled: defOn }).enabled === true || (gs.debug == null && defOn)
+    w.innerHTML = `
+      <div style="padding:24px 28px;overflow-y:auto;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:12px">
+        <div class="set-card" style="display:flex;align-items:center;gap:12px;padding:14px 20px">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">调试模式</div>
+            <div class="set-desc" style="margin-top:2px">开启后内核输出全量镜像到日志文件（mb-debug.log）；${env ? (env.packaged ? '安装包默认关闭' : '开发模式默认开启') : ''}</div>
+          </div>
+          <button type="button" class="toggle ${on ? 'on' : ''}" id="dbg-on"></button>
+        </div>
+        <div class="set-card" style="display:flex;align-items:center;gap:12px;padding:14px 20px">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">调试日志 / 诊断包</div>
+            <div class="set-desc" style="margin-top:2px">打开日志目录：mb-debug.log（调试日志）与系统信息；反馈问题时可整目录打包附上</div>
+          </div>
+          <button class="btn ghost" id="dbg-export">打开日志目录</button>
+        </div>
+        <div class="set-card" style="padding:14px 20px">
+          <div style="font-size:13px;font-weight:600">环境信息</div>
+          <div class="set-desc" id="dbg-env" style="margin-top:6px;line-height:1.8"></div>
+        </div>
+      </div>`
+    $('dbg-on').onclick = async (e) => {
+      e.currentTarget.classList.toggle('on')
+      await saveAppSettings({ debug: { enabled: e.currentTarget.classList.contains('on') } })
+      renderWork('help', 'debug')
+    }
+    $('dbg-export').onclick = async () => {
+      const err = await window.moonlybox.openLogDir()
+      if (err) $('dbg-export').textContent = '打开失败：' + err
+    }
+    if (env) $('dbg-env').innerHTML = `平台：${env.platform}<br/>Electron：${env.electron} · Node：${env.node}<br/>安装包：${env.packaged ? '是' : '否（开发模式）'}<br/>语言：${env.locale}`
+    return
+  }
+  if (nav === 'help' && arg === 'cloudaddr') {
+    // #310.7：云端地址（只读展示+复制）
+    let webBase = 'https://moonlybox.cn'
+    try {
+      const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
+      if (r.event === 'done' && r.code === 0) {
+        const parsed = JSON.parse(r.text)
+        webBase = parsed.data?.webBase ?? parsed.webBase ?? webBase
+      }
+    } catch {}
+    w.innerHTML = `
+      <div style="padding:24px 28px;overflow-y:auto;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:12px">
+        <div class="set-card" style="padding:14px 20px">
+          <div style="font-size:13px;font-weight:600">云端服务地址</div>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <input readonly value="${webBase}" style="flex:1" id="cld-addr" />
+            <button class="btn ghost" id="cld-copy">复制</button>
+          </div>
+          <div class="set-desc" style="margin-top:8px">云端功能（书房/收藏/条款/反馈等）与账号服务均由此地址提供。</div>
+        </div>
+      </div>`
+    $('cld-copy').onclick = async () => {
+      try { await navigator.clipboard.writeText($('cld-addr').value); $('cld-copy').textContent = '已复制'; setTimeout(() => { const b = $('cld-copy'); if (b) b.textContent = '复制' }, 1500) } catch {}
+    }
+    return
+  }
   if (nav === 'help' && arg === 'kernel') {
     const r = await window.moonlybox.rpc('ping', {}, 10_000)
     w.innerHTML = `<div style="padding:20px" class="mono">内核：${r.event === 'done' ? '✓ 已连接（daemon pong）' : '✗ ' + (r.message ?? '未连接')}<br/>vault：${await window.moonlybox.vaultGet() ?? '未选择'}</div>`
@@ -1814,9 +1886,72 @@ async function renderWork(nav, arg, label2) {
     return
   }
   if (nav === 'help' && arg === 'about') {
+    // #310.7：关于页卡片化——LOGO/名称/口号/版本徽章/更新区（自动更新开关+立即更新）/版本说明/发现新版本章节
     const v = await window.moonlybox.versions()
-    w.innerHTML = `<div style="padding:20px" class="mono">GUI v${v.shellVersion} · 内核 v${v.kernelVersion}<br/><br/><button class="btn ghost" id="btn-check2">检查更新</button></div>`
-    $('btn-check2').onclick = () => window.moonlybox.updateCheck()
+    const env = await window.moonlybox.envInfo().catch(() => null)
+    const gs = await loadAppSettings()
+    const autoOn = (gs.updater ?? { enabled: true }).enabled !== false
+    const st = await window.moonlybox.updateState().catch(() => ({}))
+    const LOGO_SVG = document.querySelector('#titlebar svg')?.outerHTML ?? ''
+    // 版本说明（本地常量——发版时随版本更新；键=版本号）
+    const VERSION_NOTES = {
+      '0.5.1': '设置中心 11 分类；云端内嵌主题跟随；图示快建与侧栏细节批；小月对话 UI 与工作空间。',
+      '0.5.0': '图示（Mermaid 代码面板+实时预览+AI 生成）；工作空间与对话持久化；消息平台八通道。',
+    }
+    const notes = VERSION_NOTES[v.shellVersion] ?? '稳定性修复与细节优化。'
+    const prog = st?.progress != null ? `<div style="margin-top:8px;height:6px;border-radius:999px;background:var(--hover);overflow:hidden"><div style="width:${st.progress}%;height:100%;background:var(--accent);transition:width .3s"></div></div>` : ''
+    const updateSection = st?.downloaded
+      ? `<div class="set-card" style="border-color:var(--ok)"><div class="sc-main"><div class="sc-title" style="color:var(--ok)">✓ 新版本 v${st.version} 已就绪</div><div class="sc-desc">重启应用后完成安装</div></div><button class="btn" id="abt-install" style="background:var(--ok)">立即安装</button></div>`
+      : st?.available
+        ? `<div class="set-card" style="border-color:var(--accent)"><div class="sc-main"><div class="sc-title" style="color:var(--accent)">发现新版本 v${st.version}</div><div class="sc-desc">${VERSION_NOTES[st.version] ?? '修复与优化，详见官网更新日志。'}${st?.checking ? ' · 下载中…' : ''}</div></div></div>${prog}`
+        : ''
+    w.innerHTML = `
+      <div style="padding:24px 28px;overflow-y:auto;height:100%;box-sizing:border-box">
+        <div class="set-card" style="display:flex;align-items:center;gap:16px;padding:18px 20px">
+          <div style="width:52px;height:52px;border-radius:14px;background:var(--hover);display:flex;align-items:center;justify-content:center;flex:none">${LOGO_SVG.replace('viewBox="132 72 236 343" style="width:18px;height:18px;flex:none"', 'viewBox="132 72 236 343" style="width:34px;height:34px"')}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:17px;font-weight:700">魔力宝盒</div>
+            <div class="set-desc" style="margin-top:2px">你的智能信息管家 · 收藏、便签、待办、书房与小月，一盒皆收</div>
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+              <span style="font-size:11px;padding:2px 9px;border-radius:999px;background:var(--hover);color:var(--muted)">GUI v${v.shellVersion}</span>
+              <span style="font-size:11px;padding:2px 9px;border-radius:999px;background:var(--hover);color:var(--muted)">内核 v${v.kernelVersion}</span>
+              ${env?.packaged ? '' : '<span style="font-size:11px;padding:2px 9px;border-radius:999px;background:color-mix(in srgb, var(--accent) 14%, transparent);color:var(--accent)">开发模式</span>'}
+            </div>
+          </div>
+        </div>
+
+        <div class="set-card" style="margin-top:12px;display:flex;align-items:center;gap:12px;padding:14px 20px">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">自动更新</div>
+            <div class="set-desc" style="margin-top:2px">关闭后仅在打开本页点击「立即更新」时检查</div>
+          </div>
+          <button type="button" class="toggle ${autoOn ? 'on' : ''}" id="abt-auto"></button>
+          <button class="btn" id="btn-check2">${st?.checking ? '检查中…' : '立即更新'}</button>
+        </div>
+        ${updateSection}
+
+        <div class="set-card" style="margin-top:12px;padding:14px 20px">
+          <div style="font-size:13px;font-weight:600">当前版本说明</div>
+          <div class="set-desc" style="margin-top:6px;line-height:1.7">v${v.shellVersion} · ${notes}</div>
+        </div>
+
+        <div class="set-desc" style="margin-top:14px">环境：${env ? `${env.platform} · Electron ${env.electron}` : ''}</div>
+      </div>`
+    $('abt-auto').onclick = async (e) => {
+      e.currentTarget.classList.toggle('on')
+      const on = e.currentTarget.classList.contains('on')
+      await saveAppSettings({ updater: { enabled: on } })
+      await window.moonlybox.setAutoUpdate(on)
+    }
+    $('btn-check2').onclick = async (e) => {
+      e.currentTarget.textContent = '检查中…'
+      const st2 = await window.moonlybox.updateCheck()
+      if (st2?.downloaded) renderWork('help', 'about')
+      else if (st2?.available) { e.currentTarget.textContent = '立即更新'; renderWork('help', 'about') }
+      else e.currentTarget.textContent = '已是最新版本'
+    }
+    const inst = $('abt-install')
+    if (inst) inst.onclick = () => window.moonlybox.updateInstall()
     return
   }
   w.innerHTML = `<div style="padding:20px" class="muted">选择左侧项目开始</div>`
@@ -2461,6 +2596,10 @@ function bindChat(chatInfo) {
       if (msg.event === 'log') log(msg.payload)
       else if (msg.event === 'stderr') log('[stderr] ' + msg.payload)
       else if (msg.event === 'confirm_request') renderConfirmBar(msg.id, msg.payload)
+      // #310.7：调试模式镜像（模块级异步查一次开关，避免每行 RPC）
+      if (msg.event === 'log' || msg.event === 'stderr') {
+        debugMirror().then((on) => { if (on) window.moonlybox.debugLog(msg.payload) })
+      }
     })
     kernelEventBound = true
   }

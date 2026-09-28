@@ -7,6 +7,7 @@ const { autoUpdater } = require('electron-updater')
 const { Notification, ipcMain } = require('electron')
 
 let updateState = { checking: false, available: false, version: null, error: null, downloaded: false }
+let autoUpdateEnabled = true // #310.7：自动更新开关（设置-帮助；关=不自动下载，仅手动检查）
 
 function initUpdater(getMainWindow) {
   autoUpdater.autoDownload = true
@@ -37,9 +38,9 @@ function initUpdater(getMainWindow) {
     if (w && !w.isDestroyed()) w.webContents.send('shell:updateReady', { version: info.version })
   })
 
-  // 启动后 30s 首查，之后每 4h
-  setTimeout(() => { autoUpdater.checkForUpdates().catch(() => {}) }, 30_000)
-  setInterval(() => { autoUpdater.checkForUpdates().catch(() => {}) }, 4 * 3600 * 1000)
+  // 启动后 30s 首查，之后每 4h（#310.7：自动更新关=不自动查/下载，只保留手动检查）
+  setTimeout(() => { if (autoUpdateEnabled) autoUpdater.checkForUpdates().catch(() => {}) }, 30_000)
+  setInterval(() => { if (autoUpdateEnabled) autoUpdater.checkForUpdates().catch(() => {}) }, 4 * 3600 * 1000)
 
   // IPC：关于页手动检查/取状态/重启安装
   ipcMain.handle('shell:updateCheck', async () => {
@@ -48,6 +49,13 @@ function initUpdater(getMainWindow) {
   })
   ipcMain.handle('shell:updateState', () => updateState)
   ipcMain.handle('shell:updateInstall', () => { autoUpdater.quitAndInstall() })
+  // #310.7：自动更新开关（关=不自动查/下载；手动检查仍可用）
+  ipcMain.handle('shell:setAutoUpdate', (_e, on) => {
+    autoUpdateEnabled = !!on
+    autoUpdater.autoDownload = !!on
+    autoUpdater.autoInstallOnAppQuit = !!on
+    return true
+  })
 }
 
-module.exports = { initUpdater, updateState }
+module.exports = { initUpdater, updateState, get autoUpdateEnabled() { return autoUpdateEnabled } }
