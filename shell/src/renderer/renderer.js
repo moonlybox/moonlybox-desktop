@@ -490,6 +490,9 @@ async function renderTree(container, rel, depth) {
 }
 
 // ---------- 第三列渲染 ----------
+// #299：渲染世代令牌——快速切换功能时旧 renderWork 协程作废（await 期间 DOM 已被新渲染重写，
+// 旧协程继续执行会 null 报错或把新页面覆盖成旧页面）。cloud 长链路每步 await 后检查。
+let renderGen = 0
 async function renderWork(nav, arg, label2) {
   const w = $('work')
   if (nav === 'vault' && arg && !arg.dir) {
@@ -1517,6 +1520,8 @@ async function renderWork(nav, arg, label2) {
   }
   if (nav === 'cloud' && arg && typeof arg === 'object') {
     // #254：云端功能页=WebView 承载 web SPA（布局/交互/多视图=web 端现成；升级零客户端发版）
+    const gen = ++renderGen // #299：本协程世代号——期间用户切走则后续步骤全部作废
+    const genValid = () => gen === renderGen && $('cloud-wv') !== null
     // #253.41/#253.42：防闪烁+加载动画——webview 初始透明+spinner 覆盖层，目标页 did-finish-load 后淡入并移除 spinner（无调试文字）
     w.innerHTML = `<div style="flex:1;display:flex;position:relative;background:var(--bg)">
       <webview id="cloud-wv" style="flex:1;width:100%;height:100%;opacity:0;transition:opacity .25s" src="about:blank"></webview>
@@ -1525,15 +1530,17 @@ async function renderWork(nav, arg, label2) {
       </div>
     </div>`
     const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
+    if (!genValid()) return // #299：await 期间用户切走——本协程作废（防 null addEventListener 与覆盖新页面）
     if (r.event !== 'done' || r.code !== 0) { w.innerHTML = `<div style="padding:16px" class="muted">加载失败：${r.text ?? ''}</div>`; return }
     const parsed = JSON.parse(r.text)
     const webBase = parsed.data?.webBase ?? parsed.webBase ?? 'https://moonlybox.cn'  // webBase 在 data 里（daemon nav: {ok,data,token}），兜底官方域
     const token = parsed.token
     const wv = $('cloud-wv')
+    if (!wv) return // #299：双保险（世代校验兜底）
     let injected = false
     wv.addEventListener('dom-ready', async () => {
       // 只处理目标域的首次 ready（about:blank 阶段不注入）
-      if (injected) return
+      if (injected || !genValid()) return // #299：切走后协程作废，不再注入/跳转
       const cur = wv.getURL() || ''
       if (!cur.startsWith(webBase)) return
       injected = true
@@ -1542,6 +1549,7 @@ async function renderWork(nav, arg, label2) {
       } catch {
         // 注入失败重试一次（guest 页偶发未就绪）
         await new Promise((r2) => setTimeout(r2, 600))
+        if (!genValid()) return // #299：重试等待期间切走=作废
         try { if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`) } catch {}
       }
       // 路由跳转（#253.35）：web=BrowserRouter（path 路由）——manifest url 归一化去 '#'
@@ -1551,12 +1559,14 @@ async function renderWork(nav, arg, label2) {
       const reveal = () => {
         wv.removeEventListener('did-finish-load', reveal)
         setTimeout(() => {
+          if (!genValid()) return // #299：淡入延迟期间切走=不动 DOM（防云端页覆盖已切换的功能页）
           wv.style.opacity = '1'
           $('cloud-loading')?.remove()
         }, 450)
       }
       wv.addEventListener('did-finish-load', reveal)
       // #296：客户端主题以请求级参数传云端（mb_theme=dark|light 两值）——云端按本次请求加载，不影响用户云端主题设置
+      if (!genValid()) return // #299：跳转前最后校验
       const sep = path.includes('?') ? '&' : '?'
       await wv.loadURL(`${webBase}${path}${sep}mb_theme=${resolveThemeDark()}`)
     })
