@@ -2269,7 +2269,7 @@ function bindChat(chatInfo) {
     s.textContent = summary
     const b = document.createElement('div')
     b.className = 'fold-body'
-    if (body) b.textContent = body
+    if (body) b.textContent = String(body).split(/\r\n|\r|\n/).map((l) => l.replace(/\s+$/, '')).join('\n').replace(/\n{3,}/g, '\n\n')
     d.append(s, b)
     logEl().appendChild(d)
     scroll()
@@ -2319,9 +2319,11 @@ function bindChat(chatInfo) {
       return
     }
     if (/^  → |^  ✗ |^  （/.test(line) && (cur.type === 'tool' || cur.type === 'think')) {
-      // 工具结果/子行并入折叠体
-      cur.text += (cur.text ? '\n' : '') + line
-      cur.el.textContent = cur.text
+      // 工具结果/子行并入折叠体（#308.3：折叠体 pre-wrap 会显形空行——空行不并入）
+      if (line.trim()) {
+        cur.text += (cur.text ? '\n' : '') + line
+        cur.el.textContent = cur.text
+      }
       scroll()
       return
     }
@@ -2445,6 +2447,11 @@ function renderMarkdownSafe(src) {
     for (const attr of [...el.attributes]) {
       if (/^on/i.test(attr.name) || (/^(href|src)$/i.test(attr.name) && /^\s*javascript:/i.test(attr.value))) el.removeAttribute(attr.name)
     }
+  })
+  // #308.3：结果级空白行清理——marked 产出的裸 \n 文本节点与空段（含仅空白/&nbsp;）在行距下表现为整行空白
+  tpl.content.querySelectorAll('p,li,h1,h2,h3,h4,td,th').forEach((el) => {
+    const txt = (el.textContent || '').replace(/\u00a0/g, ' ').trim()
+    if (!txt && !el.querySelector('img,svg,code,pre,table')) el.remove()
   })
   const out = tpl.innerHTML.replace(/<!--MBMERMAID(\d+)-->/g, (_m, i) => `<div class="mb-mermaid" data-mbcode="${encodeURIComponent(mermaidBlocks[Number(i)] ?? '')}"></div>`)
   // mermaid 回填（异步出图）
