@@ -250,7 +250,8 @@
   .msg.ai { align-self: flex-start; align-items: flex-start; }
   .msg-bubble { padding: 7px 11px; border-radius: 14px; font-size: 13.5px; line-height: 1.55; user-select: text; }
   .msg.user .msg-bubble { background: var(--active-bg); color: var(--active-fg); border-bottom-right-radius: 4px; white-space: pre-wrap; }
-  .msg.ai .msg-bubble { background: var(--bg2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  /* #308.4：white-space 必须 normal——#log 的 pre-wrap 会继承进来，marked HTML 源码块间 \n 每个都显形成空白行 */
+  .msg.ai .msg-bubble { background: var(--bg2); border: 1px solid var(--border); border-bottom-left-radius: 4px; white-space: normal; }
   .msg.ai .msg-bubble p { margin: 0 0 4px; } .msg.ai .msg-bubble p:last-child { margin-bottom: 0; }
   .msg.ai .msg-bubble p:empty { margin: 0; height: 0; }
   .msg.ai .msg-bubble ul, .msg.ai .msg-bubble ol { margin: 2px 0 4px; padding-left: 18px; }

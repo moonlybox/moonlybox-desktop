@@ -1760,17 +1760,37 @@ function closeCtxMenu(menu) {
   menu.remove()
 }
 
-// ---------- 确认弹窗（#307.2）：主进程原生模态——window.confirm 同步阻塞弄脏焦点系统（删除后输入框全部无法聚焦）
-async function mbConfirm(message) {
-  try {
-    const ok = await window.moonlybox.confirmBox(message, '魔力宝盒')
-    if (!ok) return false
-    window.focus()
-    ensureFocusAlive()
-    return true
-  } catch {
-    return window.confirm(message) // 桥异常兜底
-  }
+// ---------- 确认弹窗（#307.2→#309：页面内置 <dialog>——UI 与新建工作空间统一；无 OS 模态往返，
+// 焦点全程由 showModal/close 在 renderer 内管理（用户实测 dialog 开合恰好能重置焦点环）→失焦源头消除）。
+// 确定后 forceFocus 归还焦点；桥 confirmBox 保留但不再默认使用。
+function mbConfirm(message, okText = '删除') {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog')
+    dlg.innerHTML = `
+      <div class="dlg-body" style="min-width:360px">
+        <div style="font-size:14px;line-height:1.6;white-space:normal;margin-bottom:18px">${message}</div>
+        <div class="set-row" style="justify-content:flex-end;gap:8px">
+          <button class="btn" id="mbc-ok" style="background:var(--err,#dc2626);color:#fff;border-color:transparent">${okText}</button>
+          <button class="btn ghost" id="mbc-cancel">取消</button>
+        </div>
+      </div>`
+    document.body.appendChild(dlg)
+    let done = false
+    const finish = (v) => {
+      if (done) return
+      done = true
+      dlg.close(); dlg.remove()
+      document.removeEventListener('cancel', onCancel)
+      resolve(v)
+    }
+    const onCancel = () => finish(false)
+    dlg.addEventListener('cancel', onCancel) // Esc=取消
+    dlg.addEventListener('close', () => finish(false)) // 兜底：任何 close 路径未走 finish
+    dlg.querySelector('#mbc-ok').onclick = () => finish(true)
+    dlg.querySelector('#mbc-cancel').onclick = () => finish(false)
+    dlg.showModal()
+    dlg.querySelector('#mbc-cancel').focus()
+  })
 }
 
 // ---------- 焦点复位（#307）：confirm/删除 DOM 后 activeElement 可能残留在已断链节点——
@@ -2576,7 +2596,7 @@ window.moonlybox.onUpdateReady((msg) => setUpgradeState('ready', msg.version))
 $('btn-upgrade').onclick = async () => {
   const st = await window.moonlybox.updateState()
   if (st?.downloaded) {
-    if (window.confirm(`v${st.version} 已就绪，安装并重启？`)) window.moonlybox.updateInstall()
+    mbConfirm(`v${st.version} 已就绪，安装并重启？`, '安装').then((ok) => { if (ok) window.moonlybox.updateInstall() })
     return
   }
   setUpgradeState('available', st?.version ?? '')
