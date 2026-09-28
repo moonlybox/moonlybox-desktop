@@ -467,13 +467,18 @@ async function renderList(nav) {
       <div id="xy-list" style="flex:1;overflow-y:auto;padding:4px 8px 12px"></div>`
     $('xy-new-ws').onclick = () => showWorkspaceDialog()
     $('xy-new-chat').onclick = async () => {
-      const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: xyActiveWorkspace }, 15_000)
-      if (r.event === 'done' && r.code === 0) {
-        xyActiveChat = JSON.parse(r.text).chat.id
-        xyActiveWorkspace = null // 新无工作空间对话
-        await renderWork('xiaoyue')
-        await renderWork('xiaoyue', { chat: xyActiveChat })
-      }
+      if (xyCreating) return // #305 防重入
+      xyCreating = true
+      try {
+        const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: xyActiveWorkspace }, 15_000)
+        if (r.event === 'done' && r.code === 0) {
+          xyActiveChat = JSON.parse(r.text).chat.id
+          xyActiveWorkspace = null // 新无工作空间对话
+          await renderWork('xiaoyue')
+          await renderWork('xiaoyue', { chat: xyActiveChat })
+          await renderXiaoyueList() // #305：新建后即时刷列表（消掉「按钮还在可再点」的窗口）
+        }
+      } finally { xyCreating = false }
     }
     await renderXiaoyueList()
   } else if (nav === 'help') {
@@ -1955,6 +1960,7 @@ function bindDiagramWorkbench(existing, pick) {
 // ---------- 小月会话列表与工作空间（#282） ----------
 let xyActiveChat = null      // 当前打开的对话 id
 let xyActiveWorkspace = null // 新建对话的默认归属（null=无工作空间）
+let xyCreating = false       // #305：createChat 防重入门（列表不实时刷新期间连点会建重复对话）
 
 async function renderXiaoyueList() {
   const box = $('xy-list')
@@ -2020,14 +2026,18 @@ async function renderXiaoyueList() {
   freeGroup.innerHTML = `<div class="tree-item" style="font-weight:600">💬 对话<span style="margin-left:6px;font-weight:400;font-size:11px;color:var(--muted)">无工作空间</span><span class="xy-free-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="新建无工作空间对话">＋</span></div>`
   box.appendChild(freeGroup)
   freeGroup.querySelector('.xy-free-add').onclick = async () => {
-    const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: null }, 15_000)
-    if (r.event === 'done' && r.code === 0) {
-      xyActiveChat = JSON.parse(r.text).chat.id
-      xyActiveWorkspace = null
-      await renderWork('xiaoyue')
-      await renderWork('xiaoyue', { chat: xyActiveChat })
-      await renderXiaoyueList()
-    }
+    if (xyCreating) return // #305 防重入
+    xyCreating = true
+    try {
+      const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: null }, 15_000)
+      if (r.event === 'done' && r.code === 0) {
+        xyActiveChat = JSON.parse(r.text).chat.id
+        xyActiveWorkspace = null
+        await renderWork('xiaoyue')
+        await renderWork('xiaoyue', { chat: xyActiveChat })
+        await renderXiaoyueList()
+      }
+    } finally { xyCreating = false }
   }
   for (const c of free) box.appendChild(chatItem(c, null))
   const sorted = [...wss].sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
@@ -2037,14 +2047,18 @@ async function renderXiaoyueList() {
     // #303：组头收敛——保留「💬 在此工作空间新建对话」（单图标），「增加工作目录/删除」收进 ⋯ 更多菜单（参照图示 #300/#301：挂 body+fixed）
     group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.map((d, i) => (i === (ws.primaryIndex ?? 0) ? `【主】${d}` : d)).join('\n')}">📁 ${ws.name}</span><span class="xy-ws-chat" style="color:var(--muted);cursor:pointer;padding:0 4px" title="在此工作空间新建对话">💬</span><span class="xy-ws-more" style="color:var(--muted);cursor:pointer;padding:0 4px" title="更多">⋯</span></div>`
     group.querySelector('.xy-ws-chat').onclick = async () => {
-      const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: ws.id }, 15_000)
-      if (r.event === 'done' && r.code === 0) {
-        xyActiveChat = JSON.parse(r.text).chat.id
-        xyActiveWorkspace = ws.id
-        await renderWork('xiaoyue')
-        await renderWork('xiaoyue', { chat: xyActiveChat })
-        await renderXiaoyueList()
-      }
+      if (xyCreating) return // #305 防重入
+      xyCreating = true
+      try {
+        const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: ws.id }, 15_000)
+        if (r.event === 'done' && r.code === 0) {
+          xyActiveChat = JSON.parse(r.text).chat.id
+          xyActiveWorkspace = ws.id
+          await renderWork('xiaoyue')
+          await renderWork('xiaoyue', { chat: xyActiveChat })
+          await renderXiaoyueList()
+        }
+      } finally { xyCreating = false }
     }
     // #303：⋯ 更多菜单（挂 body+fixed，#301 范式）：增加工作目录 / 删除工作空间
     const openMenu = () => {
@@ -2088,17 +2102,7 @@ async function renderXiaoyueList() {
     group.querySelector('.xy-ws-more').onclick = (e) => { e.stopPropagation(); openMenu() }
     box.appendChild(group)
     for (const c of chats.filter((x) => x.workspaceId === ws.id)) box.appendChild(chatItem(c, ws.id))
-    // 工作空间下新建对话
-    const add = document.createElement('div')
-    add.className = 'tree-item'
-    add.style.paddingLeft = '26px'
-    add.style.color = 'var(--muted)'
-    add.textContent = '＋ 新对话'
-    add.onclick = async () => {
-      const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: ws.id }, 15_000)
-      if (r.event === 'done' && r.code === 0) { xyActiveChat = JSON.parse(r.text).chat.id; xyActiveWorkspace = ws.id; await renderWork('xiaoyue'); await renderWork('xiaoyue', { chat: xyActiveChat }) }
-    }
-    box.appendChild(add)
+    // #305：组尾「＋ 新对话」行删除——入口唯一（组头 💬 即新建对话入口）；原双入口连点会建重复对话
   }
 }
 
@@ -2328,6 +2332,8 @@ function bindChat(chatInfo) {
     if (meta && meta.title === '新对话') renderXiaoyueList()
   }
   $('btn-ask').onclick = ask
+  // #305：绑定完成即聚焦输入框（连续渲染后可直接输入；输入法状态不打断）
+  setTimeout(() => { const q = $('q'); if (q && !q.disabled) q.focus() }, 50)
   $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') ask() })
   // #282：恢复历史轮次（#288：气泡形态）
   if (meta?.turns?.length) {
