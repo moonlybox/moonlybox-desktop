@@ -1969,21 +1969,63 @@ async function renderXiaoyueList() {
     el.className = 'tree-item xy-chat' + (c.id === xyActiveChat ? ' active' : '')
     el.style.paddingLeft = '26px'
     el.dataset.chat = c.id
-    el.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💬 ${c.title}</span><span data-del="1" style="color:var(--muted);cursor:pointer;padding:0 4px">×</span>`
-    el.onclick = (e) => { if (!e.target.dataset.del) openChat(c.id, wsId) }
-    el.querySelector('[data-del]').onclick = async (e) => {
+    // #303：删除收敛进 ⋯ 更多菜单（挂 body+fixed，#301 范式）
+    el.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💬 ${c.title}</span><span data-more="1" style="color:var(--muted);cursor:pointer;padding:0 4px" title="更多">⋯</span>`
+    el.onclick = (e) => { if (!e.target.dataset.more) openChat(c.id, wsId) }
+    el.querySelector('[data-more]').onclick = (e) => {
       e.stopPropagation()
-      await window.moonlybox.rpc('workspace', { op: 'deleteChat', id: c.id }, 10_000)
-      if (xyActiveChat === c.id) { xyActiveChat = null; await renderWork('xiaoyue') }
-      await renderXiaoyueList()
+      const existed = document.querySelector('.xy-menu')
+      if (existed) { existed.remove(); return }
+      const menu = document.createElement('div')
+      menu.className = 'xy-menu'
+      const rect = el.getBoundingClientRect()
+      menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:96px;box-shadow:0 8px 24px rgba(0,0,0,.35);visibility:hidden'
+      document.body.appendChild(menu)
+      menu.innerHTML = `<div class="xy-mi-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err)">删除</div>`
+      const mh = menu.offsetHeight
+      const below = rect.bottom + 2 + mh <= window.innerHeight - 8
+      menu.style.left = `${Math.min(rect.right - 104, window.innerWidth - 112)}px`
+      menu.style.top = `${below ? rect.bottom + 2 : rect.top - mh - 2}px`
+      menu.style.visibility = ''
+      menu.querySelector('.xy-mi-del').onclick = async (e2) => {
+        e2.stopPropagation()
+        menu.remove()
+        if (!window.confirm(`删除对话「${c.title}」？`)) return
+        await window.moonlybox.rpc('workspace', { op: 'deleteChat', id: c.id }, 10_000)
+        if (xyActiveChat === c.id) { xyActiveChat = null; await renderWork('xiaoyue') }
+        await renderXiaoyueList()
+      }
+      const close = (e3) => { if (!menu.contains(e3.target)) { menu.remove(); document.removeEventListener('click', close); lb?.removeEventListener('scroll', close) } }
+      const lb = box.closest('.list-body')
+      lb?.addEventListener('scroll', close, { once: true })
+      setTimeout(() => document.addEventListener('click', close), 0)
     }
     return el
   }
-  // 工作空间分组
-  for (const ws of wss) {
+  // 无工作空间组固定最前（#303）；工作空间按创建时间倒序（最新在上）
+  const free = chats.filter((c) => !c.workspaceId)
+  const freeGroup = document.createElement('div')
+  freeGroup.className = 'xy-ws-group'
+  // #303：组头副标签改内联样式（原 .set-desc 行高致「无工作空间」与主文字不齐平）
+  freeGroup.innerHTML = `<div class="tree-item" style="font-weight:600">💬 对话<span style="margin-left:6px;font-weight:400;font-size:11px;color:var(--muted)">无工作空间</span><span class="xy-free-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="新建无工作空间对话">＋</span></div>`
+  box.appendChild(freeGroup)
+  freeGroup.querySelector('.xy-free-add').onclick = async () => {
+    const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: null }, 15_000)
+    if (r.event === 'done' && r.code === 0) {
+      xyActiveChat = JSON.parse(r.text).chat.id
+      xyActiveWorkspace = null
+      await renderWork('xiaoyue')
+      await renderWork('xiaoyue', { chat: xyActiveChat })
+      await renderXiaoyueList()
+    }
+  }
+  for (const c of free) box.appendChild(chatItem(c, null))
+  const sorted = [...wss].sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))
+  for (const ws of sorted) {
     const group = document.createElement('div')
     group.className = 'xy-ws-group'
-    group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.map((d, i) => (i === (ws.primaryIndex ?? 0) ? `【主】${d}` : d)).join('\n')}">📁 ${ws.name}</span><span class="xy-ws-chat" style="color:var(--muted);cursor:pointer;padding:0 4px" title="在此工作空间新建对话">💬＋</span><span class="xy-ws-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="增加工作目录">＋</span><span class="xy-ws-del" style="color:var(--muted);cursor:pointer;padding:0 4px" title="删除工作空间">×</span></div>`
+    // #303：组头收敛——保留「💬 在此工作空间新建对话」（单图标），「增加工作目录/删除」收进 ⋯ 更多菜单（参照图示 #300/#301：挂 body+fixed）
+    group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.map((d, i) => (i === (ws.primaryIndex ?? 0) ? `【主】${d}` : d)).join('\n')}">📁 ${ws.name}</span><span class="xy-ws-chat" style="color:var(--muted);cursor:pointer;padding:0 4px" title="在此工作空间新建对话">💬</span><span class="xy-ws-more" style="color:var(--muted);cursor:pointer;padding:0 4px" title="更多">⋯</span></div>`
     group.querySelector('.xy-ws-chat').onclick = async () => {
       const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: ws.id }, 15_000)
       if (r.event === 'done' && r.code === 0) {
@@ -1994,18 +2036,44 @@ async function renderXiaoyueList() {
         await renderXiaoyueList()
       }
     }
-    group.querySelector('.xy-ws-add').onclick = async () => {
-      const r = await window.moonlybox.pickFolder()
-      const dir = r?.ok ? r.path : null
-      if (!dir) return
-      await window.moonlybox.rpc('workspace', { op: 'update', id: ws.id, addDir: dir }, 10_000)
-      await renderXiaoyueList()
+    // #303：⋯ 更多菜单（挂 body+fixed，#301 范式）：增加工作目录 / 删除工作空间
+    const openMenu = () => {
+      const existed = document.querySelector('.xy-menu')
+      if (existed) { existed.remove(); return }
+      const row = group.querySelector('.tree-item')
+      const menu = document.createElement('div')
+      menu.className = 'xy-menu'
+      const rect = row.getBoundingClientRect()
+      menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:132px;box-shadow:0 8px 24px rgba(0,0,0,.35);visibility:hidden'
+      document.body.appendChild(menu)
+      menu.innerHTML = `<div class="xy-mi-add" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px">增加工作目录</div><div class="xy-mi-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err)">删除工作空间</div>`
+      const mh = menu.offsetHeight
+      const below = rect.bottom + 2 + mh <= window.innerHeight - 8
+      menu.style.left = `${Math.min(rect.right - 140, window.innerWidth - 148)}px`
+      menu.style.top = `${below ? rect.bottom + 2 : rect.top - mh - 2}px`
+      menu.style.visibility = ''
+      menu.querySelector('.xy-mi-add').onclick = async (e2) => {
+        e2.stopPropagation()
+        menu.remove()
+        const r = await window.moonlybox.pickFolder()
+        const dir = r?.ok ? r.path : null
+        if (!dir) return
+        await window.moonlybox.rpc('workspace', { op: 'update', id: ws.id, addDir: dir }, 10_000)
+        await renderXiaoyueList()
+      }
+      menu.querySelector('.xy-mi-del').onclick = async (e2) => {
+        e2.stopPropagation()
+        menu.remove()
+        if (!window.confirm(`删除工作空间「${ws.name}」？其下对话将变为无工作空间对话（历史保留）。`)) return
+        await window.moonlybox.rpc('workspace', { op: 'delete', id: ws.id }, 10_000)
+        await renderXiaoyueList()
+      }
+      const close = (e3) => { if (!menu.contains(e3.target)) { menu.remove(); document.removeEventListener('click', close); lb?.removeEventListener('scroll', close) } }
+      const lb = box.closest('.list-body')
+      lb?.addEventListener('scroll', close, { once: true })
+      setTimeout(() => document.addEventListener('click', close), 0)
     }
-    group.querySelector('.xy-ws-del').onclick = async () => {
-      if (!window.confirm(`删除工作空间「${ws.name}」？其下对话将变为无工作空间对话（历史保留）。`)) return
-      await window.moonlybox.rpc('workspace', { op: 'delete', id: ws.id }, 10_000)
-      await renderXiaoyueList()
-    }
+    group.querySelector('.xy-ws-more').onclick = (e) => { e.stopPropagation(); openMenu() }
     box.appendChild(group)
     for (const c of chats.filter((x) => x.workspaceId === ws.id)) box.appendChild(chatItem(c, ws.id))
     // 工作空间下新建对话
@@ -2020,23 +2088,6 @@ async function renderXiaoyueList() {
     }
     box.appendChild(add)
   }
-  // 无工作空间的「对话」分类
-  const free = chats.filter((c) => !c.workspaceId)
-  const freeGroup = document.createElement('div')
-  freeGroup.className = 'xy-ws-group'
-  freeGroup.innerHTML = `<div class="tree-item" style="font-weight:600">💬 对话<span class="set-desc" style="margin-left:6px;font-weight:400">无工作空间</span><span class="xy-free-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="新建无工作空间对话">＋</span></div>`
-  box.appendChild(freeGroup)
-  freeGroup.querySelector('.xy-free-add').onclick = async () => {
-    const r = await window.moonlybox.rpc('workspace', { op: 'createChat', workspaceId: null }, 15_000)
-    if (r.event === 'done' && r.code === 0) {
-      xyActiveChat = JSON.parse(r.text).chat.id
-      xyActiveWorkspace = null
-      await renderWork('xiaoyue')
-      await renderWork('xiaoyue', { chat: xyActiveChat })
-      await renderXiaoyueList()
-    }
-  }
-  for (const c of free) box.appendChild(chatItem(c, null))
 }
 
 function showWorkspaceDialog() {
