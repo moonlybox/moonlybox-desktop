@@ -1780,7 +1780,120 @@ function showWorkspaceDialog() {
 let kernelEventBound = false
 function bindChat(chatInfo) {
   const meta = chatInfo?.meta
-  const log = (t) => { $('log').textContent += t + '\n'; $('log').scrollTop = $('log').scrollHeight }
+  // #288 对话 UI：log() 升级为结构化消息渲染——行前缀分类（用户气泡/AI 气泡 Markdown/工具折叠条/思考折叠条/活动小字）。
+  // daemon 协议不变（console.log 行级流），渲染分类全在 renderer 侧。
+  const logEl = () => $('log')
+  // 当前聚合态：连续相关行并入同一容器（AI 气泡 / 工具折叠 / 思考折叠）
+  let cur = { type: null, el: null, text: '' }
+  const scroll = () => { const el = logEl(); if (el) el.scrollTop = el.scrollHeight }
+  const flushCur = () => {
+    if (!cur.type || !cur.el) return
+    if (cur.type === 'ai') setBubbleMarkdown(cur.el.querySelector('.msg-bubble'), cur.text)
+    cur = { type: null, el: null, text: '' }
+  }
+  const addMsg = (role, text) => {
+    flushCur() // 连续消息安全：先终稿上一个聚合容器（ai 气泡渲染最终 markdown）
+    const wrap = document.createElement('div')
+    wrap.className = `msg ${role}`
+    const roleEl = document.createElement('div')
+    roleEl.className = 'msg-role'
+    roleEl.textContent = role === 'user' ? '你' : '小月'
+    const bubble = document.createElement('div')
+    bubble.className = 'msg-bubble'
+    wrap.append(roleEl, bubble)
+    logEl().appendChild(wrap)
+    if (role === 'user') bubble.textContent = text
+    else { cur = { type: 'ai', el: wrap, text } ; setBubbleMarkdown(bubble, text) }
+    scroll()
+    return bubble
+  }
+  const addFold = (summary, body, cls) => {
+    const d = document.createElement('details')
+    d.className = `chat-fold ${cls ?? ''}`
+    const s = document.createElement('summary')
+    s.textContent = summary
+    const b = document.createElement('div')
+    b.className = 'fold-body'
+    if (body) b.textContent = body
+    d.append(s, b)
+    logEl().appendChild(d)
+    scroll()
+    return b
+  }
+  const addActLine = (text, indent) => {
+    const el = document.createElement('div')
+    el.className = 'chat-act-line' + (indent ? ' indent' : '')
+    el.textContent = text
+    logEl().appendChild(el)
+    scroll()
+  }
+  const log = (t) => {
+    const el = logEl()
+    if (!el) return
+    const line = String(t)
+    // 分类规则（与 kernel 行形态一一对应）：
+    if (line.startsWith('你> ')) {
+      flushCur()
+      addMsg('user', line.slice(3))
+      return
+    }
+    if (line.startsWith('小月：')) {
+      flushCur()
+      // 终答（可能多行——payload 单条含 \n）
+      addMsg('ai', line.slice(3))
+      return
+    }
+    if (cur.type === 'ai' && line.trim()) {
+      // AI 气泡的续行（answer 多行被 daemon 拆行时并入）
+      cur.text += '\n' + line
+      setBubbleMarkdown(cur.el.querySelector('.msg-bubble'), cur.text)
+      scroll()
+      return
+    }
+    if (line.startsWith('⚙ ')) {
+      flushCur()
+      const body = addFold(line, '', 'tool')
+      cur = { type: 'tool', el: body, text: '' }
+      return
+    }
+    if (/^（LLM 响应：/.test(line) || /^（已接入工具 /.test(line) || /^（本地/.test(line) || /^（云端/.test(line) || /^（上下文/.test(line)) {
+      flushCur()
+      const isThink = line.startsWith('（LLM 响应：')
+      const body = addFold(isThink ? '💭 思考过程' : line.replace(/^（|）$/g, ''), line, 'think')
+      cur = { type: 'think', el: body, text: line }
+      return
+    }
+    if (/^  → |^  ✗ |^  （/.test(line) && (cur.type === 'tool' || cur.type === 'think')) {
+      // 工具结果/子行并入折叠体
+      cur.text += (cur.text ? '\n' : '') + line
+      cur.el.textContent = cur.text
+      scroll()
+      return
+    }
+    if (line.startsWith('—— ')) {
+      flushCur()
+      const sep = document.createElement('div')
+      sep.className = 'chat-act-line'
+      sep.style.textAlign = 'center'
+      sep.style.opacity = '.7'
+      sep.textContent = line
+      el.appendChild(sep)
+      scroll()
+      return
+    }
+    if (line.startsWith('[stderr] ')) {
+      flushCur()
+      const errEl = document.createElement('div')
+      errEl.className = 'chat-err'
+      errEl.textContent = '⚠ ' + line.slice(9)
+      el.appendChild(errEl)
+      scroll()
+      return
+    }
+    // 普通过程行（（本地轨：...）/（工具调用 ...）等）
+    flushCur()
+    addActLine(line)
+  }
   // #280.3：事件绑定只做一次——bindChat 每次进对话页都跑，重复 subscribe+onKernelEvent
   // 会让 main eventHooks 与 renderer 监听累加，同一 log 事件渲染 N 份（「装配行越聊越多」根因）
   if (!kernelEventBound) {
@@ -1798,7 +1911,7 @@ function bindChat(chatInfo) {
     $('q').value = ''
     const askBtn = $('btn-ask') // #283.11：await 最长 300s，期间切对话/切页重渲——持有引用，事后 querySelector 会是 null
     askBtn.disabled = true
-    log(`\n你> ${q}`)
+    addMsg('user', q) // #288：用户消息直接走气泡（不再经行分类）
     // #269：工具（管家模式）归 MCP 分类——mcp.builtinEnabled 总闸；#282 chatId/workspaceId 随请求
     const tools = APP_SETTINGS?.mcp?.builtinEnabled !== false
     const payload = { q, chatId: meta?.id, workspaceId: meta ? (meta.workspaceId ?? null) : undefined }
@@ -1807,17 +1920,33 @@ function bindChat(chatInfo) {
     askBtn.disabled = false
     // #283.4：回答只显示一路——过程行（含「小月：」终答）已经 kernel log 实时上屏，
     // done.text 是同一批行的整包（parts.join），再 log 一次＝回答重复两段。done 分支只报错误。
-    if (!(r.event === 'done' && r.code === 0)) log(`⚠ ${r.message ?? r.text ?? '请求失败'}`)
+    if (!(r.event === 'done' && r.code === 0)) {
+      flushCur()
+      const errEl = document.createElement('div')
+      errEl.className = 'chat-err'
+      errEl.textContent = '⚠ ' + (r.message ?? r.text ?? '请求失败')
+      logEl().appendChild(errEl)
+      scroll()
+    }
+    flushCur()
     // 会话标题随首轮更新（列表刷新）
     if (meta && meta.title === '新对话') renderXiaoyueList()
   }
   $('btn-ask').onclick = ask
   $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') ask() })
-  // #282：恢复历史轮次
+  // #282：恢复历史轮次（#288：气泡形态）
   if (meta?.turns?.length) {
-    log(`—— 历史对话（${meta.turns.length} 轮）——`)
-    for (const t of meta.turns.slice(-40)) log(`${t.role === 'user' ? '你' : '小月'}> ${t.content}`)
-    log('—— 以上为历史 ——')
+    const sep = document.createElement('div')
+    sep.className = 'chat-act-line'
+    sep.style.textAlign = 'center'
+    sep.style.opacity = '.7'
+    sep.textContent = `—— 历史对话（${meta.turns.length} 轮）——`
+    logEl().appendChild(sep)
+    for (const t of meta.turns.slice(-40)) addMsg(t.role === 'user' ? 'user' : 'ai', t.content)
+    const sep2 = sep.cloneNode(true)
+    sep2.textContent = '—— 以上为历史 ——'
+    logEl().appendChild(sep2)
+    scroll()
   }
 }
 
@@ -1837,6 +1966,44 @@ function renderConfirmBar(rpcId, payload) {
   log.appendChild(bar)
 }
 
+// ---------- 对话 Markdown 渲染（#288：marked vendor+sanitize+mermaid 回填；图示页 mdToHtml 同逻辑全局化） ----------
+function renderMarkdownSafe(src) {
+  const mermaidBlocks = []
+  const staged = src.replace(/```mermaid[^\n]*\n([\s\S]*?)```/g, (_m, code) => {
+    mermaidBlocks.push(code)
+    return `\n<!--MBMERMAID${mermaidBlocks.length - 1}-->\n`
+  })
+  let html = window.marked ? window.marked.parse(staged, { breaks: true, gfm: true }) : '<pre>' + staged.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])) + '</pre>'
+  const tpl = document.createElement('template')
+  tpl.innerHTML = html
+  tpl.content.querySelectorAll('script,iframe,object,embed,link,meta').forEach((el) => el.remove())
+  tpl.content.querySelectorAll('*').forEach((el) => {
+    for (const attr of [...el.attributes]) {
+      if (/^on/i.test(attr.name) || (/^(href|src)$/i.test(attr.name) && /^\s*javascript:/i.test(attr.value))) el.removeAttribute(attr.name)
+    }
+  })
+  const out = tpl.innerHTML.replace(/<!--MBMERMAID(\d+)-->/g, (_m, i) => `<div class="mb-mermaid" data-mbcode="${encodeURIComponent(mermaidBlocks[Number(i)] ?? '')}"></div>`)
+  // mermaid 回填（异步出图）
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.mb-mermaid:not([data-mbdone])').forEach(async (el) => {
+      el.dataset.mbdone = '1'
+      const code = decodeURIComponent(el.dataset.mbcode ?? '')
+      if (!code || !window.mermaid) return
+      try {
+        const id = 'mbm' + Math.random().toString(36).slice(2, 8)
+        const svg = await window.mermaid.render(id, code)
+        el.innerHTML = svg.svg || svg
+      } catch (e) {
+        el.textContent = '（图示渲染失败）'
+      }
+    })
+  })
+  return out
+}
+// 把纯文本（可能多行）按 Markdown 渲染进气泡
+function setBubbleMarkdown(el, text) {
+  el.innerHTML = renderMarkdownSafe(text)
+}
 // ---------- 设置弹窗（需求 5：集中设置） ----------
 $('btn-avatar').onclick = async () => {
   const r = await window.moonlybox.rpc('auth', { op: 'whoami' }, 15_000)
