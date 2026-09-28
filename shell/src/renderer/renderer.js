@@ -372,12 +372,7 @@ async function renderList(nav) {
     newBtn.className = 'tree-item'
     newBtn.style.color = 'var(--accent)'
     newBtn.textContent = '＋ 新建图示'
-    newBtn.onclick = async () => {
-      // #293：新建直达模板弹窗（不再先进空态页再点一次）
-      let pick = null
-      try { pick = await showDiagramTemplateDialog() } catch { return }
-      await renderWork('diagram', { __tpl: pick })
-    }
+    newBtn.onclick = () => renderWork('diagram', {}) // #294：空态页=快捷新建页（模板网格+名称就地填），无需弹窗
     body.appendChild(newBtn)
     const r = await window.moonlybox.rpc('diagram', { op: 'list' }, 30_000)
     try {
@@ -1569,9 +1564,15 @@ async function renderWork(nav, arg, label2) {
         <button class="btn" id="dg-ai" style="background:#7c3aed;font-size:12px;padding:5px 10px">✨ AI 生成</button>
         <span id="dg-state" class="muted" style="font-size:11px;margin-left:auto"></span>
       </div>
-      <div id="dg-empty" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
-        <div class="muted" style="font-size:13px">从模板创建图示，或打开左侧已有图示</div>
-        <button class="btn" id="dg-new" style="padding:8px 22px;font-size:13px">＋ 新建</button>
+      <div id="dg-empty" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px">
+        <div style="font-size:15px;font-weight:600">新建图示</div>
+        <div class="set-desc">选择图示类型，创建后自动填充该类型的示例代码，稍后可修改。</div>
+        <div id="dg-quick-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:640px"></div>
+        <div style="display:flex;gap:8px;width:100%;max-width:640px;margin-top:6px">
+          <input id="dg-quick-title" placeholder="图示名称（必填）" style="flex:1" maxlength="60" />
+          <button class="btn" id="dg-quick-ok" style="background:var(--accent)">创建</button>
+        </div>
+        <div class="set-desc" id="dg-quick-hint" style="margin-top:4px">打开左侧已有图示继续编辑。</div>
       </div>
       <div id="dg-editor" style="display:none;flex:1;min-height:0">
         <div style="flex:1;display:flex;min-height:0;height:100%">
@@ -1586,18 +1587,29 @@ async function renderWork(nav, arg, label2) {
       $('dg-editor').style.flexDirection = 'column'
       bindDiagramWorkbench(existing, pick)
     }
-    const newRow = $('dg-new')
-    if (newRow) {
-      newRow.onclick = async () => {
-        let pick = null
-        try { pick = await showDiagramTemplateDialog() } catch { return } // 取消=留在空态
-        openEditor(null, pick)
-      }
+    // #294：空态页=快捷新建页——模板网格+名称就地填，砍掉弹窗（#290/#293 两轮形态定稿）
+    const grid = $('dg-quick-grid')
+    let picked = DG_TEMPLATES[0].key // 默认选「流程图」
+    const tplCard = (t) => `
+      <div data-tpl="${t.key}" style="border:1px solid ${t.key === picked ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:10px 6px;cursor:pointer;text-align:center">
+        <div style="font-size:20px">${t.icon}</div>
+        <div style="font-size:12.5px;margin-top:4px">${t.name}</div>
+      </div>`
+    const renderGrid = () => { grid.innerHTML = DG_TEMPLATES.map(tplCard).join('') }
+    renderGrid()
+    grid.querySelectorAll('[data-tpl]').forEach((el) => {
+      el.onclick = () => { picked = el.dataset.tpl; renderGrid() }
+    })
+    const quickCreate = () => {
+      const title = $('dg-quick-title').value.trim()
+      if (!title) { const inp = $('dg-quick-title'); inp.focus(); inp.placeholder = '请先填写图示名称（必填）'; return }
+      const tpl = DG_TEMPLATES.find((t) => t.key === picked)
+      openEditor(null, { key: tpl.key, name: tpl.name, title, code: tpl.code })
     }
-    // arg.__tpl=侧栏新建选完模板直达编辑器；arg.id=打开已有图示；否则空态（按钮隐藏）
-    if (arg?.__tpl) {
-      openEditor(null, arg.__tpl)
-    } else if (arg?.id) {
+    $('dg-quick-ok').onclick = quickCreate
+    $('dg-quick-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') quickCreate() })
+    // arg.id=打开已有图示；无 arg=快捷新建页
+    if (arg?.id) {
       openEditor(arg)
     } else {
       const hide = ['dg-save', 'dg-activate', 'dg-ai']
@@ -1778,64 +1790,6 @@ const DG_TEMPLATES = [
   { key: 'empty', name: '空图示', icon: '📄', desc: '从空白开始', common: false, code: '' },
 ]
 
-// 模板选择弹窗：resolve(选择) / reject(取消)；名称在此填写，确认后进工作台自动填充
-function showDiagramTemplateDialog() {
-  return new Promise((resolve, reject) => {
-    const ov = document.createElement('div')
-    ov.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center'
-    const card = document.createElement('div')
-    card.style.cssText = 'width:620px;max-width:92vw;max-height:86vh;overflow-y:auto;background:var(--panel,#1e1e2e);border:1px solid var(--border);border-radius:10px;padding:18px'
-    const common = DG_TEMPLATES.filter((t) => t.common && t.key !== 'empty')
-    const rest = DG_TEMPLATES.filter((t) => !t.common)
-    card.innerHTML = `
-      <div style="display:flex;align-items:center;margin-bottom:4px"><b style="font-size:15px">新建图示</b><span style="flex:1"></span><span id="dg-tpl-close" style="cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px">×</span></div>
-      <div class="set-desc" style="margin-bottom:10px">选择图示类型，示例代码会自动填充，稍后可修改。</div>
-      <div class="set-desc" style="margin:8px 0 6px;font-weight:600">常用</div>
-      <div id="dg-tpl-common" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
-      <div class="set-desc" style="margin:12px 0 6px;font-weight:600">更多类型</div>
-      <div id="dg-tpl-more" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
-      <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
-        <div class="set-desc" style="margin-bottom:6px">图示名称</div>
-        <div style="display:flex;gap:8px">
-          <input id="dg-tpl-title" placeholder="给图示起个名字（必填）" style="flex:1" maxlength="60" />
-          <button class="btn" id="dg-tpl-ok" style="background:var(--accent)">创建</button>
-        </div>
-      </div>`
-    ov.appendChild(card)
-    document.body.appendChild(ov)
-    let picked = null
-    const itemHtml = (t) => `
-      <div data-tpl="${t.key}" style="border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;text-align:center;transition:border-color .15s">
-        <div style="font-size:20px">${t.icon}</div>
-        <div style="font-size:13px;margin:4px 0 2px">${t.name}</div>
-        <div class="set-desc" style="font-size:11px">${t.desc}</div>
-      </div>`
-    card.querySelector('#dg-tpl-common').innerHTML = common.map(itemHtml).join('')
-    card.querySelector('#dg-tpl-more').innerHTML = rest.map(itemHtml).join('')
-    const markSel = () => {
-      card.querySelectorAll('[data-tpl]').forEach((el) => {
-        el.style.borderColor = el.dataset.tpl === picked ? 'var(--accent)' : 'var(--border)'
-      })
-    }
-    card.querySelectorAll('[data-tpl]').forEach((el) => {
-      el.onclick = () => { picked = el.dataset.tpl; markSel() }
-      el.onmouseenter = () => { el.style.borderColor = 'var(--accent)' }
-      el.onmouseleave = markSel
-    })
-    const close = () => { ov.remove(); reject(new Error('cancelled')) }
-    card.querySelector('#dg-tpl-close').onclick = close
-    ov.onclick = (e) => { if (e.target === ov) close() }
-    card.querySelector('#dg-tpl-ok').onclick = () => {
-      const title = card.querySelector('#dg-tpl-title').value.trim()
-      if (!picked) return
-      if (!title) { card.querySelector('#dg-tpl-title').focus(); card.querySelector('#dg-tpl-title').placeholder = '请先填写图示名称（必填）'; return }
-      const tpl = DG_TEMPLATES.find((t) => t.key === picked)
-      ov.remove()
-      resolve({ key: tpl.key, name: tpl.name, title, code: tpl.code })
-    }
-    card.querySelector('#dg-tpl-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') card.querySelector('#dg-tpl-ok').click() })
-  })
-}
 
 // ---------- 图示工作台绑定（从旧 renderer 迁移，#252 逻辑保留） ----------
 let dgCurrentId = null
