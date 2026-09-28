@@ -493,7 +493,7 @@ async function renderList(nav) {
     await renderXiaoyueList()
   } else if (nav === 'help') {
     // #310.5：帮助项选中态——currentHelpArg 跟踪当前项，DOM 级切换（点击换 active，不重渲侧栏）
-    for (const [arg, label, fn] of [['feedback', '📝 问题反馈', () => renderWork('help', 'feedback')], ['kernel', '🧠 内核状态', () => renderWork('help', 'kernel')], ['about', 'ℹ️ 关于', () => renderWork('help', 'about')]]) {
+    for (const [arg, label, fn] of [['terms', '📜 条款', () => renderWork('help', 'terms')], ['feedback', '📝 问题反馈', () => renderWork('help', 'feedback')], ['kernel', '🧠 内核状态', () => renderWork('help', 'kernel')], ['about', 'ℹ️ 关于', () => renderWork('help', 'about')]]) {
       const el = document.createElement('div')
       el.className = 'tree-item' + (currentHelpArg === arg ? ' active' : '')
       el.textContent = label
@@ -1765,8 +1765,8 @@ async function renderWork(nav, arg, label2) {
     w.innerHTML = `<div style="padding:20px" class="mono">内核：${r.event === 'done' ? '✓ 已连接（daemon pong）' : '✗ ' + (r.message ?? '未连接')}<br/>vault：${await window.moonlybox.vaultGet() ?? '未选择'}</div>`
     return
   }
-  if (nav === 'help' && arg === 'feedback') {
-    // #310.3：问题反馈=内嵌云端 /feedback（登录态注入同 cloud 模式）；失败给外链兜底（与头像菜单一致）
+  if (nav === 'help' && (arg === 'feedback' || arg === 'terms')) {
+    // #310.3/.6：问题反馈/条款=内嵌云端页（embed=1 隐藏云端主菜单；登录态注入同 cloud 模式）
     const gen = ++renderGen
     const genValid = () => gen === renderGen && $('fb-wv') !== null
     w.innerHTML = `<div style="flex:1;display:flex;position:relative;background:var(--bg)">
@@ -1799,8 +1799,8 @@ async function renderWork(nav, arg, label2) {
         if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
       } catch {}
       if (!genValid()) return
-      // #310.4：embed=1——AppShell 嵌入模式（#253.36），隐藏云端主菜单只渲染页面本体（与云端功能内嵌同约定）
-      await wv.loadURL(`${webBase}/feedback?mb_theme=${resolveThemeDark()}&embed=1`)
+      // #310.4/.6：embed=1——AppShell 嵌入模式（#253.36），隐藏云端主菜单只渲染页面本体（与云端功能内嵌同约定）
+      await wv.loadURL(`${webBase}/${arg === 'terms' ? 'terms' : 'feedback'}?mb_theme=${resolveThemeDark()}&embed=1`)
     })
     wv.addEventListener('did-finish-load', () => {
       if (!genValid()) return
