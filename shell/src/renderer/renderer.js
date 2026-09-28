@@ -175,6 +175,15 @@ setInterval(() => { if (APP_SETTINGS?.appearance?.theme === 'time') applyThemeSe
     const w = Math.min(MAX, Math.max(MIN, Math.round(startW + (e.clientX - startX))))
     document.documentElement.style.setProperty('--list-w', w + 'px')
   })
+  // #307：confirm() 同步阻塞会吞掉 mouseup——dragging 残留导致后续指针行为异常；多点兜底自愈
+  const endDrag = () => {
+    if (!resizer.classList.contains('dragging')) return
+    resizer.classList.remove('dragging')
+    document.body.classList.remove('col-resizing')
+  }
+  window.addEventListener('blur', endDrag)
+  window.addEventListener('pointercancel', endDrag)
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') endDrag() })
   window.addEventListener('mouseup', () => {
     if (!resizer.classList.contains('dragging')) return
     resizer.classList.remove('dragging')
@@ -558,6 +567,7 @@ async function renderTree(container, rel, depth) {
 // 旧协程继续执行会 null 报错或把新页面覆盖成旧页面）。cloud 长链路每步 await 后检查。
 let renderGen = 0
 async function renderWork(nav, arg, label2) {
+  ensureFocusAlive() // #307：删除/confirm 后焦点断链自愈
   const w = $('work')
   if (nav === 'vault' && arg && !arg.dir) {
     // 文件工作台：阅读（默认，md 渲染+mermaid 出图）⇄ 编辑 双态切换（#253.49 用户：预览为默认，不固定分栏）
@@ -1750,6 +1760,23 @@ function closeCtxMenu(menu) {
   menu.remove()
 }
 
+// ---------- 焦点复位（#307）：confirm/删除 DOM 后 activeElement 可能残留在已断链节点——
+// 此后 click 聚焦任何 input 失灵（焦点系统脏）。重渲入口统一自愈：断链则 blur 归还 body。
+function ensureFocusAlive() {
+  const sweep = () => {
+    try {
+      const ae = document.activeElement
+      if (ae && ae !== document.body && !ae.isConnected) {
+        ae.blur?.()
+        document.body.focus?.()
+      }
+    } catch {}
+  }
+  sweep()
+  setTimeout(sweep, 0)   // 重渲后节点才真正断链——下一帧再扫一次
+  requestAnimationFrame(sweep)
+}
+
 // ---------- 图示类型嗅探（#292）：代码首关键词 → DG_TEMPLATES key（存书房标签同源） ----------
 function sniffDiagramType(code) {
   const head = String(code ?? '').replace(/^\s*```(?:mermaid)?/, '').trimStart().split(/\s/)[0] ?? ''
@@ -1963,6 +1990,7 @@ let xyActiveWorkspace = null // 新建对话的默认归属（null=无工作空�
 let xyCreating = false       // #305：createChat 防重入门（列表不实时刷新期间连点会建重复对话）
 
 async function renderXiaoyueList() {
+  ensureFocusAlive() // #307：删除工作空间/对话（confirm+DOM 重建）后焦点断链自愈
   const box = $('xy-list')
   if (!box) return
   const rw = await window.moonlybox.rpc('workspace', { op: 'list' }, 10_000)
