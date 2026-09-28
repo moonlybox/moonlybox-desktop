@@ -1791,8 +1791,8 @@ async function renderWork(nav, arg, label2) {
         if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
       } catch {}
       if (!genValid()) return
-      const sep = '/feedback'.includes('?') ? '&' : '?'
-      await wv.loadURL(`${webBase}/feedback${sep}mb_theme=${resolveThemeDark()}`)
+      // #310.4：embed=1——AppShell 嵌入模式（#253.36），隐藏云端主菜单只渲染页面本体（与云端功能内嵌同约定）
+      await wv.loadURL(`${webBase}/feedback?mb_theme=${resolveThemeDark()}&embed=1`)
     })
     wv.addEventListener('did-finish-load', () => {
       if (!genValid()) return
