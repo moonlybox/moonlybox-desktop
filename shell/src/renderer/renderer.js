@@ -416,9 +416,10 @@ async function renderList(nav) {
         el.querySelector('.dg-more').onclick = (e) => {
           e.stopPropagation()
           const existed = document.querySelector('.dg-menu')
-          if (existed) { existed.remove(); return }
+          if (existed) { existed.remove(); existed._row?.classList.remove('menu-open'); return }
           const menu = document.createElement('div')
           menu.className = 'dg-menu'
+          menu._row = el // #304：菜单打开期间锚定行保持 hover 背景（归属感）——关闭时移除
           const rect = el.getBoundingClientRect()
           menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:112px;box-shadow:0 8px 24px rgba(0,0,0,.35)'
           // 默认锚在行下方右对齐；底部放不下则翻转到行上方
@@ -432,7 +433,7 @@ async function renderList(nav) {
           menu.innerHTML = `<div class="dg-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err,#f87171)">删除</div>`
           menu.querySelector('.dg-del').onclick = async (e2) => {
             e2.stopPropagation()
-            menu.remove()
+            closeCtxMenu(menu)
             if (!window.confirm(`删除图示「${it.title}」？将移入回收站（30 天内可在云端书房恢复）。`)) return
             const rr = await window.moonlybox.rpc('diagram', { op: 'delete', id: it.id }, 30_000)
             if (rr.event === 'done' && rr.code === 0 && JSON.parse(rr.text).ok !== false) {
@@ -444,7 +445,7 @@ async function renderList(nav) {
             }
           }
           // 点外部/列表滚动关闭（menu 已挂 document.body）
-          const close = (e3) => { if (!menu.contains(e3.target)) { menu.remove(); document.removeEventListener('click', close); lb?.removeEventListener('scroll', close) } }
+          const close = (e3) => { if (!menu.contains(e3.target)) { closeCtxMenu(menu); document.removeEventListener('click', close); lb?.removeEventListener('scroll', close) } }
           const lb = el.closest('.list-body')
           lb?.addEventListener('scroll', close, { once: true })
           setTimeout(() => document.addEventListener('click', close), 0)
@@ -1737,6 +1738,12 @@ async function renderWork(nav, arg, label2) {
   w.innerHTML = `<div style="padding:20px" class="muted">选择左侧项目开始</div>`
 }
 
+// ---------- 上下文菜单关闭助手（#304）：移除菜单+清锚定行 hover 保持 ----------
+function closeCtxMenu(menu) {
+  menu._row?.classList.remove('menu-open')
+  menu.remove()
+}
+
 // ---------- 图示类型嗅探（#292）：代码首关键词 → DG_TEMPLATES key（存书房标签同源） ----------
 function sniffDiagramType(code) {
   const head = String(code ?? '').replace(/^\s*```(?:mermaid)?/, '').trimStart().split(/\s/)[0] ?? ''
@@ -1975,9 +1982,10 @@ async function renderXiaoyueList() {
     el.querySelector('[data-more]').onclick = (e) => {
       e.stopPropagation()
       const existed = document.querySelector('.xy-menu')
-      if (existed) { existed.remove(); return }
+      if (existed) { closeCtxMenu(existed); return }
       const menu = document.createElement('div')
       menu.className = 'xy-menu'
+      menu._row = el // #304：锚定行 hover 保持
       const rect = el.getBoundingClientRect()
       menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:96px;box-shadow:0 8px 24px rgba(0,0,0,.35);visibility:hidden'
       document.body.appendChild(menu)
@@ -1989,13 +1997,13 @@ async function renderXiaoyueList() {
       menu.style.visibility = ''
       menu.querySelector('.xy-mi-del').onclick = async (e2) => {
         e2.stopPropagation()
-        menu.remove()
+        closeCtxMenu(menu)
         if (!window.confirm(`删除对话「${c.title}」？`)) return
         await window.moonlybox.rpc('workspace', { op: 'deleteChat', id: c.id }, 10_000)
         if (xyActiveChat === c.id) { xyActiveChat = null; await renderWork('xiaoyue') }
         await renderXiaoyueList()
       }
-      const close = (e3) => { if (!menu.contains(e3.target)) { menu.remove(); document.removeEventListener('click', close); lb?.removeEventListener('scroll', close) } }
+      const close = (e3) => { if (!menu.contains(e3.target)) { closeCtxMenu(menu); document.removeEventListener('click', close); lb?.removeEventListener('scroll', close) } }
       const lb = box.closest('.list-body')
       lb?.addEventListener('scroll', close, { once: true })
       setTimeout(() => document.addEventListener('click', close), 0)
@@ -2039,10 +2047,11 @@ async function renderXiaoyueList() {
     // #303：⋯ 更多菜单（挂 body+fixed，#301 范式）：增加工作目录 / 删除工作空间
     const openMenu = () => {
       const existed = document.querySelector('.xy-menu')
-      if (existed) { existed.remove(); return }
+      if (existed) { closeCtxMenu(existed); return }
       const row = group.querySelector('.tree-item')
       const menu = document.createElement('div')
       menu.className = 'xy-menu'
+      menu._row = row // #304：锚定行 hover 保持
       const rect = row.getBoundingClientRect()
       menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:132px;box-shadow:0 8px 24px rgba(0,0,0,.35);visibility:hidden'
       document.body.appendChild(menu)
@@ -2054,7 +2063,7 @@ async function renderXiaoyueList() {
       menu.style.visibility = ''
       menu.querySelector('.xy-mi-add').onclick = async (e2) => {
         e2.stopPropagation()
-        menu.remove()
+        closeCtxMenu(menu)
         const r = await window.moonlybox.pickFolder()
         const dir = r?.ok ? r.path : null
         if (!dir) return
@@ -2063,12 +2072,12 @@ async function renderXiaoyueList() {
       }
       menu.querySelector('.xy-mi-del').onclick = async (e2) => {
         e2.stopPropagation()
-        menu.remove()
+        closeCtxMenu(menu)
         if (!window.confirm(`删除工作空间「${ws.name}」？其下对话将变为无工作空间对话（历史保留）。`)) return
         await window.moonlybox.rpc('workspace', { op: 'delete', id: ws.id }, 10_000)
         await renderXiaoyueList()
       }
-      const close = (e3) => { if (!menu.contains(e3.target)) { menu.remove(); document.removeEventListener('click', close); lb?.removeEventListener('scroll', close) } }
+      const close = (e3) => { if (!menu.contains(e3.target)) { closeCtxMenu(menu); document.removeEventListener('click', close); lb?.removeEventListener('scroll', close) } }
       const lb = box.closest('.list-body')
       lb?.addEventListener('scroll', close, { once: true })
       setTimeout(() => document.addEventListener('click', close), 0)
