@@ -367,6 +367,13 @@ async function renderList(nav) {
       body.innerHTML = '<div class="muted" style="padding:10px">导航解析失败（登录后可用）</div>'
     }
   } else if (nav === 'diagram') {
+    // #290：顶部「＋ 新建」→ renderWork('diagram', { __new: true }) 进空态（编辑器按钮隐藏，工作台内点「＋ 新建」走模板弹窗）
+    const newBtn = document.createElement('div')
+    newBtn.className = 'tree-item'
+    newBtn.style.color = 'var(--accent)'
+    newBtn.textContent = '＋ 新建图示'
+    newBtn.onclick = () => renderWork('diagram', {})
+    body.appendChild(newBtn)
     const r = await window.moonlybox.rpc('diagram', { op: 'list' }, 30_000)
     try {
       const items = JSON.parse(r.text).data.diagrams || []
@@ -377,9 +384,9 @@ async function renderList(nav) {
         el.onclick = () => renderWork('diagram', it)
         body.appendChild(el)
       }
-      if (!items.length) body.innerHTML = '<div class="muted" style="padding:10px">暂无图示</div>'
+      if (!items.length) body.insertAdjacentHTML('beforeend', '<div class="muted" style="padding:10px">暂无图示</div>')
     } catch {
-      body.innerHTML = '<div class="muted" style="padding:10px">列表加载失败（登录后可用）</div>'
+      body.insertAdjacentHTML('beforeend', '<div class="muted" style="padding:10px">列表加载失败（登录后可用）</div>')
     }
   } else if (nav === 'xiaoyue') {
     // #282 会话列表：工作空间分组 + 对话（无工作空间）分类
@@ -1546,6 +1553,7 @@ async function renderWork(nav, arg, label2) {
   }
   if (nav === 'diagram') {
     // 图示工作台（沿用 #252 三区）
+    // #290 创建返工：新建走「＋ 新建→模板弹窗→填名称→自动填充示例」流程；未创建前不出现保存/存书房/AI 按钮
     w.innerHTML = `
       <div class="row" style="padding:10px 16px;border-bottom:1px solid var(--border)">
         <input id="dg-title" placeholder="图示标题" style="width:180px" />
@@ -1554,12 +1562,40 @@ async function renderWork(nav, arg, label2) {
         <button class="btn" id="dg-ai" style="background:#7c3aed;font-size:12px;padding:5px 10px">✨ AI 生成</button>
         <span id="dg-state" class="muted" style="font-size:11px;margin-left:auto"></span>
       </div>
-      <div style="flex:1;display:flex;min-height:0">
-        <textarea id="dg-code" spellcheck="false" style="flex:1;border:0;border-right:1px solid var(--border);padding:14px;font:12px/1.6 ui-monospace,monospace;resize:none;background:transparent;color:inherit;outline:none" placeholder="mermaid 代码（例：graph TD; A[开始] --> B[结束]）"></textarea>
-        <div id="dg-preview" style="flex:1;overflow:auto;padding:16px"></div>
+      <div id="dg-empty" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+        <div class="muted" style="font-size:13px">从模板创建图示，或打开左侧已有图示</div>
+        <button class="btn" id="dg-new" style="padding:8px 22px;font-size:13px">＋ 新建</button>
       </div>
-      <div id="dg-err" style="display:none;padding:8px 16px;font-size:12px;color:var(--err);border-top:1px solid var(--border)"></div>`
-    bindDiagramWorkbench(arg)
+      <div id="dg-editor" style="display:none;flex:1;min-height:0">
+        <div style="flex:1;display:flex;min-height:0;height:100%">
+          <textarea id="dg-code" spellcheck="false" style="flex:1;border:0;border-right:1px solid var(--border);padding:14px;font:12px/1.6 ui-monospace,monospace;resize:none;background:transparent;color:inherit;outline:none" placeholder="mermaid 代码（例：graph TD; A[开始] --> B[结束]）"></textarea>
+          <div id="dg-preview" style="flex:1;overflow:auto;padding:16px"></div>
+        </div>
+        <div id="dg-err" style="display:none;padding:8px 16px;font-size:12px;color:var(--err);border-top:1px solid var(--border)"></div>
+      </div>`
+    const newRow = $('dg-new')
+    if (newRow) {
+      newRow.onclick = async () => {
+        let pick = null
+        try { pick = await showDiagramTemplateDialog() } catch { return } // 取消=留在空态
+        $('dg-empty').style.display = 'none'
+        $('dg-editor').style.display = 'flex'
+        $('dg-editor').style.flexDirection = 'column'
+        bindDiagramWorkbench(null, pick)
+      }
+    }
+    // arg=打开已有图示 → 直接进编辑器；无 arg → 空态（按钮隐藏）
+    if (arg?.id) {
+      $('dg-empty').style.display = 'none'
+      $('dg-editor').style.display = 'flex'
+      $('dg-editor').style.flexDirection = 'column'
+      bindDiagramWorkbench(arg)
+    } else {
+      const hide = ['dg-save', 'dg-activate', 'dg-ai']
+      for (const id of hide) { const el = $(id); if (el) el.style.display = 'none' }
+      const ti = $('dg-title'); if (ti) ti.style.display = 'none'
+      $('dg-state').textContent = ''
+    }
     return
   }
   if (nav === 'xiaoyue') {
@@ -1603,17 +1639,191 @@ async function renderWork(nav, arg, label2) {
   w.innerHTML = `<div style="padding:20px" class="muted">选择左侧项目开始</div>`
 }
 
+// ---------- 图示模板（#290 创建返工：新建→模板弹窗→名称→自动填充示例） ----------
+const DG_TEMPLATES = [
+  { key: 'flowchart', name: '流程图', icon: '🔀', desc: '步骤流转 / 判断分支', common: true,
+    code: `flowchart TD
+    A[开始] --> B{是否已登录?}
+    B -- 是 --> C[进入首页]
+    B -- 否 --> D[跳转登录页]
+    D --> E[输入账密]
+    E --> F{验证通过?}
+    F -- 通过 --> C
+    F -- 失败 --> D
+    C --> G[结束]` },
+  { key: 'sequence', name: '时序图', icon: '🔗', desc: '模块间调用时序', common: true,
+    code: `sequenceDiagram
+    participant U as 用户
+    participant C as 客户端
+    participant S as 服务端
+    U->>C: 点击登录
+    C->>S: 提交账密
+    S-->>C: 返回 token
+    C-->>U: 进入首页` },
+  { key: 'mindmap', name: '思维导图', icon: '🧠', desc: '主题发散 / 知识梳理', common: true,
+    code: `mindmap
+  root((产品规划))
+    核心功能
+      对话
+      图示
+    增长
+      渠道合作
+      内容营销
+    商业化
+      订阅制` },
+  { key: 'pie', name: '饼图', icon: '🥧', desc: '占比分布', common: true,
+    code: `pie title 时间分配
+    "开发" : 45
+    "设计" : 20
+    "会议" : 15
+    "其他" : 20` },
+  { key: 'gantt', name: '甘特图', icon: '📅', desc: '项目排期', common: true,
+    code: `gantt
+    title 项目排期
+    dateFormat YYYY-MM-DD
+    section 设计
+    原型设计 :a1, 2026-10-01, 7d
+    视觉稿 :a2, after a1, 5d
+    section 开发
+    前端开发 :b1, after a2, 10d
+    联调测试 :b2, after b1, 5d` },
+  { key: 'er', name: 'ER 图', icon: '🗄️', desc: '数据模型 / 实体关系', common: true,
+    code: `erDiagram
+    USER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : contains
+    USER {
+        string id PK
+        string name
+    }
+    ORDER {
+        string id PK
+        datetime created_at
+    }` },
+  { key: 'state', name: '状态图', icon: '🚦', desc: '状态机流转', common: false,
+    code: `stateDiagram-v2
+    [*] --> 草稿
+    草稿 --> 待审核 : 提交
+    待审核 --> 已发布 : 通过
+    待审核 --> 草稿 : 驳回
+    已发布 --> [*]` },
+  { key: 'journey', name: '用户旅程', icon: '🛤️', desc: '体验流程 / 满意度', common: false,
+    code: `journey
+    title 用户注册旅程
+    section 发现
+      访问官网: 5: 用户
+      了解产品: 4: 用户
+    section 转化
+      注册账号: 3: 用户
+      首次使用: 4: 用户` },
+  { key: 'timeline', name: '时间线', icon: '🗓️', desc: '事件脉络', common: false,
+    code: `timeline
+    title 产品里程碑
+    2026-01 : 立项
+    2026-04 : 内测上线
+    2026-09 : 正式发布` },
+  { key: 'quadrant', name: '象限图', icon: '🎯', desc: '四象限分析', common: false,
+    code: `quadrantChart
+    title 需求优先级
+    x-axis 低紧迫 --> 高紧迫
+    y-axis 低重要 --> 高重要
+    需求A: [0.8, 0.9]
+    需求B: [0.3, 0.7]
+    需求C: [0.6, 0.2]` },
+  { key: 'gitgraph', name: 'Git 图', icon: '🌿', desc: '分支策略', common: false,
+    code: `gitGraph
+    commit id: "init"
+    branch dev
+    commit
+    commit
+    merge main
+    commit id: "v1.0" tag: "v1.0"` },
+  { key: 'class', name: '类图', icon: '📦', desc: '类结构 / 继承关系', common: false,
+    code: `classDiagram
+    class Animal {
+        +String name
+        +eat()
+    }
+    class Dog {
+        +bark()
+    }
+    Animal <|-- Dog` },
+  { key: 'empty', name: '空图示', icon: '📄', desc: '从空白开始', common: false, code: '' },
+]
+
+// 模板选择弹窗：resolve(选择) / reject(取消)；名称在此填写，确认后进工作台自动填充
+function showDiagramTemplateDialog() {
+  return new Promise((resolve, reject) => {
+    const ov = document.createElement('div')
+    ov.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center'
+    const card = document.createElement('div')
+    card.style.cssText = 'width:620px;max-width:92vw;max-height:86vh;overflow-y:auto;background:var(--panel,#1e1e2e);border:1px solid var(--border);border-radius:10px;padding:18px'
+    const common = DG_TEMPLATES.filter((t) => t.common && t.key !== 'empty')
+    const rest = DG_TEMPLATES.filter((t) => !t.common)
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;margin-bottom:4px"><b style="font-size:15px">新建图示</b><span style="flex:1"></span><span id="dg-tpl-close" style="cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px">×</span></div>
+      <div class="set-desc" style="margin-bottom:10px">选择图示类型，示例代码会自动填充，稍后可修改。</div>
+      <div class="set-desc" style="margin:8px 0 6px;font-weight:600">常用</div>
+      <div id="dg-tpl-common" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
+      <div class="set-desc" style="margin:12px 0 6px;font-weight:600">更多类型</div>
+      <div id="dg-tpl-more" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"></div>
+      <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+        <div class="set-desc" style="margin-bottom:6px">图示名称</div>
+        <div style="display:flex;gap:8px">
+          <input id="dg-tpl-title" placeholder="给图示起个名字（必填）" style="flex:1" maxlength="60" />
+          <button class="btn" id="dg-tpl-ok" style="background:var(--accent)">创建</button>
+        </div>
+      </div>`
+    ov.appendChild(card)
+    document.body.appendChild(ov)
+    let picked = null
+    const itemHtml = (t) => `
+      <div data-tpl="${t.key}" style="border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;text-align:center;transition:border-color .15s">
+        <div style="font-size:20px">${t.icon}</div>
+        <div style="font-size:13px;margin:4px 0 2px">${t.name}</div>
+        <div class="set-desc" style="font-size:11px">${t.desc}</div>
+      </div>`
+    card.querySelector('#dg-tpl-common').innerHTML = common.map(itemHtml).join('')
+    card.querySelector('#dg-tpl-more').innerHTML = rest.map(itemHtml).join('')
+    const markSel = () => {
+      card.querySelectorAll('[data-tpl]').forEach((el) => {
+        el.style.borderColor = el.dataset.tpl === picked ? 'var(--accent)' : 'var(--border)'
+      })
+    }
+    card.querySelectorAll('[data-tpl]').forEach((el) => {
+      el.onclick = () => { picked = el.dataset.tpl; markSel() }
+      el.onmouseenter = () => { el.style.borderColor = 'var(--accent)' }
+      el.onmouseleave = markSel
+    })
+    const close = () => { ov.remove(); reject(new Error('cancelled')) }
+    card.querySelector('#dg-tpl-close').onclick = close
+    ov.onclick = (e) => { if (e.target === ov) close() }
+    card.querySelector('#dg-tpl-ok').onclick = () => {
+      const title = card.querySelector('#dg-tpl-title').value.trim()
+      if (!picked) return
+      if (!title) { card.querySelector('#dg-tpl-title').focus(); card.querySelector('#dg-tpl-title').placeholder = '请先填写图示名称（必填）'; return }
+      const tpl = DG_TEMPLATES.find((t) => t.key === picked)
+      ov.remove()
+      resolve({ key: tpl.key, name: tpl.name, title, code: tpl.code })
+    }
+    card.querySelector('#dg-tpl-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') card.querySelector('#dg-tpl-ok').click() })
+  })
+}
+
 // ---------- 图示工作台绑定（从旧 renderer 迁移，#252 逻辑保留） ----------
 let dgCurrentId = null
 let dgRenderTimer = null
 let dgLastError = null
 
-function bindDiagramWorkbench(existing) {
+function bindDiagramWorkbench(existing, pick) {
   dgCurrentId = existing?.id ?? null
   mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' })
-  $('dg-code').value = existing?.content ?? ''
-  $('dg-title').value = existing?.title ?? ''
-  $('dg-state').textContent = existing?.state === 'draft' ? '📝 云端草稿' : existing?.state ? '📚 已存书房' : '新草稿'
+  // #290：pick=模板弹窗选择结果——填充名称+示例代码，新草稿从这一刻开始
+  $('dg-code').value = pick ? (pick.code ?? '') : (existing?.content ?? '')
+  $('dg-title').value = pick ? pick.title : (existing?.title ?? '')
+  // 从空态新建：显示标题框与保存/存书房/AI 按钮（打开已有图示时本就显示）
+  const show = ['dg-save', 'dg-activate', 'dg-ai', 'dg-title']
+  for (const id of show) { const el = $(id); if (el) el.style.display = '' }
+  $('dg-state').textContent = pick ? `已选模板：${pick.name}——示例已填充，可编辑后保存` : existing?.state === 'draft' ? '📝 云端草稿' : existing?.state ? '📚 已存书房' : '新草稿'
 
   const render = async () => {
     const err = $('dg-err')
@@ -1621,7 +1831,7 @@ function bindDiagramWorkbench(existing) {
     const src = $('dg-code').value
     const m = src.match(/```mermaid\n([\s\S]*?)```/)
     const code = (m ? m[1] : src).trim()
-    if (!code) { box.innerHTML = '<span class="muted" style="font-size:12px">左侧输入 mermaid 即时预览</span>'; return }
+    if (!code) { box.innerHTML = '<span class="muted" style="font-size:12px">输入 mermaid 代码即时预览</span>'; return }
     try {
       const { svg } = await mermaid.render('dg-' + Date.now(), code)
       box.innerHTML = svg
