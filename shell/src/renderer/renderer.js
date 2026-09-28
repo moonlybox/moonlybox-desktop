@@ -380,7 +380,9 @@ async function renderList(nav) {
       for (const it of items) {
         const el = document.createElement('div')
         el.className = 'tree-item'
-        el.textContent = `${it.state === 'draft' ? '📝' : '📚'} ${it.title}`
+        // #292：图标=图示类型（存档标签优先，内容嗅探兜底）——草稿半透明+title 标状态，废除 📝/📚（风格与小月/文档统一）
+        el.innerHTML = `<span style="opacity:${it.state === 'draft' ? '.55' : '1'}">${dgTypeIcon(it)}</span> <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(it.title).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>`
+        el.title = `${it.state === 'draft' ? '草稿' : '已存书房'} · ${it.diagramType ?? sniffDiagramType(it.content) ?? '未知类型'}`
         el.onclick = () => renderWork('diagram', it)
         body.appendChild(el)
       }
@@ -1639,6 +1641,25 @@ async function renderWork(nav, arg, label2) {
   w.innerHTML = `<div style="padding:20px" class="muted">选择左侧项目开始</div>`
 }
 
+// ---------- 图示类型嗅探（#292）：代码首关键词 → DG_TEMPLATES key（存书房标签同源） ----------
+function sniffDiagramType(code) {
+  const head = String(code ?? '').replace(/^\s*```(?:mermaid)?/, '').trimStart().split(/\s/)[0] ?? ''
+  const table = [
+    ['flowchart', /^(flowchart|graph)\b/i], ['sequence', /^sequenceDiagram\b/i],
+    ['mindmap', /^mindmap\b/i], ['pie', /^pie\b/i], ['gantt', /^gantt\b/i],
+    ['er', /^erDiagram\b/i], ['state', /^stateDiagram/i], ['journey', /^journey\b/i],
+    ['timeline', /^timeline\b/i], ['quadrant', /^quadrantChart\b/i],
+    ['gitgraph', /^gitGraph\b/i], ['class', /^classDiagram\b/i],
+  ]
+  for (const [key, re] of table) if (re.test(head)) return key
+  return null
+}
+function dgTypeIcon(item) {
+  const key = item.diagramType ?? sniffDiagramType(item.content)
+  const tpl = DG_TEMPLATES.find((t) => t.key === key)
+  return (tpl && key !== 'empty' ? tpl.icon : '') || '📊'
+}
+
 // ---------- 图示模板（#290 创建返工：新建→模板弹窗→名称→自动填充示例） ----------
 const DG_TEMPLATES = [
   { key: 'flowchart', name: '流程图', icon: '🔀', desc: '步骤流转 / 判断分支', common: true,
@@ -1848,7 +1869,7 @@ function bindDiagramWorkbench(existing, pick) {
 
   $('dg-save').onclick = async () => {
     const title = $('dg-title').value.trim() || '未命名图示'
-    const r = await window.moonlybox.rpc('diagram', { op: 'save', id: dgCurrentId, title, content: $('dg-code').value }, 60_000)
+    const r = await window.moonlybox.rpc('diagram', { op: 'save', id: dgCurrentId, title, content: $('dg-code').value, diagramType: sniffDiagramType($('dg-code').value) }, 60_000)
     if (r.event === 'done' && r.code === 0) {
       const d = JSON.parse(r.text).data
       const isNew = !dgCurrentId
@@ -1909,7 +1930,7 @@ async function renderXiaoyueList() {
     el.className = 'tree-item xy-chat' + (c.id === xyActiveChat ? ' active' : '')
     el.style.paddingLeft = '26px'
     el.dataset.chat = c.id
-    el.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.title}</span><span data-del="1" style="color:var(--muted);cursor:pointer;padding:0 4px">×</span>`
+    el.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💬 ${c.title}</span><span data-del="1" style="color:var(--muted);cursor:pointer;padding:0 4px">×</span>`
     el.onclick = (e) => { if (!e.target.dataset.del) openChat(c.id, wsId) }
     el.querySelector('[data-del]').onclick = async (e) => {
       e.stopPropagation()
