@@ -8,6 +8,7 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import qrcodeGen from 'qrcode-generator'
 import { loadSettings } from './settings'
 
 /** 消息平台凭据钥匙串（account=msg:<platform>:<key>，secret 字段一律不入 settings.json） */
@@ -567,6 +568,385 @@ export class FeishuAdapter implements PlatformAdapter {
   }
 }
 
+/* ============================ 企业微信（AI Bot openws 长连接，协议照 Hermes wecom adapter 取直） ============================ */
+
+/**
+ * 企业微信适配器：AI Bot WebSocket 网关（wss://openws.work.weixin.qq.com）——无需公网回调。
+ * 协议（照 Hermes plugins/platforms/wecom 逐帧核对）：连接后发 aibot_subscribe{bot_id,secret,device_id}，
+ * 等 req_id 匹配的 ack（errcode=0）→ 收 aibot_msg_callback（{body:{msgid,from:{userid},chatid,chattype,msgtype,text:{content}}}）；
+ * 回复=被动 aibot_respond_msg（headers.req_id=收件 req_id，群聊唯一通路）/主动 aibot_send_msg{chatid,...}（仅单聊）；
+ * 客户端 30s 发 cmd=ping 心跳；另一连接上线会被踢（disconnected_event）——v1 不自动重连踢出场景。
+ * botId/secret 来源=企微管理后台「智能机器人」凭据页。
+ */
+const WECOM_WS_URL = 'wss://openws.work.weixin.qq.com'
+const WECOM_HEARTBEAT_MS = 30_000
+
+export class WeComAdapter implements PlatformAdapter {
+  id = 'wecom'
+  private ws: WebSocket | null = null
+  private stopped = false
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  /** 收件帧缓存：chatId → 最新 req_id（群聊被动回复必须） */
+  private chatReqIds = new Map<string, string>()
+  private reqCounter = 0
+
+  constructor(
+    private botId: string,
+    private secret: string,
+    private wsImpl?: WsImpl,
+  ) {}
+
+  private newReqId(tag: string): string {
+    this.reqCounter += 1
+    return `${tag}_${Date.now().toString(36)}_${this.reqCounter}`
+  }
+
+  async start(onMessage: (m: InboundMessage) => Promise<void>): Promise<() => void> {
+    this.stopped = false
+    const WSCtor = this.wsImpl ?? (globalThis as any).WebSocket
+    if (!WSCtor) throw new Error('WebSocket 不可用')
+    await new Promise<void>((resolve, reject) => {
+      const ws: WebSocket = new WSCtor(WECOM_WS_URL)
+      this.ws = ws
+      const timer = setTimeout(() => {
+        try { ws.close() } catch { /* ignore */ }
+        reject(new Error('企业微信连接超时（20s）'))
+      }, 20_000)
+      ws.onopen = () => {
+        this.sendJson({ cmd: 'aibot_subscribe', headers: { req_id: this.newReqId('subscribe') }, body: { bot_id: this.botId, secret: this.secret, device_id: `moonlybox-${Math.random().toString(36).slice(2, 10)}` } })
+      }
+      ws.onmessage = (ev) => {
+        let payload: any
+        try {
+          payload = JSON.parse(String(ev.data))
+        } catch {
+          return
+        }
+        if (!payload || typeof payload !== 'object') return
+        const cmd = String(payload.cmd ?? '')
+        if (cmd === 'ping') return
+        const reqId = String(payload.headers?.req_id ?? '')
+        // subscribe ack：errcode!=0 = 凭据错误
+        if (reqId.startsWith('subscribe_')) {
+          clearTimeout(timer)
+          const errcode = payload.body?.errcode ?? payload.errcode ?? 0
+          if (errcode !== 0 && errcode !== null && errcode !== undefined) {
+            reject(new Error(`企业微信订阅失败（errcode=${errcode}）：${payload.body?.errmsg ?? payload.errmsg ?? '认证失败'}`))
+            try { ws.close() } catch { /* ignore */ }
+            return
+          }
+          resolve()
+          return
+        }
+        if (cmd === 'aibot_msg_callback') void this.handleCallback(payload, onMessage)
+      }
+      ws.onerror = () => { /* onclose 会兜 */ }
+      ws.onclose = () => {
+        clearTimeout(timer)
+        if (!this.stopped) reject(new Error('企业微信连接被关闭'))
+      }
+    })
+    this.heartbeatTimer = setInterval(() => {
+      try {
+        this.sendJson({ cmd: 'ping', headers: { req_id: this.newReqId('ping') }, body: {} })
+      } catch { /* ignore */ }
+    }, WECOM_HEARTBEAT_MS)
+    console.log('（消息网关 wecom 已启动）')
+    return () => {
+      this.stopped = true
+      if (this.heartbeatTimer) clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = null
+      try { this.ws?.close() } catch { /* ignore */ }
+      this.ws = null
+      this.chatReqIds.clear()
+    }
+  }
+
+  private sendJson(payload: unknown): void {
+    if (!this.ws || this.ws.readyState !== 1) throw new Error('企业微信 ws 未连接')
+    this.ws.send(JSON.stringify(payload))
+  }
+
+  private async handleCallback(payload: any, onMessage: (m: InboundMessage) => Promise<void>): Promise<void> {
+    try {
+      const body = payload?.body
+      if (!body || typeof body !== 'object') return
+      const reqId = String(payload.headers?.req_id ?? '')
+      const senderId = String(body.from?.userid ?? '').trim()
+      const chatId = String(body.chatid ?? senderId).trim()
+      if (!chatId) return
+      const msgtype = String(body.msgtype ?? '').toLowerCase()
+      let text = ''
+      if (msgtype === 'text') text = String(body.text?.content ?? '')
+      else if (msgtype === 'mixed') {
+        const items = Array.isArray(body.mixed?.msg_item) ? body.mixed.msg_item : []
+        text = items.filter((it: any) => String(it?.msgtype ?? '').toLowerCase() === 'text').map((it: any) => String(it?.text?.content ?? '')).join('\n')
+      }
+      text = text.trim()
+      const isGroup = String(body.chattype ?? '').toLowerCase() === 'group'
+      if (isGroup) text = text.replace(/^@\S+\s*/, '').trim() // @机器人前缀
+      if (!text) return // 图片/文件等 v1 不处理
+      if (reqId) this.chatReqIds.set(chatId, reqId)
+      await onMessage({ platform: 'wecom', chatId: `wecom:${chatId}`, sender: senderId, text, replyTo: reqId })
+    } catch (e: any) {
+      console.log(`（消息网关 wecom 消息处理失败：${String(e?.message ?? e).slice(0, 120)}）`)
+    }
+  }
+
+  async send(chatId: string, text: string, replyTo?: string): Promise<void> {
+    const rawChat = chatId.startsWith('wecom:') ? chatId.slice(6) : chatId
+    const body = { msgtype: 'markdown', markdown: { content: text.slice(0, 4000) } }
+    // 被动回复优先（群聊唯一通路；req_id 失效降级主动发——单聊）
+    const cachedReqId = replyTo || this.chatReqIds.get(rawChat) || ''
+    if (cachedReqId) {
+      try {
+        const resp = await this.request('aibot_respond_msg', cachedReqId, body)
+        if ((resp?.errcode ?? 0) === 0) return
+      } catch { /* 落主动发 */ }
+    }
+    if (this.chatReqIds.has(rawChat) || cachedReqId) {
+      // 有收件记录但被动失败且无主动通路的场景=群聊——报错（与 Hermes 一致：群必须被动回复）
+      if (!replyTo && this.isGroupChat(rawChat)) throw new Error('企业微信群聊回复失败（req_id 失效，需重新@机器人）')
+    }
+    const resp = await this.request('aibot_send_msg', this.newReqId('send'), { chatid: rawChat, ...body })
+    const errcode = (resp as any)?.errcode ?? (resp as any)?.body?.errcode ?? 0
+    if (errcode !== 0) throw new Error(`企业微信发送失败（errcode=${errcode}）`)
+  }
+
+  private isGroupChat(_chatId: string): boolean {
+    // chatid 无群/单聊标记——v1 简化：有缓存 req_id 时被动失败直接报错由上层兜底
+    return false
+  }
+
+  private request(cmd: string, reqId: string, body: unknown, timeoutMs = 15_000): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== 1) return reject(new Error('企业微信 ws 未连接'))
+      const timer = setTimeout(() => reject(new Error('企业微信响应超时')), timeoutMs)
+      const onMsg = (ev: MessageEvent) => {
+        let p: any
+        try { p = JSON.parse(String(ev.data)) } catch { return }
+        if (p?.headers?.req_id !== reqId) return
+        this.ws?.removeEventListener('message', onMsg)
+        clearTimeout(timer)
+        resolve(p)
+      }
+      this.ws.addEventListener('message', onMsg)
+      try {
+        this.sendJson({ cmd, headers: { req_id: reqId }, body })
+      } catch (e) {
+        this.ws.removeEventListener('message', onMsg)
+        clearTimeout(timer)
+        reject(e as Error)
+      }
+    })
+  }
+}
+
+/* ============================ 个人微信（iLink Bot API，协议照 Hermes weixin.py 取直） ============================ */
+
+/**
+ * 个人微信适配器：腾讯 iLink Bot API（ilinkai.weixin.qq.com）——扫码登录获得 bot token，长轮询收件，无需公网。
+ * 协议（照 Hermes gateway/platforms/weixin.py 逐帧核对）：POST {base}/ilink/bot/getupdates{get_updates_buf 游标}
+ * → {msgs:[{message_id,from_user_id,item_list:[{type:1,text_item:{text}}],context_token}]}；
+ * 回复=POST ilink/bot/sendmessage{msg:{to_user_id,client_id,message_type:2,message_state:2,item_list,context_token}}——
+ * context_token 必须回显收件帧对应发件人的最新值（缺失降级无 token 发送）；会话过期（ret=-14）停 10 分钟。
+ * 头：AuthorizationType: ilink_bot_token + iLink-App-Id: bot + iLink-App-ClientVersion + X-WECHAT-UIN（随机 b64）。
+ * 限制（Hermes 文档）：iLink bot 身份≠普通个人号——多数账号只有单聊可靠，群聊投递不保证。
+ */
+const WX_BASE_URL = 'https://ilinkai.weixin.qq.com'
+const WX_CHANNEL_VERSION = '2.2.0'
+const WX_CLIENT_VERSION = String((2 << 16) | (2 << 8) | 0)
+const WX_POLL_TIMEOUT_MS = 35_000
+const WX_API_TIMEOUT_MS = 15_000
+
+function wxHeaders(token: string, body: string): Record<string, string> {
+  const uin = Buffer.from(String(Math.floor(Math.random() * 0xffffffff)).padStart(10, '0')).toString('base64')
+  return {
+    'Content-Type': 'application/json',
+    AuthorizationType: 'ilink_bot_token',
+    'Content-Length': String(Buffer.byteLength(body)),
+    'X-WECHAT-UIN': uin,
+    'iLink-App-Id': 'bot',
+    'iLink-App-ClientVersion': WX_CLIENT_VERSION,
+    Authorization: `Bearer ${token}`,
+  }
+}
+
+async function wxPost(fetchImpl: FetchImpl, endpoint: string, token: string, payload: Record<string, unknown>): Promise<any> {
+  const body = JSON.stringify({ ...payload, base_info: { channel_version: WX_CHANNEL_VERSION } })
+  const r = await fetchImpl(`${WX_BASE_URL}/${endpoint}`, { method: 'POST', headers: wxHeaders(token, body), body })
+  if (!r.ok) throw new Error(`iLink ${endpoint} HTTP ${r.status}`)
+  return (await r.json()) as any
+}
+
+export class WeixinAdapter implements PlatformAdapter {
+  id = 'weixin'
+  private stopped = false
+  /** 发件人 → 最新 context_token（回复必回显） */
+  private contextTokens = new Map<string, string>()
+
+  constructor(
+    private token: string,
+    private accountId: string,
+    private fetchImpl?: FetchImpl,
+  ) {}
+
+  async start(onMessage: (m: InboundMessage) => Promise<void>): Promise<() => void> {
+    this.stopped = false
+    const f = this.fetchImpl ?? fetch
+    const poll = async () => {
+      let syncBuf = ''
+      let failureStreak = 0
+      while (!this.stopped) {
+        try {
+          const resp = await wxPost(f, 'ilink/bot/getupdates', this.token, { get_updates_buf: syncBuf }).catch(async (e: any) => {
+            // 长轮询超时形态：fetch 15s 超时视为空轮询继续（iLink 35s 挂起，fetch 端 15s 先断——正常节拍）
+            if (String(e?.message ?? '').includes('abort')) return { ret: 0, msgs: [], get_updates_buf: syncBuf }
+            throw e
+          })
+          const ret = resp?.ret ?? 0
+          const errcode = resp?.errcode ?? 0
+          if (ret !== 0 || errcode !== 0) {
+            if (ret === -14 || errcode === -14) {
+              console.log('（消息网关 weixin 会话过期——暂停 10 分钟）')
+              await new Promise((r) => setTimeout(r, 600_000))
+              continue
+            }
+            failureStreak += 1
+            if (failureStreak >= 3) {
+              await new Promise((r) => setTimeout(r, 30_000))
+              failureStreak = 0
+            } else {
+              await new Promise((r) => setTimeout(r, 2_000))
+            }
+            continue
+          }
+          failureStreak = 0
+          if (resp.get_updates_buf) syncBuf = String(resp.get_updates_buf)
+          for (const msg of resp.msgs ?? []) {
+            if (this.stopped) break
+            try {
+              await this.handleMsg(msg, onMessage)
+            } catch (e: any) {
+              console.log(`（消息网关 weixin 消息处理失败：${String(e?.message ?? e).slice(0, 120)}）`)
+            }
+          }
+        } catch (e: any) {
+          if (this.stopped) break
+          failureStreak += 1
+          console.log(`（消息网关 weixin 轮询失败 ${failureStreak}：${String(e?.message ?? e).slice(0, 120)}）`)
+          await new Promise((r) => setTimeout(r, failureStreak >= 3 ? 30_000 : 2_000))
+          if (failureStreak >= 3) failureStreak = 0
+        }
+      }
+    }
+    void poll()
+    console.log('（消息网关 weixin 已启动）')
+    return () => {
+      this.stopped = true
+      this.contextTokens.clear()
+    }
+  }
+
+  private async handleMsg(msg: any, onMessage: (m: InboundMessage) => Promise<void>): Promise<void> {
+    const senderId = String(msg?.from_user_id ?? '').trim()
+    if (!senderId || senderId === this.accountId) return // 自己发的回环
+    const items = Array.isArray(msg?.item_list) ? msg.item_list : []
+    let text = ''
+    for (const it of items) {
+      if (Number(it?.type) === 1) text += String(it?.text_item?.text ?? '')
+    }
+    text = text.trim()
+    if (!text) return // 图片/语音等 v1 不处理
+    const contextToken = String(msg?.context_token ?? '').trim()
+    if (contextToken) this.contextTokens.set(senderId, contextToken)
+    await onMessage({ platform: 'weixin', chatId: `wx:${senderId}`, sender: senderId, text, replyTo: contextToken || undefined })
+  }
+
+  async send(chatId: string, text: string, replyTo?: string): Promise<void> {
+    const f = this.fetchImpl ?? fetch
+    const peer = chatId.startsWith('wx:') ? chatId.slice(3) : chatId
+    const contextToken = replyTo || this.contextTokens.get(peer) || ''
+    const message: Record<string, unknown> = {
+      from_user_id: '',
+      to_user_id: peer,
+      client_id: `moonlybox-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6)}`,
+      message_type: 2, // MSG_TYPE_BOT
+      message_state: 2, // MSG_STATE_FINISH
+      item_list: [{ type: 1, text_item: { text: text.slice(0, 2048) } }],
+    }
+    if (contextToken) message.context_token = contextToken
+    const resp = await wxPost(f, 'ilink/bot/sendmessage', this.token, { msg: message })
+    const ret = resp?.ret ?? 0
+    if (ret !== 0) throw new Error(`个人微信发送失败（ret=${ret}）：${resp?.errmsg ?? '未知错误'}`)
+  }
+}
+
+/* ============================ 个人微信扫码登录（iLink qr_login，照 Hermes 流程） ============================ */
+
+const WX_QR_TIMEOUT_MS = 35_000
+
+/**
+ * 取登录二维码：GET ilink/bot/get_bot_qrcode?bot_type=3 → {qrcode, qrcode_img_content}。
+ * qrcode_img_content=微信需扫描的 liteapp URL（非裸 hex token）；本机用 qrcode-generator 渲染 SVG（零外链）。
+ */
+export async function wxQrLoginStart(fetchImpl?: FetchImpl): Promise<{ qrcode: string; svg: string }> {
+  const f = fetchImpl ?? fetch
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(), WX_QR_TIMEOUT_MS)
+  try {
+    const r = await f(`${WX_BASE_URL}/ilink/bot/get_bot_qrcode?bot_type=3`, {
+      headers: { 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': WX_CLIENT_VERSION },
+      signal: ctl.signal,
+    } as RequestInit)
+    if (!r.ok) throw new Error(`取二维码失败（HTTP ${r.status}）`)
+    const j = (await r.json()) as any
+    const qrcode = String(j?.qrcode ?? '')
+    const content = String(j?.qrcode_img_content ?? '') || qrcode
+    if (!qrcode || !content) throw new Error('二维码响应缺少字段')
+    const qr = qrcodeGen(0, 'M')
+    qr.addData(content)
+    qr.make()
+    return { qrcode, svg: qr.createSvgTag({ cellSize: 4, margin: 8 }) }
+  } finally {
+    clearTimeout(t)
+  }
+}
+
+/** 轮询扫码状态：wait / scaned / scaned_but_redirect / expired / confirmed（含 ilink_bot_id+bot_token+baseurl） */
+export async function wxQrLoginPoll(qrcode: string, baseUrl = WX_BASE_URL, fetchImpl?: FetchImpl): Promise<{
+  status: string
+  redirectHost?: string
+  accountId?: string
+  token?: string
+  baseUrl?: string
+}> {
+  const f = fetchImpl ?? fetch
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(), WX_QR_TIMEOUT_MS)
+  try {
+    const r = await f(`${baseUrl}/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`, {
+      headers: { 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': WX_CLIENT_VERSION },
+      signal: ctl.signal,
+    } as RequestInit)
+    if (!r.ok) throw new Error(`扫码状态查询失败（HTTP ${r.status}）`)
+    const j = (await r.json()) as any
+    const status = String(j?.status ?? 'wait')
+    if (status === 'scaned_but_redirect') return { status, redirectHost: String(j?.redirect_host ?? '') }
+    if (status === 'confirmed') {
+      return {
+        status,
+        accountId: String(j?.ilink_bot_id ?? ''),
+        token: String(j?.bot_token ?? ''),
+        baseUrl: String(j?.baseurl ?? WX_BASE_URL),
+      }
+    }
+    return { status }
+  } finally {
+    clearTimeout(t)
+  }
+}
+
 /* ============================ 网关编排 ============================ */
 
 export interface GatewayStatus {
@@ -580,7 +960,8 @@ const runningStops = new Map<string, () => void>()
 const SECRET_KEYS: Record<string, string[]> = {
   // 平台 id → secret 字段清单（面板 needs.secret=true 的键；token 类）
   feishu: ['appSecret'],
-  wecom: ['corpSecret'],
+  wecom: ['secret'], // 企微 AI Bot（openws 通道）：bot_id + secret（非传统自建应用 corpSecret）
+  weixin: ['token'], // 个人微信 iLink Bot：扫码登录获得，长期有效；accountId 落 settings.json
   dingtalk: ['appSecret'],
   telegram: ['botToken'],
   qqbot: ['appSecret'],
@@ -617,7 +998,7 @@ export function enabledPlatforms(): Array<{ id: string; config: PlatformConfig }
 }
 
 /** 已接入网关的平台（buildAdapter 有实现）；新平台接入时同步更新 */
-const GATEWAY_READY = ['telegram', 'dingtalk', 'qqbot', 'feishu']
+const GATEWAY_READY = ['telegram', 'dingtalk', 'qqbot', 'feishu', 'wecom', 'weixin']
 
 function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetchImpl?: FetchImpl, wsImpl?: WsImpl): PlatformAdapter | null {
   switch (id) {
@@ -629,6 +1010,10 @@ function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetc
       return config.appId && config.appSecret ? new QQBotAdapter(config.appId, config.appSecret, fetchImpl, wsImpl) : null
     case 'feishu':
       return config.appId && config.appSecret ? new FeishuAdapter(config.appId, config.appSecret) : null
+    case 'wecom':
+      return config.botId && config.secret ? new WeComAdapter(config.botId, config.secret, wsImpl) : null
+    case 'weixin':
+      return config.token && config.accountId ? new WeixinAdapter(config.token, config.accountId, fetchImpl) : null
     default:
       return null // 飞书/钉钉/Slack/QQbot/企微/微信逐个迭代接入（未接入平台静默跳过）
   }

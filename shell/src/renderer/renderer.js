@@ -897,13 +897,14 @@ async function renderWork(nav, arg, label2) {
       const g = await loadAppSettings()
       const provs = APP_PROVIDERS?.messaging ?? []
       const enabled = g.messaging?.providers ?? {}
-      panel('消息平台', '对接 IM 平台，让你在小月里远程收发消息与操作。Token/Secret 只存本机钥匙串。当前支持 Telegram；飞书/企业微信/钉钉/Slack 等逐批接入。', `
+      panel('消息平台', '对接 IM 平台，让你在小月里远程收发消息与操作。Token/Secret 只存本机钥匙串。已支持飞书、钉钉、QQ 机器人、Telegram、企业微信（AI 机器人）；个人微信走 iLink 机器人身份（扫码登录，多数账号单聊可用）；Slack 待接入。', `
         ${provs.map((p) => {
           const cur = enabled[p.id] ?? { enabled: false }
           return `<div class="set-card"><div class="sc-main"><div class="sc-title">${p.label}</div><div class="sc-desc">${cur.enabled ? '已开启' : '对接后可在此平台收发消息'}</div></div>
             <button type="button" class="toggle ${cur.enabled ? 'on' : ''}" data-msg="${p.id}"></button></div>
           <div data-msgcfg="${p.id}" style="display:${cur.enabled ? 'block' : 'none'};margin:0 0 10px">
             ${p.needs.map((n) => `<div class="set-field" style="max-width:340px"><label>${n.label}${n.secret ? '（只存钥匙串）' : ''}</label><input type="${n.secret ? 'password' : 'text'}" data-msgkey="${p.id}.${n.key}" value="${(cur.config ?? {})[n.key] && !n.secret ? (cur.config ?? {})[n.key] : ''}" placeholder="${n.secret ? '已配置时不回显' : ''}" /></div>`).join('')}
+            ${p.id === 'weixin' ? `<div class="set-row" style="margin-top:8px"><button type="button" class="btn" id="sp-wx-login">扫码登录（获取 Token）</button><span class="set-desc" id="sp-wx-login-state"></span></div><div id="sp-wx-qr" style="margin-top:8px;max-width:200px"></div>` : ''}
           </div>`
         }).join('')}
         <div class="set-status" id="sp-msg-status"></div>
@@ -918,6 +919,60 @@ async function renderWork(nav, arg, label2) {
           const parts = statuses.map((s) => `${s.platform}：${s.running ? '✓ 运行中' : `✗ ${s.error ?? '未启动'}`}`)
           run.textContent = parts.join('  ') || '无已启用平台'
         } else run.textContent = `启动失败：${r.message ?? r.text}`
+      }
+      const wxLoginBtn = $('sp-wx-login')
+      if (wxLoginBtn) {
+        let wxTimer = null
+        let wxQrcode = ''
+        let wxBase = ''
+        const stopWx = () => {
+          if (wxTimer) clearInterval(wxTimer)
+          wxTimer = null
+        }
+        const pollWx = async () => {
+          const st = $('sp-wx-login-state')
+          const r = await window.moonlybox.rpc('messaging', { op: 'wxLoginPoll', qrcode: wxQrcode, baseUrl: wxBase }, 40_000)
+          if (r.event !== 'done' || r.code !== 0) {
+            stopWx()
+            st.textContent = `✗ ${r.message ?? r.text ?? '查询失败'}`
+            return
+          }
+          const j = JSON.parse(r.text)
+          if (j.status === 'wait') st.textContent = '等待扫码…'
+          else if (j.status === 'scaned') st.textContent = '已扫码，请在微信里确认…'
+          else if (j.status === 'scaned_but_redirect' && j.redirectHost) {
+            wxBase = `https://${j.redirectHost}`
+            st.textContent = '已扫码，请在微信里确认…'
+          } else if (j.status === 'expired') {
+            stopWx()
+            st.textContent = '✗ 二维码已过期，请重新点击扫码登录'
+          } else if (j.status === 'confirmed') {
+            stopWx()
+            st.textContent = `✓ 登录成功（账号 ${j.accountId}）——Token 已存钥匙串，可直接启动网关`
+            const qr = $('sp-wx-qr')
+            if (qr) qr.innerHTML = ''
+            renderWork('settings')
+          }
+        }
+        wxLoginBtn.onclick = async () => {
+          stopWx()
+          const st = $('sp-wx-login-state')
+          const qrBox = $('sp-wx-qr')
+          st.textContent = '获取二维码…'
+          const r = await window.moonlybox.rpc('messaging', { op: 'wxLoginStart' }, 40_000)
+          if (r.event !== 'done' || r.code !== 0) {
+            st.textContent = `✗ ${r.message ?? r.text ?? '获取二维码失败'}`
+            return
+          }
+          const j = JSON.parse(r.text)
+          wxQrcode = j.qrcode
+          wxBase = ''
+          if (qrBox) qrBox.innerHTML = j.svg
+          st.textContent = '请用微信扫描上方二维码（有效期约 5 分钟）…'
+          stopWx()
+          wxTimer = setInterval(pollWx, 3000)
+          void pollWx()
+        }
       }
       window.moonlybox.rpc('messaging', { op: 'status' }, 10_000).then((r) => {
         if (r.event === 'done' && r.code === 0) {

@@ -439,6 +439,35 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             await stopGateway()
             code = 0
             text = JSON.stringify({ ok: true })
+          } else if (op3 === 'wxLoginStart') {
+            // #286.4 个人微信扫码登录：取二维码（SVG 本机渲染，零外链）
+            const { wxQrLoginStart } = require('../lib/messaging-gateway') as typeof import('../lib/messaging-gateway')
+            const q = await wxQrLoginStart()
+            code = 0
+            text = JSON.stringify({ ok: true, qrcode: q.qrcode, svg: q.svg })
+          } else if (op3 === 'wxLoginPoll') {
+            // 轮询扫码状态；confirmed 时 token 入钥匙串（msg:weixin:token）+ accountId 落 settings
+            const { wxQrLoginPoll } = require('../lib/messaging-gateway') as typeof import('../lib/messaging-gateway')
+            const qrcode = String(args.qrcode ?? '')
+            const baseUrl = args.baseUrl ? String(args.baseUrl) : undefined
+            const st = await wxQrLoginPoll(qrcode, baseUrl)
+            if (st.status === 'confirmed') {
+              if (!st.token || !st.accountId) throw new Error('扫码已确认但凭据不完整——请重试')
+              const { Entry } = require('@napi-rs/keyring') as typeof import('@napi-rs/keyring')
+              new Entry('moonlybox', 'msg:weixin:token').setPassword(st.token)
+              const s = loadSettings() as Record<string, any>
+              const providers = { ...(s.messaging?.providers ?? {}) }
+              const cur = { ...(providers.weixin ?? { enabled: false, config: {} }) }
+              cur.enabled = true
+              cur.config = { ...(cur.config ?? {}), accountId: st.accountId, 'keychain:token': true }
+              providers.weixin = cur
+              saveSettings({ messaging: { providers } } as never)
+              code = 0
+              text = JSON.stringify({ status: 'confirmed', accountId: st.accountId })
+            } else {
+              code = 0
+              text = JSON.stringify({ status: st.status, redirectHost: st.redirectHost ?? '' })
+            }
           } else {
             const { gatewayRunning } = require('../lib/messaging-gateway') as typeof import('../lib/messaging-gateway')
             code = 0
@@ -595,7 +624,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             const mg = patch.messaging as Record<string, unknown> | undefined
             if (mg && typeof mg === 'object' && mg.providers && typeof mg.providers === 'object') {
               const { Entry } = require('@napi-rs/keyring') as typeof import('@napi-rs/keyring')
-              const MSG_SECRET_KEYS: Record<string, string[]> = { feishu: ['appSecret'], wecom: ['corpSecret'], dingtalk: ['appSecret'], telegram: ['botToken'], slack: ['botToken'] }
+              const MSG_SECRET_KEYS: Record<string, string[]> = { feishu: ['appSecret'], wecom: ['secret'], weixin: ['token'], dingtalk: ['appSecret'], telegram: ['botToken'], qqbot: ['appSecret'], slack: ['botToken'] }
               for (const [pid, pv] of Object.entries(mg.providers as Record<string, any>)) {
                 if (!pv || typeof pv !== 'object') continue
                 const cfgIn = (pv.config ?? {}) as Record<string, unknown>

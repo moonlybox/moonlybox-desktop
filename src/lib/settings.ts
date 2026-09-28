@@ -165,7 +165,8 @@ export const WEBSEARCH_PROVIDERS: Array<{ id: string; label: string; baseUrl: st
 /** 消息平台（#256.5：参考 Hermes 可对接平台；token/key 一律钥匙串不入本清单） */
 export const MESSAGING_PROVIDERS: Array<{ id: string; label: string; needs: Array<{ key: string; label: string; secret?: boolean }> }> = [
   { id: 'feishu', label: '飞书', needs: [{ key: 'appId', label: 'App ID' }, { key: 'appSecret', label: 'App Secret', secret: true }] },
-  { id: 'wecom', label: '企业微信', needs: [{ key: 'corpId', label: '企业 ID' }, { key: 'corpSecret', label: '应用 Secret', secret: true }, { key: 'agentId', label: 'AgentId' }] },
+  { id: 'wecom', label: '企业微信（AI 机器人）', needs: [{ key: 'botId', label: 'Bot ID' }, { key: 'secret', label: 'Bot Secret', secret: true }] },
+  { id: 'weixin', label: '个人微信（iLink 机器人）', needs: [{ key: 'token', label: 'Bot Token（扫码登录获取）', secret: true }, { key: 'accountId', label: '账号 ID（ilink_bot_id）' }] },
   { id: 'dingtalk', label: '钉钉', needs: [{ key: 'appKey', label: 'AppKey' }, { key: 'appSecret', label: 'AppSecret', secret: true }] },
   { id: 'qqbot', label: 'QQ 机器人', needs: [{ key: 'appId', label: 'AppID' }, { key: 'appSecret', label: 'AppSecret', secret: true }] },
   { id: 'telegram', label: 'Telegram Bot', needs: [{ key: 'botToken', label: 'Bot Token', secret: true }] },
