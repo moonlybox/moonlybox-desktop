@@ -94,6 +94,7 @@ const SETTINGS_CATS = [
   { id: 'memory', label: '记忆' },
 ]
 const SET_SUB_LABELS = { platform: '平台 API', local: '本地部署', custom: '自定义', builtin: '内置', market: '市场' }
+let currentHelpArg = 'about' // #310.5：帮助侧栏选中态跟踪（默认=关于）
 let currentSetCat = 'general'
 let currentSetSub = null
 let clipboardWatch = false; // 剪贴板自动采集（启动默认关，与 T3 行为一致；面板开关即时生效）——分号必须：下行 IIFE 以 ( 开头（ASI 陷阱 #253.20）
@@ -491,11 +492,17 @@ async function renderList(nav) {
     }
     await renderXiaoyueList()
   } else if (nav === 'help') {
-    for (const [label, fn] of [['📝 问题反馈', () => renderWork('help', 'feedback')], ['🧠 内核状态', () => renderWork('help', 'kernel')], ['ℹ️ 关于', () => renderWork('help', 'about')]]) {
+    // #310.5：帮助项选中态——currentHelpArg 跟踪当前项，DOM 级切换（点击换 active，不重渲侧栏）
+    for (const [arg, label, fn] of [['feedback', '📝 问题反馈', () => renderWork('help', 'feedback')], ['kernel', '🧠 内核状态', () => renderWork('help', 'kernel')], ['about', 'ℹ️ 关于', () => renderWork('help', 'about')]]) {
       const el = document.createElement('div')
-      el.className = 'tree-item'
+      el.className = 'tree-item' + (currentHelpArg === arg ? ' active' : '')
       el.textContent = label
-      el.onclick = fn
+      el.onclick = () => {
+        currentHelpArg = arg
+        body.querySelectorAll('.tree-item').forEach((x) => x.classList.remove('active'))
+        el.classList.add('active')
+        fn()
+      }
       body.appendChild(el)
     }
   }
@@ -1752,6 +1759,7 @@ async function renderWork(nav, arg, label2) {
     else w.insertAdjacentHTML('afterbegin', '<div class="muted" style="padding:16px">左侧新建工作空间或对话开始。</div>')
     return
   }
+  if (nav === 'help' && !arg) return renderWork('help', currentHelpArg || 'about') // #310.5：进帮助默认打开上次/关于
   if (nav === 'help' && arg === 'kernel') {
     const r = await window.moonlybox.rpc('ping', {}, 10_000)
     w.innerHTML = `<div style="padding:20px" class="mono">内核：${r.event === 'done' ? '✓ 已连接（daemon pong）' : '✗ ' + (r.message ?? '未连接')}<br/>vault：${await window.moonlybox.vaultGet() ?? '未选择'}</div>`
