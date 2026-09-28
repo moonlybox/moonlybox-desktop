@@ -420,6 +420,7 @@ async function renderList(nav) {
           const menu = document.createElement('div')
           menu.className = 'dg-menu'
           menu._row = el // #304：菜单打开期间锚定行保持 hover 背景（归属感）——关闭时移除
+          el.classList.add('menu-open')
           const rect = el.getBoundingClientRect()
           menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:112px;box-shadow:0 8px 24px rgba(0,0,0,.35)'
           // 默认锚在行下方右对齐；底部放不下则翻转到行上方
@@ -1986,6 +1987,7 @@ async function renderXiaoyueList() {
       const menu = document.createElement('div')
       menu.className = 'xy-menu'
       menu._row = el // #304：锚定行 hover 保持
+      el.classList.add('menu-open')
       const rect = el.getBoundingClientRect()
       menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:96px;box-shadow:0 8px 24px rgba(0,0,0,.35);visibility:hidden'
       document.body.appendChild(menu)
@@ -2052,6 +2054,7 @@ async function renderXiaoyueList() {
       const menu = document.createElement('div')
       menu.className = 'xy-menu'
       menu._row = row // #304：锚定行 hover 保持
+      row.classList.add('menu-open')
       const rect = row.getBoundingClientRect()
       menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:132px;box-shadow:0 8px 24px rgba(0,0,0,.35);visibility:hidden'
       document.body.appendChild(menu)
