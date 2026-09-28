@@ -1851,15 +1851,21 @@ function bindDiagramWorkbench(existing, pick) {
     const r = await window.moonlybox.rpc('diagram', { op: 'save', id: dgCurrentId, title, content: $('dg-code').value }, 60_000)
     if (r.event === 'done' && r.code === 0) {
       const d = JSON.parse(r.text).data
+      const isNew = !dgCurrentId
       dgCurrentId = d.id
       $('dg-state').textContent = `✓ 已保存草稿 v${d.version}`
+      // #291：保存后立刻刷新侧栏列表（新建首存/改名都不用再切功能回来）
+      void renderList('diagram')
+      if (isNew) $('dg-state').textContent += '（已加入左侧列表）'
     } else $('dg-state').textContent = '保存失败：' + (r.text || r.message)
   }
   $('dg-activate').onclick = async () => {
     if (!dgCurrentId) { $('dg-state').textContent = '先保存草稿'; return }
     const r = await window.moonlybox.rpc('diagram', { op: 'activate', id: dgCurrentId }, 60_000)
-    if (r.event === 'done' && r.code === 0) $('dg-state').textContent = '📚 已存进书房'
-    else $('dg-state').textContent = '准入失败：' + (r.text || r.message)
+    if (r.event === 'done' && r.code === 0) {
+      $('dg-state').textContent = '📚 已存进书房'
+      void renderList('diagram') // #291：📝→📚 徽标即时更新
+    } else $('dg-state').textContent = '准入失败：' + (r.text || r.message)
   }
   $('dg-ai').onclick = async () => {
     const prompt = window.prompt('描述你要画的图')
