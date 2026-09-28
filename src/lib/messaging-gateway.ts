@@ -947,6 +947,124 @@ export async function wxQrLoginPoll(qrcode: string, baseUrl = WX_BASE_URL, fetch
   }
 }
 
+/* ============================ Slack（Socket Mode，协议照官方 socket-mode 客户端取直） ============================ */
+
+/**
+ * Slack 适配器：Socket Mode 长连接（免公网回调，零依赖自实现——协议照 @slack/socket-mode 逐帧核对，
+ * 与钉钉同款自实现先例）。链路：POST apps.connections.open（Bearer app-level token，xapp- 形态）→ wss url
+ * → 收 type:hello=就绪 → 收 type:events_api{envelope_id,payload} 必须回 {envelope_id,payload:{}} ack（3 秒窗）；
+ * type:disconnect=服务端要求重连（重领 url）。收件 event={type:'message',channel,user,text,bot_id,subtype}——
+ * bot_id 非空=机器人自己/其他 bot 的消息，跳过防回环；编辑/删除类 subtype 跳过。
+ * 回复=REST chat.postMessage（Bearer bot token，xoxb- 形态）{channel,text}。
+ * 凭据两个 token：botToken（xoxb-，bot scope）+ appToken（xapp-，connections:write scope）。
+ */
+const SLACK_API = 'https://slack.com/api'
+
+export class SlackAdapter implements PlatformAdapter {
+  id = 'slack'
+  private ws: WebSocket | null = null
+  private stopped = false
+  private closedByUs = false
+
+  constructor(
+    private botToken: string,
+    private appToken: string,
+    private fetchImpl?: FetchImpl,
+    private wsImpl?: WsImpl,
+  ) {}
+
+  private async slackApi(method: string, token: string, body: Record<string, unknown>): Promise<any> {
+    const f = this.fetchImpl ?? fetch
+    const r = await f(`${SLACK_API}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    })
+    if (!r.ok) throw new Error(`Slack ${method} HTTP ${r.status}`)
+    const j = (await r.json()) as any
+    if (!j?.ok) throw new Error(`Slack ${method} 失败：${j?.error ?? 'unknown'}`)
+    return j
+  }
+
+  async start(onMessage: (m: InboundMessage) => Promise<void>): Promise<() => void> {
+    this.stopped = false
+    this.closedByUs = false
+    const open = await this.slackApi('apps.connections.open', this.appToken, {})
+    const url = String(open?.url ?? '')
+    if (!url.startsWith('wss://')) throw new Error('Slack apps.connections.open 未返回 wss 地址（检查 app token 的 connections:write scope）')
+    const WSCtor = this.wsImpl ?? (globalThis as any).WebSocket
+    if (!WSCtor) throw new Error('WebSocket 不可用')
+    await new Promise<void>((resolve, reject) => {
+      const ws: WebSocket = new WSCtor(url)
+      this.ws = ws
+      const timer = setTimeout(() => {
+        try { ws.close() } catch { /* ignore */ }
+        reject(new Error('Slack 连接超时（20s）'))
+      }, 20_000)
+      ws.onmessage = (ev) => {
+        let frame: any
+        try {
+          frame = JSON.parse(String(ev.data))
+        } catch {
+          return
+        }
+        if (frame?.type === 'hello') {
+          clearTimeout(timer)
+          resolve()
+          return
+        }
+        if (frame?.type === 'disconnect') {
+          // 服务端回收连接（pod recycling）——关闭让外层重连
+          try { ws.close() } catch { /* ignore */ }
+          return
+        }
+        if (frame?.type === 'events_api' && frame.envelope_id) {
+          // ack 必须回（3 秒窗，超时 Slack 重推）
+          try {
+            ws.send(JSON.stringify({ envelope_id: frame.envelope_id, payload: {} }))
+          } catch { /* ignore */ }
+          void this.handleEvent(frame.payload, onMessage)
+        }
+        // 其它类型（slash_commands/interactivity 等）v1 不处理
+      }
+      ws.onclose = () => {
+        clearTimeout(timer)
+        if (!this.stopped && !this.closedByUs) reject(new Error('Slack 连接被关闭'))
+      }
+      ws.onerror = () => { /* onclose 兜 */ }
+    })
+    console.log('（消息网关 slack 已启动）')
+    return () => {
+      this.stopped = true
+      this.closedByUs = true
+      try { this.ws?.close() } catch { /* ignore */ }
+      this.ws = null
+    }
+  }
+
+  private async handleEvent(payload: any, onMessage: (m: InboundMessage) => Promise<void>): Promise<void> {
+    try {
+      const ev = payload?.event
+      if (!ev || ev.type !== 'message') return
+      if (ev.bot_id || ev.subtype) return // 机器人消息/编辑删除等系统 subtype——防回环
+      const text = String(ev.text ?? '').trim()
+      const channel = String(ev.channel ?? '').trim()
+      if (!text || !channel) return
+      // 线程语境保留（thread_ts 存在=回复进线程）；频道前缀保持原样进 chatId
+      await onMessage({ platform: 'slack', chatId: `slack:${channel}`, sender: String(ev.user ?? ''), text, replyTo: ev.thread_ts ? String(ev.thread_ts) : undefined })
+    } catch (e: any) {
+      console.log(`（消息网关 slack 消息处理失败：${String(e?.message ?? e).slice(0, 120)}）`)
+    }
+  }
+
+  async send(chatId: string, text: string, replyTo?: string): Promise<void> {
+    const channel = chatId.startsWith('slack:') ? chatId.slice(6) : chatId
+    const body: Record<string, unknown> = { channel, text: text.slice(0, 40_000) }
+    if (replyTo) body.thread_ts = replyTo // 原消息在线程里→回复跟进线程
+    await this.slackApi('chat.postMessage', this.botToken, body)
+  }
+}
+
 /* ============================ 网关编排 ============================ */
 
 export interface GatewayStatus {
@@ -961,7 +1079,7 @@ const SECRET_KEYS: Record<string, string[]> = {
   // 平台 id → secret 字段清单（面板 needs.secret=true 的键；token 类）
   feishu: ['appSecret'],
   wecom: ['secret'], // 企微 AI Bot（openws 通道）：bot_id + secret（非传统自建应用 corpSecret）
-  weixin: ['token'], // 个人微信 iLink Bot：扫码登录获得，长期有效；accountId 落 settings.json
+  weixin: ['token'], // 个人微信 iLink Bot：扫码登录获得，长期有效；accountId 落 settings.json\n  slack: ['botToken', 'appToken'], // 双 token：bot(xoxb-) + app-level(xapp-, connections:write)
   dingtalk: ['appSecret'],
   telegram: ['botToken'],
   qqbot: ['appSecret'],
@@ -998,7 +1116,7 @@ export function enabledPlatforms(): Array<{ id: string; config: PlatformConfig }
 }
 
 /** 已接入网关的平台（buildAdapter 有实现）；新平台接入时同步更新 */
-const GATEWAY_READY = ['telegram', 'dingtalk', 'qqbot', 'feishu', 'wecom', 'weixin']
+const GATEWAY_READY = ['telegram', 'dingtalk', 'qqbot', 'feishu', 'wecom', 'weixin', 'slack']
 
 function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetchImpl?: FetchImpl, wsImpl?: WsImpl): PlatformAdapter | null {
   switch (id) {
@@ -1014,6 +1132,8 @@ function buildAdapter(id: string, config: PlatformConfig, stateDir: string, fetc
       return config.botId && config.secret ? new WeComAdapter(config.botId, config.secret, wsImpl) : null
     case 'weixin':
       return config.token && config.accountId ? new WeixinAdapter(config.token, config.accountId, fetchImpl) : null
+    case 'slack':
+      return config.botToken && config.appToken ? new SlackAdapter(config.botToken, config.appToken, fetchImpl, wsImpl) : null
     default:
       return null // 飞书/钉钉/Slack/QQbot/企微/微信逐个迭代接入（未接入平台静默跳过）
   }

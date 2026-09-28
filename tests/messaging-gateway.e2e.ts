@@ -82,13 +82,11 @@ test('enabledPlatforms：未启用/缺凭据跳过', () => {
   expect(list.find((x) => x.id === 'slack')).toBeUndefined()
 })
 
-test('startGateway：未接入平台（slack）失败隔离不炸网关', async () => {
-  saveSettings({ messaging: { providers: { slack: { enabled: true, config: { botToken: 'x' } } } } } as never)
+test('startGateway：已启用但缺凭据的平台=未就绪跳过（不报错不炸网关）', async () => {
+  // 七平台全接入后，「暂未接入」形态消失；失败隔离保留=缺凭据平台静默跳过（statuses 为空但网关正常启停）
+  saveSettings({ messaging: { providers: { wecom: { enabled: true, config: { botId: 'x' } } } } } as never)
   const statuses = await startGateway(stateDir, async () => 'ok', mockFetch)
-  expect(statuses.length).toBe(1)
-  expect(statuses[0]!.platform).toBe('slack')
-  expect(statuses[0]!.running).toBe(false)
-  expect(statuses[0]!.error).toContain('暂未接入')
+  expect(statuses.length).toBe(0)
   await stopGateway()
   expect(gatewayRunning()).toEqual([])
 })

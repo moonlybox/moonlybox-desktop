@@ -170,7 +170,7 @@ export const MESSAGING_PROVIDERS: Array<{ id: string; label: string; needs: Arra
   { id: 'dingtalk', label: '钉钉', needs: [{ key: 'appKey', label: 'AppKey' }, { key: 'appSecret', label: 'AppSecret', secret: true }] },
   { id: 'qqbot', label: 'QQ 机器人', needs: [{ key: 'appId', label: 'AppID' }, { key: 'appSecret', label: 'AppSecret', secret: true }] },
   { id: 'telegram', label: 'Telegram Bot', needs: [{ key: 'botToken', label: 'Bot Token', secret: true }] },
-  { id: 'slack', label: 'Slack', needs: [{ key: 'botToken', label: 'Bot Token (xoxb-)', secret: true }] },
+  { id: 'slack', label: 'Slack', needs: [{ key: 'botToken', label: 'Bot Token (xoxb-)', secret: true }, { key: 'appToken', label: 'App-Level Token (xapp-)', secret: true }] },
 ]
 
 /** URL 提取服务商（#256.9：本地 Readability 或服务商；Jina 免 Key） */
