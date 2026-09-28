@@ -1764,11 +1764,11 @@ const DG_TEMPLATES = [
   { key: 'quadrant', name: '象限图', icon: '🎯', desc: '四象限分析', common: false,
     code: `quadrantChart
     title 需求优先级
-    x-axis 低紧迫 --> 高紧迫
-    y-axis 低重要 --> 高重要
-    需求A: [0.8, 0.9]
-    需求B: [0.3, 0.7]
-    需求C: [0.6, 0.2]` },
+    x-axis "低紧迫 --> 高紧迫"
+    y-axis "低重要 --> 高重要"
+    "需求A": [0.8, 0.9]
+    "需求B": [0.3, 0.7]
+    "需求C": [0.6, 0.2]` },
   { key: 'gitgraph', name: 'Git 图', icon: '🌿', desc: '分支策略', common: false,
     code: `gitGraph
     commit id: "init"
