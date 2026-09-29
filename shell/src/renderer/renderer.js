@@ -53,13 +53,13 @@ const ICON_PATHS = {
 }
 const navIconSvg = (nav, size = 18) => `<svg viewBox="0 0 24 24" style="width:${size}px;height:${size}px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">${ICON_PATHS[nav] ?? ''}</svg>`
 const NAVS = {
-  vault: { label: '书房（本地）' },
-  diagram: { label: '图示' },
-  cloud: { label: '云端' },
-  backup: { label: '备份' },
-  xiaoyue: { label: '小月' },
-  help: { label: '帮助' },
-  settings: { label: '设置' },
+  vault: { label: 'nav.vault' },
+  diagram: { label: 'nav.diagram' },
+  cloud: { label: 'nav.cloud' },
+  backup: { label: 'nav.backup' },
+  xiaoyue: { label: 'nav.xiaoyue' },
+  help: { label: 'nav.help' },
+  settings: { label: 'nav.settings' },
 };  // 对象字面量后接 IIFE 必须分号（ASI 陷阱 #253.20）
 let currentNav = null
 const openFrames = new Set();  // 下一 IIFE 以 ( 开头，无分号会被解析为跨行调用（ASI 陷阱 #253.20）
@@ -83,17 +83,17 @@ const setIconSvg = (id, size = 15) => `<svg viewBox="0 0 24 24" style="width:${s
 const SETTINGS_CATS = [
   { id: 'general', label: '通用' },
   { id: 'appearance', label: '外观' },
-  { id: 'library', label: '文档库' },
-  { id: 'chat', label: '对话' },
-  { id: 'model', label: '模型', subs: ['platform', 'custom', 'local'] }, // #310.2：平台API→自定义→本地部署
-  { id: 'messaging', label: '消息平台' },
-  { id: 'mcp', label: 'MCP', subs: ['builtin', 'custom', 'market'] }, // #310.2：内置→自定义→市场
-  { id: 'skills', label: '技能' },
-  { id: 'websearch', label: '网络搜索' },
-  { id: 'docproc', label: '文档处理' },
-  { id: 'memory', label: '记忆' },
+  { id: 'library', label: 'set.cat.library' },
+  { id: 'chat', label: 'set.cat.chat' },
+  { id: 'model', label: 'set.cat.model', subs: ['platform', 'custom', 'local'] }, // #310.2：平台API→自定义→本地部署
+  { id: 'messaging', label: 'set.cat.messaging' },
+  { id: 'mcp', label: 'set.cat.mcp', subs: ['builtin', 'custom', 'market'] }, // #310.2：内置→自定义→市场
+  { id: 'skills', label: 'set.cat.skills' },
+  { id: 'websearch', label: 'set.cat.websearch' },
+  { id: 'docproc', label: 'set.cat.docproc' },
+  { id: 'memory', label: 'set.cat.memory' },
 ]
-const SET_SUB_LABELS = { platform: '平台 API', local: '本地部署', custom: '自定义', builtin: '内置', market: '市场' }
+const SET_SUB_LABELS = { platform: 'set.sub.platform', local: 'set.sub.local', custom: 'set.sub.custom', builtin: 'set.sub.builtin', market: 'set.sub.market' }
 let currentHelpArg = 'about' // #310.5：帮助侧栏选中态跟踪（默认=关于）
 let _dbgOn = null; let _dbgAt = 0
 async function debugMirror() { // #310.7：调试开关缓存查询
@@ -118,6 +118,89 @@ const PLATFORM_PROVIDERS_FALLBACK = [
   { id: 'anthropic', label: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1', models: ['claude-sonnet-4-20250514'], docs: 'https://console.anthropic.com' },
 ]
 let APP_PROVIDERS = null // 提供商清单 {platform,websearch,messaging,memory}
+// ---------- #313 客户端 i18n 双语（zh 默认/en） ----------
+// 键控字典：UI 高频标签全走 t()；t 读 APP_SETTINGS.appearance.lang（zh-CN→zh/en），未加载时按 navigator 回落。
+const I18N_DICT = {
+  'nav.vault': { zh: '书房（本地）', en: 'Study (Local)' },
+  'nav.diagram': { zh: '图示', en: 'Diagrams' },
+  'nav.cloud': { zh: '云端', en: 'Cloud' },
+  'nav.backup': { zh: '备份', en: 'Backup' },
+  'nav.xiaoyue': { zh: '小月', en: 'Moonie' },
+  'nav.help': { zh: '帮助', en: 'Help' },
+  'nav.settings': { zh: '设置', en: 'Settings' },
+  'set.cat.general': { zh: '通用', en: 'General' },
+  'set.cat.appearance': { zh: '外观', en: 'Appearance' },
+  'set.cat.library': { zh: '文档库', en: 'Library' },
+  'set.cat.chat': { zh: '对话', en: 'Chat' },
+  'set.cat.model': { zh: '模型', en: 'Models' },
+  'set.cat.messaging': { zh: '消息平台', en: 'Messaging' },
+  'set.cat.mcp': { zh: 'MCP', en: 'MCP' },
+  'set.cat.skills': { zh: '技能', en: 'Skills' },
+  'set.cat.websearch': { zh: '网络搜索', en: 'Web Search' },
+  'set.cat.docproc': { zh: '文档处理', en: 'Doc Processing' },
+  'set.cat.memory': { zh: '记忆', en: 'Memory' },
+  'set.sub.platform': { zh: '平台 API', en: 'Platform API' },
+  'set.sub.local': { zh: '本地部署', en: 'Local' },
+  'set.sub.custom': { zh: '自定义', en: 'Custom' },
+  'set.sub.builtin': { zh: '内置', en: 'Built-in' },
+  'set.sub.market': { zh: '市场', en: 'Market' },
+  'help.terms': { zh: '📜 条款', en: '📜 Terms' },
+  'help.feedback': { zh: '📝 问题反馈', en: '📝 Feedback' },
+  'help.debug': { zh: '🐞 调试', en: '🐞 Debug' },
+  'help.cloudaddr': { zh: '🌐 云端地址', en: '🌐 Cloud URL' },
+  'help.kernel': { zh: '🧠 内核状态', en: '🧠 Kernel' },
+  'help.about': { zh: 'ℹ️ 关于', en: 'ℹ️ About' },
+  'tree.expandAll': { zh: '全部展开', en: 'Expand all' },
+  'ui.saveFail': { zh: '保存失败', en: 'Save failed' },
+  'ui.saving': { zh: '保存中…', en: 'Saving…' },
+  'ui.saved': { zh: '✓ 已保存', en: '✓ Saved' },
+  'ui.stop': { zh: '停用', en: 'Disable' },
+  'ui.edit': { zh: '编辑', en: 'Edit' },
+  'ui.untitled': { zh: '未命名', en: 'Untitled' },
+  'ui.updateNow': { zh: '立即更新', en: 'Update Now' },
+  'ui.checking': { zh: '检查中…', en: 'Checking…' },
+  'ui.enable': { zh: '启用', en: 'Enable' },
+  'panel.sub.general': { zh: '基础行为设置。更改即时生效。', en: 'Core behavior. Changes apply instantly.' },
+  'panel.sub.appearance': { zh: '主题、语言与缩放。', en: 'Theme, language and zoom.' },
+  'panel.sub.chat': { zh: '小月的上下文与重试行为。上下文仅存内存（本机），不落盘。', en: 'Moonie context and retry behavior. Context stays in memory only (this machine), never written to disk.' },
+  'panel.sub.library': { zh: '本地书房目录与同步内核。目录是同步、检索、小月的单一数据源。', en: 'Local study directory and sync kernel. The directory is the single source for sync, search and Moonie.' },
+  'panel.sub.model.platform': { zh: '每个平台可单独配置 API Key 与模型、单独启用/停用；任一实例可设为对话默认模型。Key 只存本机钥匙串，永不上传', en: 'Configure API key, model and on/off per platform; any instance can be the default chat model. Keys stay in the local keychain, never uploaded.' },
+  'panel.sub.model.local': { zh: '连接本机已有的 Ollama 服务，模型数据不出本机；已装则直接复用，不重复安装。', en: 'Connect to a local Ollama service; data never leaves this machine. Reuses an existing install instead of reinstalling.' },
+  'panel.sub.model.custom': { zh: '添加多个 OpenAI 兼容端点（Ollama / LM Studio / vLLM / 中转站 / 私有部署），每条可单独启用/停用，任一可设为对话默认。本地端点 Key 可留空。', en: 'Add multiple OpenAI-compatible endpoints (Ollama / LM Studio / vLLM / proxy / self-hosted); each can be toggled and set as default. Local endpoints need no key.' },
+  'panel.sub.messaging': { zh: '对接 IM 平台，让你在小月里远程收发消息与操作。Token/Secret 只存本机钥匙串。', en: 'Connect IM platforms to chat with Moonie remotely. Tokens/secrets stay in the local keychain.' },
+  'panel.sub.mcp.builtin': { zh: 'Model Context Protocol 服务器——给小月接入外部工具与数据源的标准协议。', en: 'Model Context Protocol servers — the standard way to give Moonie external tools and data sources.' },
+  'panel.sub.mcp.market': { zh: '发现并安装社区 MCP 服务器。', en: 'Discover and install community MCP servers.' },
+  'panel.sub.mcp.custom': { zh: '添加自己的 MCP 服务器（Streamable HTTP）。', en: 'Add your own MCP servers (Streamable HTTP).' },
+  'panel.sub.skills': { zh: '书房里的自定义技能：小月按需读取技能全文并照其中的流程执行。数据不出本机、随书房备份。', en: 'Custom skills in your study: Moonie reads and follows them on demand. Data stays local and backs up with the study.' },
+  'panel.sub.websearch': { zh: '给小月接上搜索与网页提取能力（本质=服务商能力暴露给 Agent 的工具）。', en: 'Give Moonie web search and page extraction (provider capabilities exposed as agent tools).' },
+  'panel.sub.docproc': { zh: 'PDF/Office/图片解析为文本：本地处理（离线引擎）或第三方云服务。', en: 'Parse PDF/Office/images to text: local (offline engine) or third-party cloud services.' },
+  'panel.sub.memory': { zh: '持久记忆：小月跨会话记住关键信息。', en: 'Persistent memory: Moonie remembers key info across sessions.' },
+  'panel.general': { zh: '通用', en: 'General' },
+  'panel.appearance': { zh: '外观', en: 'Appearance' },
+  'panel.library': { zh: '文档库（书房）', en: 'Library (Study)' },
+  'panel.chat': { zh: '对话', en: 'Chat' },
+  'panel.model.platform': { zh: '模型 · 平台 API', en: 'Models · Platform API' },
+  'panel.model.custom': { zh: '模型 · 自定义', en: 'Models · Custom' },
+  'panel.model.local': { zh: '模型 · 本地部署', en: 'Models · Local' },
+  'panel.messaging': { zh: '消息平台', en: 'Messaging' },
+  'panel.mcp.builtin': { zh: 'MCP · 内置', en: 'MCP · Built-in' },
+  'panel.mcp.custom': { zh: 'MCP · 自定义', en: 'MCP · Custom' },
+  'panel.mcp.market': { zh: 'MCP · 市场', en: 'MCP · Market' },
+  'panel.skills': { zh: '技能', en: 'Skills' },
+  'panel.websearch': { zh: '网络搜索', en: 'Web Search' },
+  'panel.docproc': { zh: '文档处理', en: 'Doc Processing' },
+  'panel.memory': { zh: '记忆', en: 'Memory' },
+}
+function curLang() {
+  const l = APP_SETTINGS?.appearance?.lang
+  if (l === 'en') return 'en'
+  return 'zh' // zh-CN/缺省=中文
+}
+function t(key) {
+  const e = I18N_DICT[key]
+  if (!e) return key
+  return e[curLang()] ?? e.zh ?? key
+}
 async function loadAppSettings() {
   if (APP_SETTINGS) return APP_SETTINGS
   try {
@@ -137,7 +220,7 @@ async function saveAppSettings(patch) {
     APP_SETTINGS = JSON.parse(r.text).settings
     return { ok: true }
   }
-  return { ok: false, error: r.message ?? r.text ?? '保存失败' }
+  return { ok: false, error: r.message ?? r.text ?? t('ui.saveFail') }
 }
 function applyThemeSettings() {
   // #256.2 主题：dark/light 直接写 data-theme；system 移除（回退 media）；time=18:00-06:00 深色
@@ -206,6 +289,14 @@ for (const b of document.querySelectorAll('#rail .rail-btn')) {
   const nav = b.dataset.nav
   if (nav && ICON_PATHS[nav]) b.innerHTML = navIconSvg(nav)
 }
+// #313：rail tooltip 按当前语言重写（index.html data-tip 为中文默认；EN 时由字典覆盖，tooltip 浮层动态读 data-tip 即时生效）
+function applyRailLangTips() {
+  for (const b of document.querySelectorAll('#rail .rail-btn')) {
+    const nav = b.dataset.nav
+    if (nav && NAVS[nav]) b.setAttribute('data-tip', t(NAVS[nav].label))
+  }
+}
+try { applyRailLangTips() } catch {} // 顶层执行（NAVS/t 已定义；APP_SETTINGS 未载时按 zh 兜底）
 
 // ---------- 自定义 tooltip（#256：data-tip 驱动单例浮层，替代原生 title 的延迟+不可控样式） ----------
 (() => {
@@ -251,7 +342,7 @@ function renderFrameTabs() {
   for (const nav of openFrames) {
     const b = document.createElement('button')
     b.className = 'frame-tab' + (nav === currentNav ? ' active' : '')
-    b.innerHTML = `${navIconSvg(nav, 13)}<span style="vertical-align:middle;margin-left:5px">${NAVS[nav].label}</span>`
+    b.innerHTML = `${navIconSvg(nav, 13)}<span style="vertical-align:middle;margin-left:5px">${t(NAVS[nav].label)}</span>`
     b.onclick = () => switchNav(nav)
     box.appendChild(b)
   }
@@ -300,7 +391,7 @@ async function renderList(nav) {
       const active = cat.id === currentSetCat
       el.className = 'set-cat' + (active ? ' active' : '')
       // #256 用户：第二列只留图标+名称，去掉右侧对齐的二级说明文字
-      el.innerHTML = `${setIconSvg(cat.id)}<span>${cat.label}</span>`
+      el.innerHTML = `${setIconSvg(cat.id)}<span>${t(cat.label)}</span>`
       el.onclick = () => {
         currentSetCat = cat.id
         currentSetSub = null
@@ -311,7 +402,7 @@ async function renderList(nav) {
     }
     return
   }
-  head.textContent = NAVS[nav].label
+  head.textContent = t(NAVS[nav].label)
   body.innerHTML = ''
 
   if (nav === 'vault') {
@@ -321,7 +412,7 @@ async function renderList(nav) {
       return
     }
     // 全展开/全收起（#253.29）
-    head.innerHTML = `${NAVS[nav].label} <span id="tree-exp" style="float:right;font-weight:400;font-size:11px;color:var(--muted);cursor:pointer">全部展开</span>`
+    head.innerHTML = `${t(NAVS[nav].label)} <span id="tree-exp" style="float:right;font-weight:400;font-size:11px;color:var(--muted);cursor:pointer">${t('tree.expandAll')}</span>`
     $('tree-exp').onclick = async () => {
       const expanding = $('tree-exp').textContent === '全部展开'
       if (expanding) treeCollapsed.clear()
@@ -357,7 +448,7 @@ async function renderList(nav) {
         const el = document.createElement('div')
         el.className = 'tree-item' + (currentBkId === e.id ? ' active' : '')
         el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">📁 ${e.localPath.split(/[\\/]/).pop()}</span>
-          <span class="muted" style="font-size:10.5px;flex:none">${e.enabled ? (holdN ? `${holdN} 项已停更` : '启用') : '停用'}</span>`
+          <span class="muted" style="font-size:10.5px;flex:none">${e.enabled ? (holdN ? `${holdN} 项已停更` : t('ui.enable')) : t('ui.stop')}</span>`
         el.onclick = () => { currentBkId = e.id; renderList('backup'); renderWork('backup', { id: e.id }) }
         body.appendChild(el)
       }
@@ -500,7 +591,7 @@ async function renderList(nav) {
     await renderXiaoyueList()
   } else if (nav === 'help') {
     // #310.5：帮助项选中态——currentHelpArg 跟踪当前项，DOM 级切换（点击换 active，不重渲侧栏）
-    for (const [arg, label, fn] of [['terms', '📜 条款', () => renderWork('help', 'terms')], ['feedback', '📝 问题反馈', () => renderWork('help', 'feedback')], ['debug', '🐞 调试', () => renderWork('help', 'debug')], ['cloudaddr', '🌐 云端地址', () => renderWork('help', 'cloudaddr')], ['kernel', '🧠 内核状态', () => renderWork('help', 'kernel')], ['about', 'ℹ️ 关于', () => renderWork('help', 'about')]]) {
+    for (const [arg, label, fn] of [['terms', t('help.terms'), () => renderWork('help', 'terms')], ['feedback', t('help.feedback'), () => renderWork('help', 'feedback')], ['debug', t('help.debug'), () => renderWork('help', 'debug')], ['cloudaddr', t('help.cloudaddr'), () => renderWork('help', 'cloudaddr')], ['kernel', t('help.kernel'), () => renderWork('help', 'kernel')], ['about', t('help.about'), () => renderWork('help', 'about')]]) {
       const el = document.createElement('div')
       el.className = 'tree-item' + (currentHelpArg === arg ? ' active' : '')
       el.textContent = label
@@ -632,13 +723,13 @@ async function renderWork(nav, arg, label2) {
     const renderView = () => { view.innerHTML = mdToHtml(edit.value); renderMermaids() }
     let mode = 'read' // read | edit
     const mkBtn = (label, ghost) => { const b = document.createElement('button'); b.className = ghost ? 'btn ghost' : 'btn'; b.textContent = label; b.style.marginLeft = '8px'; return b }
-    const btnToggle = mkBtn('编辑', true)
+    const btnToggle = mkBtn(t('ui.edit'), true)
     const btnSave = mkBtn('保存', false)
     const applyMode = () => {
       if (mode === 'read') {
         edit.style.display = 'none'; view.style.display = ''
         renderView()
-        btnToggle.textContent = '编辑'
+        btnToggle.textContent = t('ui.edit')
         state.textContent = `${edit.value.length} 字符 · 阅读视图`
       } else {
         view.style.display = 'none'; edit.style.display = ''
@@ -674,7 +765,7 @@ async function renderWork(nav, arg, label2) {
     if (cat.subs && !currentSetSub) currentSetSub = cat.subs[0] // 有二级分类默认进第一个（模型→平台 API）
     const panel = (title, desc, inner) => {
       const tabs = cat.subs
-        ? `<div class="set-row" style="gap:6px;margin:0 0 18px">${cat.subs.map((s) => `<button type="button" class="btn ${s === currentSetSub ? '' : 'ghost'}" data-setsub="${s}">${SET_SUB_LABELS[s] ?? s}</button>`).join('')}</div>`
+        ? `<div class="set-row" style="gap:6px;margin:0 0 18px">${cat.subs.map((s) => `<button type="button" class="btn ${s === currentSetSub ? '' : 'ghost'}" data-setsub="${s}">${t(SET_SUB_LABELS[s] ?? s)}</button>`).join('')}</div>`
         : ''
       w.innerHTML = `<div class="set-panel"><h3>${title}</h3><p class="set-desc">${desc}</p>${tabs}${inner}</div>`
       w.querySelectorAll('[data-setsub]').forEach((b) => {
@@ -688,7 +779,7 @@ async function renderWork(nav, arg, label2) {
       const card = (id, label, desc, on) => `
         <div class="set-card"><div class="sc-main"><div class="sc-title">${label}</div><div class="sc-desc">${desc}</div></div>
           <button type="button" class="toggle ${on ? 'on' : ''}" id="${id}" aria-label="${label}"></button></div>`
-      panel('通用', '基础行为设置。更改即时生效。', `
+      panel(t('panel.general'), t('panel.sub.general'), `
         ${card('sp-launch', '开机启动', '登录系统后自动启动魔力宝盒（安装版生效）', !!gv.launchAtLogin)}
         ${card('sp-min', '启动时最小化到托盘', '开机/启动后不弹主窗口，仅在托盘待命', !!gv.launchMinimized)}
         ${card('sp-tray', '关闭时最小化到托盘', '点关闭按钮时隐藏到托盘而非退出（托盘图标可退出）', !!gv.closeToTray)}
@@ -717,7 +808,7 @@ async function renderWork(nav, arg, label2) {
     } else if (cat.id === 'appearance') {
       const g = await loadAppSettings()
       const av = g.appearance ?? {}
-      panel('外观', '主题、语言与缩放。', `
+      panel(t('panel.appearance'), t('panel.sub.appearance'), `
         <div class="set-field" style="max-width:320px"><label>色彩风格</label>
           <select id="sp-theme" class="set-select">
             <option value="system" ${av.theme === 'system' || !av.theme ? 'selected' : ''}>跟随系统</option>
@@ -745,7 +836,11 @@ async function renderWork(nav, arg, label2) {
       $('sp-lang').onchange = async (e) => {
         APP_SETTINGS.appearance = { ...(APP_SETTINGS.appearance ?? {}), lang: e.target.value }
         await saveAppSettings({ appearance: { lang: e.target.value } })
-        const st = $('sp-ap-status'); st.className = 'set-status ok'; st.textContent = '✓ 已保存（界面文案随下次刷新生效）'
+        // #313：立即生效——rail tooltip+当前视图重渲（框架标签全走 t()，随 curLang() 切换）
+        applyRailLangTips()
+        await renderList(currentNav)
+        await renderWork('settings')
+        const st = $('sp-ap-status'); st.className = 'set-status ok'; st.textContent = '✓ Saved / 已保存'
       }
       $('sp-zoom').oninput = (e) => { $('sp-zoom-v').textContent = `${e.target.value}%` }
       $('sp-zoom').onchange = async (e) => {
@@ -765,7 +860,7 @@ async function renderWork(nav, arg, label2) {
         }).join('')}</optgroup>` +
         `<optgroup label="自定义">${(mm.custom ?? []).filter((x) => x.enabled).map((x) => `<option value="custom:${x.id}" ${mm.default === `custom:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>` +
         `<optgroup label="本地部署（预留）">${(mm.local ?? []).filter((x) => x.enabled).map((x) => `<option value="local:${x.id}" ${mm.default === `local:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>`
-      panel('对话', '小月的上下文与重试行为。上下文仅存内存（本机），不落盘。', `
+      panel(t('panel.chat'), t('panel.sub.chat'), `
         <div class="set-field" style="margin-bottom:14px"><label>默认模型（小月对话/图示 AI 使用）</label>
           <select id="sp-chat-model" class="set-select set-select-sm" style="max-width:420px">
             <option value="">— 未指定（回落已配置模型）—</option>
@@ -803,7 +898,7 @@ async function renderWork(nav, arg, label2) {
       $('sp-cg').oninput = (e) => { $('sp-cg-v').textContent = `${e.target.value}%` }
       const saveChat = async () => {
         const st = $('sp-chat-status')
-        st.className = 'set-status'; st.textContent = '保存中…'
+        st.className = 'set-status'; st.textContent = t('ui.saving')
         const r = await saveAppSettings({ chat: {
           contextEnabled: $('sp-ctx').classList.contains('on'),
           autoCompress: $('sp-compress').classList.contains('on'),
@@ -812,11 +907,11 @@ async function renderWork(nav, arg, label2) {
           maxRetries: Number($('sp-retry').value) || 10,
         } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
-        st.textContent = r.ok ? '✓ 已保存（即刻生效）' : (r.error ?? '保存失败')
+        st.textContent = r.ok ? t('ui.saved') + '（即刻生效）' : (r.error ?? t('ui.saveFail'))
       }
       for (const id of ['sp-ctx', 'sp-compress', 'sp-ct', 'sp-cg', 'sp-retry']) $(id).onchange = saveChat
     } else if (cat.id === 'library') {
-      panel('文档库（书房）', '本地书房目录与同步内核。目录是同步、检索、小月的单一数据源。', `
+      panel(t('panel.library'), t('panel.sub.library'), `
         <div class="set-field">
           <label>书房目录（Vault）</label>
           <div class="set-row" style="margin:0"><input id="sp-vault" readonly placeholder="未选择" style="flex:1" /><button type="button" class="btn ghost" id="sp-vault-pick">选择…</button></div>
@@ -883,7 +978,7 @@ async function renderWork(nav, arg, label2) {
       const mcfg = g.model ?? {}
       const insts = Array.isArray(mcfg.providers) ? mcfg.providers : []
       const isDefault = (id) => mcfg.default === `platform:${id}`
-      const html = (defOpen) => panel('模型 · 平台 API', '每个平台可单独配置 API Key 与模型、单独启用/停用；任一实例可设为对话默认模型。Key 只存本机钥匙串，永不上传。', `
+      const html = (defOpen) => panel(t('panel.model.platform'), t('panel.sub.model.platform'), `
         <div id="sp-pv-list" style="display:flex;flex-direction:column;gap:8px"></div>
         <button type="button" class="btn ghost" id="sp-pv-add" style="margin-top:10px">＋ 添加平台</button>
         <div id="sp-pv-form" style="display:${defOpen ? 'block' : 'none'};margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:10px">
@@ -953,7 +1048,7 @@ async function renderWork(nav, arg, label2) {
       $('sp-pv-models').onchange = () => { if ($('sp-pv-models').value) $('sp-pv-model').value = $('sp-pv-models').value }
       $('sp-pv-save').onclick = async () => {
         const st = $('sp-pv-status')
-        st.className = 'set-status'; st.textContent = '保存中…'
+        st.className = 'set-status'; st.textContent = t('ui.saving')
         const providerId = $('sp-pv-prov').value
         const model = $('sp-pv-model').value.trim()
         const apiKey = $('sp-pv-key').value.trim()
@@ -963,11 +1058,11 @@ async function renderWork(nav, arg, label2) {
         const r = await saveAppSettings({ model: { providers: arr, ...(insts.length === 0 ? { default: `platform:${inst.id}` } : {}) } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         if (r.ok) renderWork('settings')
-        else st.textContent = r.error ?? '保存失败'
+        else st.textContent = r.error ?? t('ui.saveFail')
       }
     } else if (cat.id === 'model' && currentSetSub === 'local') {
       // #310.11：本地部署四态探测（公用不私用：检测已有 Ollama 直接复用，不重复安装；失效给修复入口）
-      panel('模型 · 本地部署', '连接本机已有的 Ollama 服务，模型数据不出本机；已装则直接复用，不重复安装。', `
+      panel(t('panel.model.local'), t('panel.sub.model.local'), `
         <div id="sp-ol-state" class="set-card"><div class="sc-main"><div class="sc-title">正在检测本机 Ollama…</div><div class="sc-desc">检测服务与已安装版本。</div></div></div>
         <div id="sp-ol-models"></div>
       `)
@@ -1032,7 +1127,7 @@ async function renderWork(nav, arg, label2) {
             }
             const r = await saveAppSettings({ model: { local: arr, ...(arr.length && !mcfg.default ? { default: `local:${arr[0].id}` } : {}) } })
             st.className = r.ok ? 'set-status ok' : 'set-status err'
-            st.textContent = r.ok ? `已接入 ${picked.length} 个模型` : (r.error ?? '保存失败')
+            st.textContent = r.ok ? `已接入 ${picked.length} 个模型` : (r.error ?? t('ui.saveFail'))
             if (r.ok) setTimeout(() => renderWork('settings'), 600)
           }
         }
@@ -1044,7 +1139,7 @@ async function renderWork(nav, arg, label2) {
       const mcfg = g.model ?? {}
       const insts = Array.isArray(mcfg.custom) ? mcfg.custom : []
       const isDefault = (id) => mcfg.default === `custom:${id}`
-      panel('模型 · 自定义', '添加多个 OpenAI 兼容端点（Ollama / LM Studio / vLLM / 中转站 / 私有部署），每条可单独启用/停用，任一可设为对话默认。本地端点 Key 可留空。', `
+      panel(t('panel.model.custom'), t('panel.sub.model.custom'), `
         <div id="sp-cu-list" style="display:flex;flex-direction:column;gap:8px"></div>
         <button type="button" class="btn ghost" id="sp-cu-add" style="margin-top:10px">＋ 添加自定义模型</button>
         <div id="sp-cu-form" style="display:${insts.length === 0 ? 'block' : 'none'};margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:10px">
@@ -1065,7 +1160,7 @@ async function renderWork(nav, arg, label2) {
         for (const inst of insts) {
           const card = document.createElement('div')
           card.className = 'set-card'
-          card.innerHTML = `<div class="sc-main"><div class="sc-title">${inst.name || '未命名'}${isDefault(inst.id) ? ' <span style="color:var(--accent);font-size:11px">默认</span>' : ''}</div>
+          card.innerHTML = `<div class="sc-main"><div class="sc-title">${inst.name || t('ui.untitled')}${isDefault(inst.id) ? ' <span style="color:var(--accent);font-size:11px">默认</span>' : ''}</div>
             <div class="sc-desc">${inst.model} · ${inst.baseUrl}</div></div>
             <div style="display:flex;align-items:center;gap:8px">
               ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">设为默认</button>`}
@@ -1096,7 +1191,7 @@ async function renderWork(nav, arg, label2) {
       $('sp-cu-cancel').onclick = () => { $('sp-cu-form').style.display = 'none' }
       $('sp-cu-save').onclick = async () => {
         const st = $('sp-cu-status')
-        st.className = 'set-status'; st.textContent = '保存中…'
+        st.className = 'set-status'; st.textContent = t('ui.saving')
         const name = $('sp-cu-name').value.trim()
         const baseUrl = $('sp-cu-url').value.trim().replace(/\/+$/, '')
         const model = $('sp-cu-model').value.trim()
@@ -1107,14 +1202,14 @@ async function renderWork(nav, arg, label2) {
         const r = await saveAppSettings({ model: { custom: [...insts, inst], ...(insts.length === 0 ? { default: `custom:${inst.id}` } : {}) } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         if (r.ok) renderWork('settings')
-        else st.textContent = r.error ?? '保存失败'
+        else st.textContent = r.error ?? t('ui.saveFail')
       }
 
     } else if (cat.id === 'messaging') {
       const g = await loadAppSettings()
       const provs = APP_PROVIDERS?.messaging ?? []
       const enabled = g.messaging?.providers ?? {}
-      panel('消息平台', '对接 IM 平台，让你在小月里远程收发消息与操作。Token/Secret 只存本机钥匙串。已支持飞书、钉钉、QQ 机器人、Telegram、企业微信（AI 机器人）、Slack、Email（邮件收发）；个人微信走 iLink 机器人身份（扫码登录，多数账号单聊可用）。', `
+      panel(t('panel.messaging'), t('panel.sub.messaging'), `
         ${provs.map((p) => {
           const cur = enabled[p.id] ?? { enabled: false }
           return `<div class="set-card"><div class="sc-main"><div class="sc-title">${p.label}</div><div class="sc-desc">${cur.enabled ? '已开启' : '对接后可在此平台收发消息'}</div></div>
@@ -1202,7 +1297,7 @@ async function renderWork(nav, arg, label2) {
       })
       w.querySelectorAll('[data-msgkey]').forEach((inp) => { inp.onchange = saveMessaging })
       async function saveMessaging() {
-        const st = $('sp-msg-status'); st.className = 'set-status'; st.textContent = '保存中…'
+        const st = $('sp-msg-status'); st.className = 'set-status'; st.textContent = t('ui.saving')
         const providers = {}
         for (const p of provs) {
           const cb = w.querySelector(`[data-msg="${p.id}"]`)
@@ -1217,11 +1312,11 @@ async function renderWork(nav, arg, label2) {
         }
         const r = await saveAppSettings({ messaging: { providers } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
-        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
+        st.textContent = r.ok ? t('ui.saved') : (r.error ?? t('ui.saveFail'))
       }
     } else if (cat.id === 'mcp' && currentSetSub === 'builtin') {
       const g = await loadAppSettings()
-      panel('MCP · 内置', 'Model Context Protocol 服务器——给小月接入外部工具与数据源的标准协议。内置服务器为魔力宝盒自带的 MoonLink（书房/收藏/便签/待办/记忆等 29 个工具）。', `
+      panel(t('panel.mcp.builtin'), t('panel.sub.mcp.builtin'), `
         <div class="set-card"><div class="sc-main"><div class="sc-title">工具（管家模式）· MoonLink（魔力宝盒内置）</div>
           <div class="sc-desc">小月能否调用工具代你执行任务（总闸）：关闭后小月纯对话，不装配 MoonLink 工具；开启后写操作仍逐一确认。原「通用」分类的此项已升格至此统一管理。</div></div>
           <button type="button" class="toggle ${g.mcp?.builtinEnabled !== false ? 'on' : ''}" id="sp-mcp-builtin"></button></div>
@@ -1231,17 +1326,17 @@ async function renderWork(nav, arg, label2) {
         e.currentTarget.classList.toggle('on')
         const r = await saveAppSettings({ mcp: { builtinEnabled: $('sp-mcp-builtin').classList.contains('on') } })
         const st = $('sp-mcp-status'); st.className = r.ok ? 'set-status ok' : 'set-status err'
-        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
+        st.textContent = r.ok ? t('ui.saved') : (r.error ?? t('ui.saveFail'))
       }
     } else if (cat.id === 'mcp' && currentSetSub === 'market') {
-      panel('MCP · 市场', '发现并安装社区 MCP 服务器。', '<div class="set-status">市场目录由平台维护，当前目录为空。</div>')
+      panel(t('panel.mcp.market'), t('panel.sub.mcp.market'), '<div class="set-status">市场目录由平台维护，当前目录为空。</div>')
 } else if (cat.id === 'mcp' && currentSetSub === 'custom') {
       const g = await loadAppSettings()
       const list = g.mcp?.custom ?? []
-      panel('MCP · 自定义', '添加自己的 MCP 服务器（Streamable HTTP）。启用后其工具与小月内置工具并列装配；API Key 只存本机钥匙串。', `
+      panel(t('panel.mcp.custom'), t('panel.sub.mcp.custom'), `
         <div id="sp-mcp-list">${list.map((m, i) => `<div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:10px">
-          <div class="set-row" style="margin:0 0 6px"><b>${m.name || '未命名'}</b><span class="set-desc" style="margin:0">${m.enabled !== false ? '已启用' : '已停用'}${m.keyStored ? ' · Key 已存钥匙串' : ''}</span>
-            <button type="button" class="btn ghost" data-mcptoggle="${i}" style="margin-left:auto">${m.enabled !== false ? '停用' : '启用'}</button>
+          <div class="set-row" style="margin:0 0 6px"><b>${m.name || t('ui.untitled')}</b><span class="set-desc" style="margin:0">${m.enabled !== false ? '已启用' : '已停用'}${m.keyStored ? ' · Key 已存钥匙串' : ''}</span>
+            <button type="button" class="btn ghost" data-mcptoggle="${i}" style="margin-left:auto">${m.enabled !== false ? t('ui.stop') : t('ui.enable')}</button>
             <button type="button" class="btn ghost" data-mcpdel="${i}">删除</button></div>
           <div class="set-desc" style="margin:0">${m.url}</div></div>`).join('') || '<div class="set-status">暂无自定义 MCP 服务器。</div>'}</div>
         <div class="set-field" style="margin-top:14px"><label>名称</label><input id="sp-mcp-name" placeholder="my-mcp" /></div>
@@ -1273,7 +1368,7 @@ async function renderWork(nav, arg, label2) {
         const list2 = [...(APP_SETTINGS.mcp?.custom ?? []), entry]
         const r = await saveAppSettings({ mcp: { custom: list2 } })
         if (r.ok) renderWork('settings')
-        else { st.className = 'set-status err'; st.textContent = r.error ?? '保存失败' }
+        else { st.className = 'set-status err'; st.textContent = r.error ?? t('ui.saveFail') }
       }
     } else if (cat.id === 'skills') {
       const gs = await loadAppSettings()
@@ -1289,7 +1384,7 @@ async function renderWork(nav, arg, label2) {
             : '<div class="set-desc">书房暂无技能——在书房目录打开 .moonlybox/skills/&lt;技能名&gt;/SKILL.md（含 name/description 头部）即生效，随书房备份。</div>'
         } else listHtml = '<div class="set-desc">技能清单读取失败。</div>'
       } catch { listHtml = '<div class="set-desc">技能清单读取失败。</div>' }
-      panel('技能', '书房里的自定义技能：小月按需读取技能全文并照其中的流程执行。数据不出本机、随书房备份。', `
+      panel(t('panel.skills'), t('panel.sub.skills'), `
         <div class="set-card"><div class="sc-main"><div class="sc-title">启用技能</div><div class="sc-desc">关闭后小月不加载技能清单与技能工具</div></div>
           <button type="button" class="toggle ${openState ? 'on' : ''}" id="sp-sk-on"></button></div>
         <div style="display:flex;gap:8px;margin-top:10px"><button class="btn ghost" id="sp-sk-open" style="font-size:12px;padding:5px 10px">📁 打开技能目录</button><span class="set-desc" style="align-self:center">在书房 .moonlybox/skills/&lt;技能名&gt;/ 放置 SKILL.md 即生效</span></div>
@@ -1312,7 +1407,7 @@ async function renderWork(nav, arg, label2) {
       const provs = APP_PROVIDERS?.websearch ?? []
       const ws = g.websearch ?? {}
       const ue = g.urlextract ?? {}
-      panel('网络搜索', '给小月接上搜索与网页提取能力（本质=服务商能力暴露给 Agent 的工具）。', `
+      panel(t('panel.websearch'), t('panel.sub.websearch'), `
         <div class="sc-title" style="font-size:13.5px;font-weight:600;margin:0 0 10px">搜索服务商</div>
         <div class="set-field" style="max-width:340px"><label>服务商</label>
           <select id="sp-ws-prov" class="set-select">
@@ -1343,7 +1438,7 @@ async function renderWork(nav, arg, label2) {
       $('sp-ws-prov').onchange = renderWsCfg
       renderWsCfg()
       $('sp-ws-save').onclick = async () => {
-        const st = $('sp-ws-status'); st.className = 'set-status'; st.textContent = '保存中…'
+        const st = $('sp-ws-status'); st.className = 'set-status'; st.textContent = t('ui.saving')
         const pv = provs.find((x) => x.id === $('sp-ws-prov').value)
         const config = {}
         const b = $('sp-ws-baseUrl')
@@ -1352,7 +1447,7 @@ async function renderWork(nav, arg, label2) {
         // #279：key 走节顶层 apiKey 字段→daemon 剥离入钥匙串（settings.json 不落 key 本体）
         const r = await saveAppSettings({ websearch: { provider: $('sp-ws-prov').value, config, ...(k && k.value ? { apiKey: k.value } : {}) } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
-        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
+        st.textContent = r.ok ? t('ui.saved') : (r.error ?? t('ui.saveFail'))
       }
       // URL 提取服务商（#276：云端清单优先——APP_PROVIDERS.urlextract；Jina 免 key，Firecrawl/自定义需 key）
       const UE_PROVIDERS = (APP_PROVIDERS?.urlextract ?? []).filter((x) => x.id !== 'local').map((x) => ({
@@ -1380,7 +1475,7 @@ async function renderWork(nav, arg, label2) {
       $('sp-ue-mode').onchange = renderUeCfg
       renderUeCfg()
       $('sp-ue-save').onclick = async () => {
-        const st = $('sp-ue-status'); st.className = 'set-status'; st.textContent = '保存中…'
+        const st = $('sp-ue-status'); st.className = 'set-status'; st.textContent = t('ui.saving')
         const mode = $('sp-ue-mode').value
         let patch
         if (mode === 'provider') {
@@ -1392,7 +1487,7 @@ async function renderWork(nav, arg, label2) {
         }
         const r = await saveAppSettings(patch)
         st.className = r.ok ? 'set-status ok' : 'set-status err'
-        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
+        st.textContent = r.ok ? t('ui.saved') : (r.error ?? t('ui.saveFail'))
       }
     } else if (cat.id === 'docproc') {
       // #256.2 用户 6 点：本地处理=具体服务商下拉（选商自动填 API 地址，不手填）
@@ -1409,7 +1504,7 @@ async function renderWork(nav, arg, label2) {
       ]
       const cur = DP_PROVIDERS.find((x) => x.id === (dp.provider ?? 'builtin')) ?? DP_PROVIDERS[0]
       const mode = dp.mode ?? (cur.local ? 'local' : 'provider')
-      panel('文档处理', 'PDF/Office/图片解析为文本：本地处理（离线引擎）或第三方云服务。', `
+      panel(t('panel.docproc'), t('panel.sub.docproc'), `
         <div class="set-field" style="max-width:400px"><label>处理方式与服务商</label>
           <select id="sp-dp-prov" class="set-select">
             <optgroup label="本地处理">${DP_PROVIDERS.filter((x) => x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${x.label}</option>`).join('')}</optgroup>
@@ -1432,7 +1527,7 @@ async function renderWork(nav, arg, label2) {
       $('sp-dp-prov').onchange = renderDpCfg
       renderDpCfg()
       $('sp-dp-save').onclick = async () => {
-        const st = $('sp-dp-status'); st.className = 'set-status'; st.textContent = '保存中…'
+        const st = $('sp-dp-status'); st.className = 'set-status'; st.textContent = t('ui.saving')
         const pv = DP_PROVIDERS.find((x) => x.id === $('sp-dp-prov').value)
         const config = {}
         const b = $('sp-dp-url')
@@ -1442,12 +1537,12 @@ async function renderWork(nav, arg, label2) {
         else if (dp.config?.keyStored && dp.provider === pv.id) config.keyStored = true
         const r = await saveAppSettings({ docproc: { mode: pv.local ? 'local' : 'provider', provider: pv.id, config } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
-        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
+        st.textContent = r.ok ? t('ui.saved') : (r.error ?? t('ui.saveFail'))
       }
 } else if (cat.id === 'memory') {
       const g = await loadAppSettings()
       const mm = g.memory ?? {}
-      panel('记忆', '持久记忆：小月跨会话记住关键信息。模式为本机内置+月忆（MoonRecall）增强——记忆沉淀在书房目录（明文可编辑、随书房备份），月忆作为云端增强逐步生效。', `
+      panel(t('panel.memory'), t('panel.sub.memory'), `
         <div class="set-card"><div class="sc-main"><div class="sc-title">启用持久记忆</div><div class="sc-desc">对话中的关键事实自动沉淀到本机记忆层，跨会话可 recall</div></div>
           <button type="button" class="toggle ${mm.enabled !== false ? 'on' : ''}" id="sp-mm-on"></button></div>
         <div class="set-card"><div class="sc-main"><div class="sc-title">同步到月忆</div><div class="sc-desc">本机沉淀的记忆条目同时上行到云端月忆候选池，你确认后才进入云端正式记忆（跨设备可用）</div></div>
@@ -1472,11 +1567,11 @@ async function renderWork(nav, arg, label2) {
       $('sp-mm-on').onclick = (e) => { e.currentTarget.classList.toggle('on'); $('sp-mm-save').click() }
       $('sp-mm-sync').onclick = (e) => { e.currentTarget.classList.toggle('on'); $('sp-mm-save').click() }
       $('sp-mm-save').onclick = async () => {
-        const st = $('sp-mm-status'); st.className = 'set-status'; st.textContent = '保存中…'
+        const st = $('sp-mm-status'); st.className = 'set-status'; st.textContent = t('ui.saving')
         const limit = Math.max(500, Math.floor(Number($('sp-mm-limit').value) || 5000))
         const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').classList.contains('on'), mode: $('sp-mm-mode').value, injectLimit: limit, syncToMoon: $('sp-mm-sync').classList.contains('on') } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
-        st.textContent = r.ok ? '✓ 已保存' : (r.error ?? '保存失败')
+        st.textContent = r.ok ? t('ui.saved') : (r.error ?? t('ui.saveFail'))
       }
       // #289 云端候选池：candidate 态实体列表+确认/丢弃（登录态经 daemon apiGet/apiPost；未登录自然报未登录错误）
       const mmBox = $('sp-mm-cand-body')
@@ -1530,8 +1625,8 @@ async function renderWork(nav, arg, label2) {
       }
       void loadCandidates()
         } else {
-      const subLabel = currentSetSub ? ` · ${SET_SUB_LABELS[currentSetSub] ?? currentSetSub}` : ''
-      panel(`${cat.label}${subLabel}`, '此分类的配置项随功能开启逐步展示。', '')
+      const subLabel = currentSetSub ? ` · ${t(SET_SUB_LABELS[currentSetSub] ?? currentSetSub)}` : ''
+      panel(`${t(cat.label)}${subLabel}`, '此分类的配置项随功能开启逐步展示。', '')
     }
     return
   }
@@ -2039,7 +2134,7 @@ async function renderWork(nav, arg, label2) {
             <div class="set-desc" style="margin-top:2px">关闭后仅在打开本页点击「立即更新」时检查</div>
           </div>
           <button type="button" class="toggle ${autoOn ? 'on' : ''}" id="abt-auto"></button>
-          <button class="btn" id="btn-check2">${st?.checking ? '检查中…' : '立即更新'}</button>
+          <button class="btn" id="btn-check2">${st?.checking ? t('ui.checking') : t('ui.updateNow')}</button>
         </div>
         ${updateSection}
 
@@ -2057,10 +2152,10 @@ async function renderWork(nav, arg, label2) {
       await window.moonlybox.setAutoUpdate(on)
     }
     $('btn-check2').onclick = async (e) => {
-      e.currentTarget.textContent = '检查中…'
+      e.currentTarget.textContent = t('ui.checking')
       const st2 = await window.moonlybox.updateCheck()
       if (st2?.downloaded) renderWork('help', 'about')
-      else if (st2?.available) { e.currentTarget.textContent = '立即更新'; renderWork('help', 'about') }
+      else if (st2?.available) { e.currentTarget.textContent = t('ui.updateNow'); renderWork('help', 'about') }
       else e.currentTarget.textContent = '已是最新版本'
     }
     const inst = $('abt-install')
@@ -2921,7 +3016,7 @@ $('btn-upgrade').onclick = async () => {
     return
   }
   setUpgradeState('available', st?.version ?? '')
-  $('upgrade-text').textContent = '检查中…'
+  $('upgrade-text').textContent = t('ui.checking')
   const after = await window.moonlybox.updateCheck()
   if (after?.downloaded) setUpgradeState('ready', after.version)
   else if (after?.available) setUpgradeState('available', after.version)
