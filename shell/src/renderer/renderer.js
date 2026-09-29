@@ -190,6 +190,55 @@ const I18N_DICT = {
   'panel.websearch': { zh: '网络搜索', en: 'Web Search' },
   'panel.docproc': { zh: '文档处理', en: 'Doc Processing' },
   'panel.memory': { zh: '记忆', en: 'Memory' },
+  'gen.launch': { zh: '开机启动', en: 'Launch at Login' },
+  'gen.launch.desc': { zh: '登录系统后自动启动魔力宝盒（安装版生效）', en: 'Start MoonlyBox automatically after login (packaged build)' },
+  'gen.minLaunch': { zh: '启动时最小化到托盘', en: 'Minimize to Tray on Launch' },
+  'gen.minLaunch.desc': { zh: '开机/启动后不弹主窗口，仅在托盘待命', en: 'No main window on launch; stays in tray' },
+  'gen.minClose': { zh: '关闭时最小化到托盘', en: 'Minimize to Tray on Close' },
+  'gen.minClose.desc': { zh: '点关闭按钮时隐藏到托盘而非退出（托盘图标可退出）', en: 'Close button hides to tray instead of quitting (tray icon has Quit)' },
+  'gen.awake': { zh: '运行任务时保持电脑唤醒', en: 'Keep Computer Awake on Tasks' },
+  'gen.awake.desc': { zh: '小月执行任务期间阻止系统休眠', en: 'Prevent system sleep while Moonie runs tasks' },
+  'gen.clip': { zh: '剪贴板自动采集', en: 'Clipboard Auto Capture' },
+  'gen.clip.desc': { zh: '监听复制的文本/链接，存入收集箱；快捷键 Alt+Shift+C 可随时手动采集（不受此开关限制）', en: 'Watch copied text/links into Inbox; Alt+Shift+C always works manually' },
+  'ap.theme': { zh: '色彩风格', en: 'Theme' },
+  'ap.theme.sys': { zh: '跟随系统', en: 'System' },
+  'ap.theme.light': { zh: '浅色', en: 'Light' },
+  'ap.theme.dark': { zh: '深色', en: 'Dark' },
+  'ap.theme.time': { zh: '跟随时间（18:00-06:00 深色）', en: 'By time (dark 18:00–06:00)' },
+  'ap.lang': { zh: '语言', en: 'Language' },
+  'ap.zoom': { zh: '缩放：', en: 'Zoom: ' },
+  'chat.ctx': { zh: '启用上下文管理', en: 'Context Management' },
+  'chat.compact': { zh: '上下文自动压缩', en: 'Auto Context Compaction' },
+  'chat.defaultModel': { zh: '默认模型（小月对话/图示 AI 使用）', en: 'Default model (used by Moonie chat / diagram AI)' },
+  'chat.unset': { zh: '— 未指定（回落已配置模型）—', en: '— Unset (fall back to configured model) —' },
+  'chat.unsetHint': { zh: '未指定——按已配置模型回落', en: 'Unset — falls back to configured model' },
+  'chat.setDefault': { zh: '✓ 已设为默认模型', en: '✓ Set as default model' },
+  'lib.vault': { zh: '书房目录（Vault）', en: 'Study Directory (Vault)' },
+  'lib.notChosen': { zh: '未选择', en: 'Not chosen' },
+  'lib.migrateBtn': { zh: '📦 迁移到新目录…', en: '📦 Migrate to New Directory…' },
+  'lib.migrateTitle': { zh: '迁移书房目录', en: 'Migrate Study Directory' },
+  'lib.migrateNew': { zh: '新目录（必须为空或不存在）', en: 'New directory (must be empty or not exist)' },
+  'lib.migrateStart': { zh: '开始迁移', en: 'Start Migration' },
+  'lib.migrating': { zh: '迁移中…（取决于书房大小，请勿关闭应用）', en: 'Migrating… (depends on study size; keep the app open)' },
+  'lib.migrateFail': { zh: '迁移失败', en: 'Migration failed' },
+  'lib.savedRestart': { zh: '✓ 已保存（内核重启后生效）', en: '✓ Saved (takes effect after kernel restart)' },
+  'mp.name': { zh: '名称', en: 'Name' },
+  'mp.model': { zh: '模型名', en: 'Model Name' },
+  'mp.baseUrl': { zh: 'API 地址', en: 'API Base URL' },
+  'mp.key': { zh: 'API Key（本地端点可留空）', en: 'API Key (leave empty for local endpoints)' },
+  'mp.recommended': { zh: '— 推荐模型 —', en: '— Recommended models —' },
+  'mp.required': { zh: '提供商与模型名必填', en: 'Provider and model name are required' },
+  'mp.ollamaEg': { zh: '例：本地 Ollama', en: 'e.g. local Ollama' },
+  'mp.noKey': { zh: ' · 未配置 Key', en: ' · No key configured' },
+  'mp.default': { zh: '默认', en: 'Default' },
+  'ol.detecting': { zh: '正在检测本机 Ollama…', en: 'Detecting local Ollama…' },
+  'ol.detectFail': { zh: '检测失败', en: 'Detection failed' },
+  'ol.pickFirst': { zh: '请先勾选模型', en: 'Select at least one model' },
+  'ol.starting': { zh: '启动中…', en: 'Starting…' },
+  'ol.startRetry': { zh: '启动失败，重试', en: 'Start failed, retry' },
+  'dg.noModel': { zh: '未设模型', en: 'No model set' },
+  'lib.notChosenParen': { zh: '（未选择）', en: '(not chosen)' },
+  'ui.appliesInstant': { zh: '（即刻生效）', en: ' (applies instantly)' },
 }
 function curLang() {
   const l = APP_SETTINGS?.appearance?.lang
@@ -780,11 +829,11 @@ async function renderWork(nav, arg, label2) {
         <div class="set-card"><div class="sc-main"><div class="sc-title">${label}</div><div class="sc-desc">${desc}</div></div>
           <button type="button" class="toggle ${on ? 'on' : ''}" id="${id}" aria-label="${label}"></button></div>`
       panel(t('panel.general'), t('panel.sub.general'), `
-        ${card('sp-launch', '开机启动', '登录系统后自动启动魔力宝盒（安装版生效）', !!gv.launchAtLogin)}
-        ${card('sp-min', '启动时最小化到托盘', '开机/启动后不弹主窗口，仅在托盘待命', !!gv.launchMinimized)}
-        ${card('sp-tray', '关闭时最小化到托盘', '点关闭按钮时隐藏到托盘而非退出（托盘图标可退出）', !!gv.closeToTray)}
-        ${card('sp-awake', '运行任务时保持电脑唤醒', '小月执行任务期间阻止系统休眠', !!gv.keepAwake)}
-        ${card('sp-watch', '剪贴板自动采集', '监听复制的文本/链接，存入收集箱；快捷键 Alt+Shift+C 可随时手动采集（不受此开关限制）', clipboardWatch)}
+        ${card('sp-launch', t('gen.launch'), t('gen.launch.desc'), !!gv.launchAtLogin)}
+        ${card('sp-min', t('gen.minLaunch'), t('gen.minLaunch.desc'), !!gv.launchMinimized)}
+        ${card('sp-tray', t('gen.minClose'), t('gen.minClose.desc'), !!gv.closeToTray)}
+        ${card('sp-awake', t('gen.awake'), t('gen.awake.desc'), !!gv.keepAwake)}
+        ${card('sp-watch', t('gen.clip'), t('gen.clip.desc'), clipboardWatch)}
       `)
       const saveGeneral = async () => {
         const patch = {
@@ -809,21 +858,21 @@ async function renderWork(nav, arg, label2) {
       const g = await loadAppSettings()
       const av = g.appearance ?? {}
       panel(t('panel.appearance'), t('panel.sub.appearance'), `
-        <div class="set-field" style="max-width:320px"><label>色彩风格</label>
+        <div class="set-field" style="max-width:320px"><label>${t('ap.theme')}</label>
           <select id="sp-theme" class="set-select">
-            <option value="system" ${av.theme === 'system' || !av.theme ? 'selected' : ''}>跟随系统</option>
-            <option value="light" ${av.theme === 'light' ? 'selected' : ''}>浅色</option>
-            <option value="dark" ${av.theme === 'dark' ? 'selected' : ''}>深色</option>
-            <option value="time" ${av.theme === 'time' ? 'selected' : ''}>跟随时间（18:00-06:00 深色）</option>
+            <option value="system" ${av.theme === 'system' || !av.theme ? 'selected' : ''}>${t('ap.theme.sys')}</option>
+            <option value="light" ${av.theme === 'light' ? 'selected' : ''}>${t('ap.theme.light')}</option>
+            <option value="dark" ${av.theme === 'dark' ? 'selected' : ''}>${t('ap.theme.dark')}</option>
+            <option value="time" ${av.theme === 'time' ? 'selected' : ''}>${t('ap.theme.time')}</option>
           </select>
         </div>
-        <div class="set-field" style="max-width:320px"><label>语言</label>
+        <div class="set-field" style="max-width:320px"><label>${t('ap.lang')}</label>
           <select id="sp-lang" class="set-select">
             <option value="zh-CN" ${av.lang === 'zh-CN' || !av.lang ? 'selected' : ''}>中文简体</option>
             <option value="en" ${av.lang === 'en' ? 'selected' : ''}>English</option>
           </select>
         </div>
-        <div class="set-field"><label>缩放：<span id="sp-zoom-v">${av.zoom ?? 100}%</span></label>
+        <div class="set-field"><label>${t('ap.zoom')}<span id="sp-zoom-v">${av.zoom ?? 100}%</span></label>
           <input type="range" id="sp-zoom" min="100" max="200" step="10" value="${av.zoom ?? 100}" style="width:260px" />
         </div>
         <div class="set-status" id="sp-ap-status"></div>
@@ -861,16 +910,16 @@ async function renderWork(nav, arg, label2) {
         `<optgroup label="自定义">${(mm.custom ?? []).filter((x) => x.enabled).map((x) => `<option value="custom:${x.id}" ${mm.default === `custom:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>` +
         `<optgroup label="本地部署（预留）">${(mm.local ?? []).filter((x) => x.enabled).map((x) => `<option value="local:${x.id}" ${mm.default === `local:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>`
       panel(t('panel.chat'), t('panel.sub.chat'), `
-        <div class="set-field" style="margin-bottom:14px"><label>默认模型（小月对话/图示 AI 使用）</label>
+        <div class="set-field" style="margin-bottom:14px"><label>${t('chat.defaultModel')}</label>
           <select id="sp-chat-model" class="set-select set-select-sm" style="max-width:420px">
-            <option value="">— 未指定（回落已配置模型）—</option>
+            <option value="">${t('chat.unset')}</option>
             ${modelOpts}
           </select>
           <div class="set-desc" style="margin-top:4px" id="sp-chat-model-hint"></div>
         </div>
-        <div class="set-card"><div class="sc-main"><div class="sc-title">启用上下文管理</div><div class="sc-desc">小月记住本次会话中的对话</div></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('chat.ctx')}</div><div class="sc-desc">小月记住本次会话中的对话</div></div>
           <button type="button" class="toggle ${cv.contextEnabled !== false ? 'on' : ''}" id="sp-ctx"></button></div>
-        <div class="set-card"><div class="sc-main"><div class="sc-title">上下文自动压缩</div><div class="sc-desc">历史过长时自动摘要，节省 token</div></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('chat.compact')}</div><div class="sc-desc">历史过长时自动摘要，节省 token</div></div>
           <button type="button" class="toggle ${cv.autoCompress !== false ? 'on' : ''}" id="sp-compress" ${cv.contextEnabled === false ? 'disabled' : ''}></button></div>
         <div class="set-field"><label>压缩阈值（历史达到容量的比例时触发）：<span id="sp-ct-v">${cv.compressThreshold ?? 80}%</span></label>
           <input type="range" id="sp-ct" min="50" max="100" step="5" value="${cv.compressThreshold ?? 80}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
@@ -889,7 +938,7 @@ async function renderWork(nav, arg, label2) {
       $('sp-chat-model').onchange = async (e) => {
         await saveAppSettings({ model: { default: e.target.value } })
         const hint = $('sp-chat-model-hint')
-        hint.textContent = e.target.value ? '✓ 已设为默认模型' : '未指定——按已配置模型回落'
+        hint.textContent = e.target.value ? t('chat.setDefault') : t('chat.unsetHint')
         setTimeout(() => { hint.textContent = '' }, 2500)
       }
       $('sp-ctx').onclick = (e) => { e.currentTarget.classList.toggle('on'); syncDisabled(); saveChat() }
@@ -907,16 +956,16 @@ async function renderWork(nav, arg, label2) {
           maxRetries: Number($('sp-retry').value) || 10,
         } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
-        st.textContent = r.ok ? t('ui.saved') + '（即刻生效）' : (r.error ?? t('ui.saveFail'))
+        st.textContent = r.ok ? t('ui.saved') + t('ui.appliesInstant') : (r.error ?? t('ui.saveFail'))
       }
       for (const id of ['sp-ctx', 'sp-compress', 'sp-ct', 'sp-cg', 'sp-retry']) $(id).onchange = saveChat
     } else if (cat.id === 'library') {
       panel(t('panel.library'), t('panel.sub.library'), `
         <div class="set-field">
-          <label>书房目录（Vault）</label>
-          <div class="set-row" style="margin:0"><input id="sp-vault" readonly placeholder="未选择" style="flex:1" /><button type="button" class="btn ghost" id="sp-vault-pick">选择…</button></div>
+          <label>${t('lib.vault')}</label>
+          <div class="set-row" style="margin:0"><input id="sp-vault" readonly placeholder=\"${t('lib.notChosen')}\" style="flex:1" /><button type="button" class="btn ghost" id="sp-vault-pick">选择…</button></div>
         </div>
-        <div class="set-row" style="margin:0"><button type="button" class="btn ghost" id="sp-vault-migrate" style="font-size:12px">📦 迁移到新目录…</button><span class="set-desc" style="align-self:center">整体复制到新目录（目标目录需为空），完成后自动切换并重启内核</span></div>
+        <div class="set-row" style="margin:0"><button type="button" class="btn ghost" id="sp-vault-migrate" style="font-size:12px">${t('lib.migrateBtn')}</button><span class="set-desc" style="align-self:center">整体复制到新目录（目标目录需为空），完成后自动切换并重启内核</span></div>
         <div class="set-status" id="sp-vault-status"></div>
       `)
       $('sp-vault').value = (await window.moonlybox.vaultGet()) ?? ''
@@ -925,7 +974,7 @@ async function renderWork(nav, arg, label2) {
         if (r.ok) {
           $('sp-vault').value = r.root
           $('sp-vault-status').className = 'set-status ok'
-          $('sp-vault-status').textContent = '✓ 已保存（内核重启后生效）'
+          $('sp-vault-status').textContent = t('lib.savedRestart')
         }
       }
       // #310.10：迁移弹窗——选目录→弹窗内执行（目标非空阻断/不支持覆盖）→成功自动切换+内核重启
@@ -933,13 +982,13 @@ async function renderWork(nav, arg, label2) {
         const dlg = document.createElement('dialog')
         dlg.innerHTML = `
           <div class="dlg-body" style="min-width:460px">
-            <div class="sc-title" style="font-size:15px;font-weight:600;margin-bottom:8px">迁移书房目录</div>
-            <div class="set-desc" style="margin-bottom:12px;line-height:1.7">当前：${$('sp-vault').value ?? '（未选择）'}<br/>迁移会把当前书房的<b>全部内容</b>复制到新目录，完成后自动切换并重启内核；原目录保留不动（作为迁移前备份）。</div>
-            <div class="set-field"><label>新目录（必须为空或不存在）</label>
+            <div class="sc-title" style="font-size:15px;font-weight:600;margin-bottom:8px">${t('lib.migrateTitle')}</div>
+            <div class="set-desc" style="margin-bottom:12px;line-height:1.7">当前：${$('sp-vault').value ?? t('lib.notChosenParen')}<br/>迁移会把当前书房的<b>全部内容</b>复制到新目录，完成后自动切换并重启内核；原目录保留不动（作为迁移前备份）。</div>
+            <div class="set-field"><label>${t('lib.migrateNew')}</label>
               <div class="set-row" style="margin:0"><input id="mg-target" readonly placeholder="点击右侧选择…" style="flex:1" /><button type="button" class="btn ghost" id="mg-pick">选择…</button></div>
             </div>
             <div class="set-status" id="mg-status" style="margin-top:10px"></div>
-            <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="mg-go" disabled>开始迁移</button><button class="btn ghost" id="mg-cancel">取消</button></div>
+            <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="mg-go" disabled>${t('lib.migrateStart')}</button><button class="btn ghost" id="mg-cancel">取消</button></div>
           </div>`
         document.body.appendChild(dlg)
         dlg.showModal()
@@ -956,7 +1005,7 @@ async function renderWork(nav, arg, label2) {
           const st = dlg.querySelector('#mg-status')
           btn.disabled = true
           st.className = 'set-status'
-          st.textContent = '迁移中…（取决于书房大小，请勿关闭应用）'
+          st.textContent = t('lib.migrating')
           const r = await window.moonlybox.vaultMigrate(dlg.querySelector('#mg-target').value)
           if (r.ok) {
             st.className = 'set-status ok'
@@ -966,7 +1015,7 @@ async function renderWork(nav, arg, label2) {
             setTimeout(() => { dlg.close(); dlg.remove(); renderList('settings'); renderWork('settings') }, 1600)
           } else {
             st.className = 'set-status err'
-            st.textContent = '✗ ' + (r.message ?? '迁移失败')
+            st.textContent = '✗ ' + (r.message ?? t('lib.migrateFail'))
             btn.disabled = false
           }
         }
@@ -989,7 +1038,7 @@ async function renderWork(nav, arg, label2) {
             </select>
             <div class="set-desc" style="margin-top:4px" id="sp-pv-docs"></div>
           </div>
-          <div class="set-field"><label>模型名</label>
+          <div class="set-field"><label>${t('mp.model')}</label>
             <div class="set-row" style="margin:0"><input id="sp-pv-model" placeholder="glm-4.5" style="flex:1" />
               <select id="sp-pv-models" class="set-select set-select-sm"><option value="">— 推荐模型 —</option></select></div>
           </div>
@@ -1009,8 +1058,8 @@ async function renderWork(nav, arg, label2) {
           const pv = provs.find((x) => x.id === inst.providerId)
           const card = document.createElement('div')
           card.className = 'set-card'
-          card.innerHTML = `<div class="sc-main"><div class="sc-title">${pv?.label ?? inst.providerId}${isDefault(inst.id) ? ' <span style="color:var(--accent);font-size:11px">默认</span>' : ''}</div>
-            <div class="sc-desc">${inst.model || '未设模型'}${inst.hasKey || inst.enabled ? '' : ' · 未配置 Key'}</div></div>
+          card.innerHTML = `<div class="sc-main"><div class="sc-title">${pv?.label ?? inst.providerId}${isDefault(inst.id) ? ` <span style=\"color:var(--accent);font-size:11px\">${t('mp.default')}</span>` : ''}</div>
+            <div class="sc-desc">${inst.model || t('dg.noModel')}${inst.hasKey || inst.enabled ? '' : t('mp.noKey')}</div></div>
             <div style="display:flex;align-items:center;gap:8px">
               ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">设为默认</button>`}
               <button type="button" class="btn ghost" data-act="del" style="padding:2px 8px;font-size:11px">删除</button>
@@ -1043,7 +1092,7 @@ async function renderWork(nav, arg, label2) {
         const pv = provs.find((x) => x.id === $('sp-pv-prov').value)
         $('sp-pv-docs').innerHTML = pv ? `API Key 获取：<a href="#" data-ext="${pv.docs}">${pv.docs}</a>` : ''
         $('sp-pv-docs').querySelectorAll('[data-ext]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); window.moonlybox.openExternal(a.dataset.ext) } })
-        $('sp-pv-models').innerHTML = '<option value="">— 推荐模型 —</option>' + (pv ? pv.models.map((m) => `<option value="${m}">${m}</option>`).join('') : '')
+        $('sp-pv-models').innerHTML = '<option value="">' + t('mp.recommended') + '</option>' + (pv ? pv.models.map((m) => `<option value="${m}">${m}</option>`).join('') : '')
       }
       $('sp-pv-models').onchange = () => { if ($('sp-pv-models').value) $('sp-pv-model').value = $('sp-pv-models').value }
       $('sp-pv-save').onclick = async () => {
@@ -1052,7 +1101,7 @@ async function renderWork(nav, arg, label2) {
         const providerId = $('sp-pv-prov').value
         const model = $('sp-pv-model').value.trim()
         const apiKey = $('sp-pv-key').value.trim()
-        if (!providerId || !model) { st.className = 'set-status err'; st.textContent = '提供商与模型名必填'; return }
+        if (!providerId || !model) { st.className = 'set-status err'; st.textContent = t('mp.required'); return }
         const inst = { id: `platform_${providerId}_${Date.now().toString(36)}`, providerId, enabled: true, model, ...(apiKey ? { apiKey } : {}) }
         const arr = [...insts, inst]
         const r = await saveAppSettings({ model: { providers: arr, ...(insts.length === 0 ? { default: `platform:${inst.id}` } : {}) } })
@@ -1063,14 +1112,14 @@ async function renderWork(nav, arg, label2) {
     } else if (cat.id === 'model' && currentSetSub === 'local') {
       // #310.11：本地部署四态探测（公用不私用：检测已有 Ollama 直接复用，不重复安装；失效给修复入口）
       panel(t('panel.model.local'), t('panel.sub.model.local'), `
-        <div id="sp-ol-state" class="set-card"><div class="sc-main"><div class="sc-title">正在检测本机 Ollama…</div><div class="sc-desc">检测服务与已安装版本。</div></div></div>
+        <div id="sp-ol-state" class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.detecting')}</div><div class="sc-desc">检测服务与已安装版本。</div></div></div>
         <div id="sp-ol-models"></div>
       `)
       {
         const box = $('sp-ol-state')
         const renderState = async () => {
           const p = await shell.ollamaProbe()
-          if (!p) { box.innerHTML = `<div class="sc-main"><div class="sc-title">检测失败</div><div class="sc-desc">请重试。</div></div>`; return }
+          if (!p) { box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.detectFail')}</div><div class="sc-desc">请重试。</div></div>`; return }
           if (p.state === 'running') {
             box.innerHTML = `<div class="sc-main"><div class="sc-title">✅ 检测到 Ollama v${esc(p.version || '?')} · 运行中</div>
               <div class="sc-desc">复用系统级服务（127.0.0.1:11434），与其他应用公用，不重复安装。</div></div>`
@@ -1080,9 +1129,9 @@ async function renderWork(nav, arg, label2) {
               <div class="sc-desc">启动后即可复用已有模型，无需重新安装。</div>
               <button type="button" class="btn ghost" id="sp-ol-start" style="margin-top:8px">▶ 启动 Ollama</button></div>`
             $('sp-ol-start').onclick = async () => {
-              const b = $('sp-ol-start'); b.disabled = true; b.textContent = '启动中…'
+              const b = $('sp-ol-start'); b.disabled = true; b.textContent = t('ol.starting')
               const r = await shell.ollamaServe(p.cli)
-              if (r && r.ok) { await renderState() } else { b.disabled = false; b.textContent = '启动失败，重试'; }
+              if (r && r.ok) { await renderState() } else { b.disabled = false; b.textContent = t('ol.startRetry'); }
             }
           } else {
             box.innerHTML = `<div class="sc-main"><div class="sc-title">未检测到 Ollama</div>
@@ -1117,7 +1166,7 @@ async function renderWork(nav, arg, label2) {
           $('sp-ol-add').onclick = async () => {
             const picked = [...mbox.querySelectorAll('input[data-olmodel]:checked')].map((el) => el.dataset.olmodel)
             const st = $('sp-ol-status')
-            if (picked.length === 0) { st.className = 'set-status err'; st.textContent = '请先勾选模型'; return }
+            if (picked.length === 0) { st.className = 'set-status err'; st.textContent = t('ol.pickFirst'); return }
             const g = await loadAppSettings()
             const mcfg = g.model ?? {}
             const arr = [...(mcfg.local ?? [])]
@@ -1143,10 +1192,10 @@ async function renderWork(nav, arg, label2) {
         <div id="sp-cu-list" style="display:flex;flex-direction:column;gap:8px"></div>
         <button type="button" class="btn ghost" id="sp-cu-add" style="margin-top:10px">＋ 添加自定义模型</button>
         <div id="sp-cu-form" style="display:${insts.length === 0 ? 'block' : 'none'};margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:10px">
-          <div class="set-field"><label>名称</label><input id="sp-cu-name" placeholder="例：本地 Ollama" /></div>
-          <div class="set-field"><label>API 地址</label><input id="sp-cu-url" placeholder="http://127.0.0.1:11434/v1（Ollama）或 https://your-endpoint.example.com/v1" /></div>
-          <div class="set-field"><label>模型名</label><input id="sp-cu-model" placeholder="your-model" /></div>
-          <div class="set-field"><label>API Key（本地端点可留空）</label><input id="sp-cu-key" type="password" placeholder="sk-…" /></div>
+          <div class="set-field"><label>${t('mp.name')}</label><input id="sp-cu-name" placeholder="${t('mp.ollamaEg')}" /></div>
+          <div class="set-field"><label>${t('mp.baseUrl')}</label><input id="sp-cu-url" placeholder="http://127.0.0.1:11434/v1（Ollama）或 https://your-endpoint.example.com/v1" /></div>
+          <div class="set-field"><label>${t('mp.model')}</label><input id="sp-cu-model" placeholder="your-model" /></div>
+          <div class="set-field"><label>${t('mp.key')}</label><input id="sp-cu-key" type="password" placeholder="sk-…" /></div>
           <div class="set-row">
             <button type="button" class="btn" id="sp-cu-save">保存</button>
             <button type="button" class="btn ghost" id="sp-cu-cancel">取消</button>
@@ -1160,7 +1209,7 @@ async function renderWork(nav, arg, label2) {
         for (const inst of insts) {
           const card = document.createElement('div')
           card.className = 'set-card'
-          card.innerHTML = `<div class="sc-main"><div class="sc-title">${inst.name || t('ui.untitled')}${isDefault(inst.id) ? ' <span style="color:var(--accent);font-size:11px">默认</span>' : ''}</div>
+          card.innerHTML = `<div class="sc-main"><div class="sc-title">${inst.name || t('ui.untitled')}${isDefault(inst.id) ? ` <span style=\"color:var(--accent);font-size:11px\">${t('mp.default')}</span>` : ''}</div>
             <div class="sc-desc">${inst.model} · ${inst.baseUrl}</div></div>
             <div style="display:flex;align-items:center;gap:8px">
               ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">设为默认</button>`}
