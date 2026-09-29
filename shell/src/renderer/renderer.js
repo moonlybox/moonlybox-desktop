@@ -531,6 +531,12 @@ const I18N_DICT = {
   'dg.quickHint': { zh: '打开左侧已有图示继续编辑。', en: 'Open an existing diagram on the left to keep editing.' },
   'xy.send': { zh: '发送', en: 'Send' },
   'lg.openAuth': { zh: '打开授权页', en: 'Open Auth Page' },
+  'ue.keyKept': { zh: 'API Key（只存钥匙串）', en: 'API Key (keychain only)' },
+  'ue.keySet': { zh: '已配置，不回显', en: 'Configured (hidden)' },
+  'mp.keyKept': { zh: 'API Key（只存钥匙串）', en: 'API Key (keychain only)' },
+  'lib.migrateNote': { zh: '整体复制到新目录（目标目录需为空），完成后自动切换并重启内核', en: 'Copies everything to the new folder (it must be empty), then switches and restarts the kernel' },
+  'sk.sideNote': { zh: '在书房 .moonlybox/skills/&lt;技能名&gt;/ 放置 SKILL.md 即生效', en: 'Drop a SKILL.md into study .moonlybox/skills/&lt;name&gt;/ to activate' },
+  'sk.filesN': { zh: ' · 关联文件 {n}', en: ' · {n} file(s)' },
   'ac.feedback': { zh: '问题反馈', en: 'Feedback' },
   'ac.settings': { zh: '个人设置', en: 'Account Settings' },
   'ac.logout': { zh: '退出登录', en: 'Sign Out' },
@@ -1276,7 +1282,7 @@ async function renderWork(nav, arg, label2) {
           <label>${t('lib.vault')}</label>
           <div class="set-row" style="margin:0"><input id="sp-vault" readonly placeholder=\"${t('lib.notChosen')}\" style="flex:1" /><button type="button" class="btn ghost" id="sp-vault-pick">选择…</button></div>
         </div>
-        <div class="set-row" style="margin:0"><button type="button" class="btn ghost" id="sp-vault-migrate" style="font-size:12px">${t('lib.migrateBtn')}</button><span class="set-desc" style="align-self:center">整体复制到新目录（目标目录需为空），完成后自动切换并重启内核</span></div>
+        <div class="set-row" style="margin:0"><button type="button" class="btn ghost" id="sp-vault-migrate" style="font-size:12px">${t('lib.migrateBtn')}</button><span class="set-desc" style="align-self:center">${t('lib.migrateNote')}</span></div>
         <div class="set-status" id="sp-vault-status"></div>
       `)
       $('sp-vault').value = (await window.moonlybox.vaultGet()) ?? ''
@@ -1299,7 +1305,7 @@ async function renderWork(nav, arg, label2) {
               <div class="set-row" style="margin:0"><input id="mg-target" readonly placeholder="${t('lib.migPick')}" style="flex:1" /><button type="button" class="btn ghost" id="mg-pick">${t('lib.migChoose')}</button></div>
             </div>
             <div class="set-status" id="mg-status" style="margin-top:10px"></div>
-            <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="mg-go" disabled>${t('lib.migrateStart')}</button><button class="btn ghost" id="mg-cancel">取消</button></div>
+            <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="mg-go" disabled>${t('lib.migrateStart')}</button><button class="btn ghost" id="mg-cancel">${t('ui.cancel')}</button></div>
           </div>`
         document.body.appendChild(dlg)
         dlg.showModal()
@@ -1740,14 +1746,14 @@ async function renderWork(nav, arg, label2) {
         if (lr.event === 'done' && lr.code === 0) {
           const items = JSON.parse(lr.text).skills ?? []
           listHtml = items.length
-            ? items.map((s) => `<div class="set-card"><div class="sc-main"><div class="sc-title">${s.name}</div><div class="sc-desc">${s.description || t('sk.noDesc')}${s.files?.length ? ` · 关联文件 ${s.files.length}` : ''}</div></div></div>`).join('')
+            ? items.map((s) => `<div class="set-card"><div class="sc-main"><div class="sc-title">${s.name}</div><div class="sc-desc">${s.description || t('sk.noDesc')}${s.files?.length ? t('sk.filesN').replace('{n}', s.files.length) : ''}</div></div></div>`).join('')
             : '<div class="set-desc">书房暂无技能——在书房目录打开 .moonlybox/skills/&lt;技能名&gt;/SKILL.md（含 name/description 头部）即生效，随书房备份。</div>'
         } else listHtml = '<div class="set-desc">技能清单读取失败。</div>'
       } catch { listHtml = '<div class="set-desc">技能清单读取失败。</div>' }
       panel(t('panel.skills'), t('panel.sub.skills'), `
         <div class="set-card"><div class="sc-main"><div class="sc-title">${t('sk.enable')}</div><div class="sc-desc">${t('sk.enableDesc')}</div></div>
           <button type="button" class="toggle ${openState ? 'on' : ''}" id="sp-sk-on"></button></div>
-        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn ghost" id="sp-sk-open" style="font-size:12px;padding:5px 10px">${t('sk.openDir')}</button><span class="set-desc" style="align-self:center">在书房 .moonlybox/skills/&lt;技能名&gt;/ 放置 SKILL.md 即生效</span></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn ghost" id="sp-sk-open" style="font-size:12px;padding:5px 10px">${t('sk.openDir')}</button><span class="set-desc" style="align-self:center">${t('sk.sideNote')}</span></div>
         <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px" id="sp-sk-list">${listHtml}</div>
       `)
       $('sp-sk-on').onclick = async (e) => {
@@ -1776,7 +1782,7 @@ async function renderWork(nav, arg, label2) {
           </select>
         </div>
         <div id="sp-ws-cfg"></div>
-        <div class="set-row"><button type="button" class="btn" id="sp-ws-save">保存</button><span class="set-status" id="sp-ws-status"></span></div>
+        <div class="set-row"><button type="button" class="btn" id="sp-ws-save">${t('ui.save')}</button><span class="set-status" id="sp-ws-status"></span></div>
         <div class="sc-title" style="font-size:13.5px;font-weight:600;margin:26px 0 10px">${t('ue.title')}</div>
         <div class="set-field" style="max-width:340px"><label>${t('ue.modeLabel')}</label>
           <select id="sp-ue-mode" class="set-select">
@@ -1785,7 +1791,7 @@ async function renderWork(nav, arg, label2) {
           </select>
         </div>
         <div id="sp-ue-cfg"></div>
-        <div class="set-row"><button type="button" class="btn" id="sp-ue-save">保存</button><span class="set-status" id="sp-ue-status"></span></div>
+        <div class="set-row"><button type="button" class="btn" id="sp-ue-save">${t('ui.save')}</button><span class="set-status" id="sp-ue-status"></span></div>
       `)
       const renderWsCfg = () => {
         const pv = provs.find((x) => x.id === $('sp-ws-prov').value)
@@ -1793,7 +1799,7 @@ async function renderWork(nav, arg, label2) {
         if (!pv) { box.innerHTML = ''; return }
         if (pv.baseUrl) box.innerHTML = `<div class="set-field" style="max-width:340px"><label>${t('mp.baseUrlAuto')}</label><input id="sp-ws-baseUrl" value="${pv.baseUrl}" readonly /></div>`
         else box.innerHTML = `<div class="set-field" style="max-width:340px"><label>API 地址</label><input id="sp-ws-baseUrl" value="${ws.config?.baseUrl ?? ''}" placeholder="https://…" /></div>`
-        box.innerHTML += `<div class="set-field" style="max-width:340px"><label>API Key（只存钥匙串）</label><input type="password" id="sp-ws-apiKey" placeholder="${ws.config?.apiKey ? '已配置，不回显' : ''}" /></div>`
+        box.innerHTML += `<div class="set-field" style="max-width:340px"><label>${t('mp.keyKept')}</label><input type="password" id="sp-ws-apiKey" placeholder="${ws.config?.apiKey ? '已配置，不回显' : ''}" /></div>`
       }
       $('sp-ws-prov').onchange = renderWsCfg
       renderWsCfg()
@@ -1826,7 +1832,7 @@ async function renderWork(nav, arg, label2) {
             <select id="sp-ue-prov" class="set-select">${UE_PROVIDERS.map((x) => `<option value="${x.id}" ${x.id === cur.id ? 'selected' : ''}>${x.label}</option>`).join('')}</select>
           </div>
           <div class="set-field" style="max-width:340px"><label>${t('ue.baseUrlAuto')}</label><input id="sp-ue-url" value="${ue.config?.baseUrl ?? cur.baseUrl}" placeholder="https://…" /></div>
-          <div class="set-field" style="max-width:340px"><label>API Key（只存钥匙串）</label><input type="password" id="sp-ue-key" placeholder="${ue.config?.apiKey ? '已配置，不回显' : ''}" /></div>`
+          <div class="set-field" style="max-width:340px"><label>${t('ue.keyKept')}</label><input type="password" id="sp-ue-key" placeholder="${ue.config?.apiKey ? t('ue.keySet') : ''}" /></div>`
         $('sp-ue-prov').onchange = () => {
           const pv = UE_PROVIDERS.find((x) => x.id === $('sp-ue-prov').value)
           $('sp-ue-url').value = pv.baseUrl
@@ -1872,7 +1878,7 @@ async function renderWork(nav, arg, label2) {
           </select>
         </div>
         <div id="sp-dp-cfg"></div>
-        <div class="set-row"><button type="button" class="btn" id="sp-dp-save">保存</button><span class="set-status" id="sp-dp-status"></span></div>
+        <div class="set-row"><button type="button" class="btn" id="sp-dp-save">${t('ui.save')}</button><span class="set-status" id="sp-dp-status"></span></div>
       `)
       const renderDpCfg = () => {
         const pv = DP_PROVIDERS.find((x) => x.id === $('sp-dp-prov').value)
@@ -1881,7 +1887,7 @@ async function renderWork(nav, arg, label2) {
         let html = ''
         if (pv.baseUrl) html += `<div class="set-field" style="max-width:400px"><label>${t('dp.baseUrlAuto')}</label><input id="sp-dp-url" value="${pv.baseUrl}" ${pv.local ? 'readonly' : ''} /></div>`
         else html += `<div class="set-field" style="max-width:400px"><label>API 地址</label><input id="sp-dp-url" value="${dp.config?.baseUrl && dp.provider === pv.id ? dp.config.baseUrl : ''}" placeholder="本地引擎无需地址" ${pv.local && !pv.baseUrl ? 'readonly' : ''} /></div>`
-        if (pv.needsKey) html += `<div class="set-field" style="max-width:400px"><label>API Key（只存钥匙串）</label><input type="password" id="sp-dp-key" placeholder="${dp.config?.keyStored ? '已配置，不回显' : ''}" /></div>`
+        if (pv.needsKey) html += `<div class="set-field" style="max-width:400px"><label>${t('mp.keyKept')}</label><input type="password" id="sp-dp-key" placeholder="${dp.config?.keyStored ? '已配置，不回显' : ''}" /></div>`
         box.innerHTML = html
       }
       $('sp-dp-prov').onchange = renderDpCfg
@@ -1917,7 +1923,7 @@ async function renderWork(nav, arg, label2) {
           <input id="sp-mm-limit" type="number" min="500" step="100" value="${mm.injectLimit ?? 5000}" style="max-width:180px" />
           <div class="set-desc" style="margin-top:4px">${t('mm.limitDesc')}</div>
         </div>
-        <div class="set-row"><button type="button" class="btn" id="sp-mm-save">保存</button><span class="set-status" id="sp-mm-status"></span></div>
+        <div class="set-row"><button type="button" class="btn" id="sp-mm-save">${t('ui.save')}</button><span class="set-status" id="sp-mm-status"></span></div>
         <div style="border-top:1px solid var(--border);margin:14px 0 10px"></div>
         <div class="sc-title" style="margin-bottom:2px">${t('mm.candidate')}</div>
         <div class="set-desc" style="margin-bottom:8px">${t('mm.candidateDesc')}</div>
@@ -2962,7 +2968,7 @@ function showWorkspaceDialog() {
         <div id="ws-dirs" style="margin:4px 0 6px;display:flex;flex-direction:column;gap:4px"></div>
         <button class="btn ghost" id="ws-add-dir">${t('xy.addDirBtn')}</button>
       </div>
-      <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="ws-create">${t('xy.create')}</button><button class="btn ghost" id="ws-cancel">取消</button></div>
+      <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="ws-create">${t('xy.create')}</button><button class="btn ghost" id="ws-cancel">${t('ui.cancel')}</button></div>
       <div class="set-status" id="ws-status"></div>
     </div>`
   document.body.appendChild(dlg)
