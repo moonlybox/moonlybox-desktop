@@ -484,6 +484,53 @@ const I18N_DICT = {
   'bk.syncing': { zh: '同步中…', en: 'Syncing…' },
   'bk.syncFail': { zh: '同步失败', en: 'Sync failed' },
   'ui.joinComma': { zh: '，', en: ', ' },
+  'ap.langZh': { zh: '中文简体', en: '中文简体' },
+  'lib.migrateNow': { zh: '当前：', en: 'Current: ' },
+  'lib.migrateDesc2': { zh: '迁移会把当前书房的<b>全部内容</b>复制到新目录，完成后自动切换并重启内核；原目录保留不动（作为迁移前备份）。', en: 'Migration copies <b>everything</b> in the current study to the new folder, then switches and restarts the kernel; the old folder stays untouched as a backup.' },
+  'lib.migPick': { zh: '点击右侧选择…', en: 'Pick via the button…' },
+  'lib.migChoose': { zh: '选择…', en: 'Browse…' },
+  'ol.detectDesc': { zh: '检测服务与已安装版本。', en: 'Detecting service and installed version.' },
+  'ol.runningDesc': { zh: '复用系统级服务（127.0.0.1:11434），与其他应用公用，不重复安装。', en: 'Reuses the system-level service (127.0.0.1:11434) shared with other apps — no duplicate install.' },
+  'ol.stoppedDesc': { zh: '启动后即可复用已有模型，无需重新安装。', en: 'Start it to reuse installed models — no reinstall needed.' },
+  'ol.startBtn': { zh: '▶ 启动 Ollama', en: '▶ Start Ollama' },
+  'ol.notFoundDesc': { zh: '本机未安装 Ollama。可前往官网下载安装（安装后回到此页自动检测；也可以在「自定义」中直接填其他本地端点）。', en: 'Ollama is not installed. Download from the official site (this page re-detects afterwards); or point a Custom endpoint at another local server.' },
+  'ol.dlBtn': { zh: '⬇ 打开 Ollama 下载页', en: '⬇ Open Ollama Download Page' },
+  'ol.recheck': { zh: '↻ 重新检测', en: '↻ Re-check' },
+  'ol.pullHint': { zh: '在终端执行 <code>ollama pull qwen3:4b</code> 拉取模型后，回到此页即可一键接入。', en: 'Run <code>ollama pull qwen3:4b</code> in a terminal, then come back here to connect with one click.' },
+  'ol.installedDesc': { zh: '接入后可在「对话默认模型」中选择；接入即复用 Ollama 现有模型，不复制文件。', en: 'After connecting, pick it under "Default Chat Model"; connecting reuses existing Ollama models — no files copied.' },
+  'ol.addPicked': { zh: '接入所选模型', en: 'Connect Selected' },
+  'ui.save': { zh: '保存', en: 'Save' },
+  'ui.cancel': { zh: '取消', en: 'Cancel' },
+  'mcp.title': { zh: '工具（管家模式）· MoonLink（魔力宝盒内置）', en: 'Tools (Butler Mode) · MoonLink (built-in)' },
+  'mcp.desc': { zh: '小月能否调用工具代你执行任务（总闸）：关闭后小月纯对话，不装配 MoonLink 工具；开启后写操作仍逐一确认。原「通用」分类的此项已升格至此统一管理。', en: 'Whether Moonie may call tools for you (master switch): off = pure chat without MoonLink tools; on = write actions still confirm one by one. Moved here from the General category.' },
+  'mcp.del': { zh: '删除', en: 'Delete' },
+  'mcp.name': { zh: '名称', en: 'Name' },
+  'mcp.keyOpt': { zh: 'API Key（可选，只存钥匙串）', en: 'API Key (optional, keychain only)' },
+  'mcp.keyPh': { zh: '服务器要求鉴权时填写', en: 'Fill in if the server requires auth' },
+  'mcp.add': { zh: '添加', en: 'Add' },
+  'sk.noDesc': { zh: '（无描述）', en: '(no description)' },
+  'sk.enable': { zh: '启用技能', en: 'Enable Skills' },
+  'sk.enableDesc': { zh: '关闭后小月不加载技能清单与技能工具', en: 'When off, Moonie loads no skill list or skill tools' },
+  'sk.openDir': { zh: '📁 打开技能目录', en: '📁 Open Skills Folder' },
+  'sk.pickVaultFirst': { zh: '⚠ 先在 设置 → 通用 选择书房目录', en: '⚠ Choose a study folder in Settings → General first' },
+  'sk.openFail': { zh: '⚠ 打开失败：', en: '⚠ Open failed: ' },
+  'bk.newDesc2': { zh: '文件内容未变化时自动跳过。', en: 'Unchanged files are skipped automatically.' },
+  'bk.dirLoading': { zh: '加载中…', en: 'Loading…' },
+  'bk.onDeleteLabel': { zh: '云端删除后（网页端删了这份文件）', en: 'After cloud deletion (web removed this file)' },
+  'bk.resyncOpt': { zh: '下次同步重新上传（备份目录为源）', en: 'Re-upload on next sync (backup folder is the source)' },
+  'bk.keepOpt': { zh: '不再同步该文件（保留云端删除动作）', en: 'Stop syncing this file (keep the cloud deletion)' },
+  'bk.dupLabel': { zh: '同名策略（云端已有同名文档，如另一台电脑备份过）', en: 'Same-name policy (cloud already has same-name docs, e.g. from another computer)' },
+  'bk.dupRenameOpt': { zh: '重命名上传（保留双方，互不覆盖）', en: 'Rename upload (keep both, never overwrite)' },
+  'bk.dupNote': { zh: '同名文档上传为「笔记 2」，双方并存；重装/换机需接管云端同名文档时，新建时会先出现「同名认领」确认。', en: 'Same-name docs upload as "Note 2" side by side; to take over cloud same-name docs after reinstall/new machine, the one-time "same-name claim" prompt appears at creation.' },
+  'bk.saveBtn': { zh: '注册并立即同步', en: 'Register && Sync Now' },
+  'about.kernel': { zh: '内核 v', en: 'Kernel v' },
+  'dg.saveDraft': { zh: '保存草稿', en: 'Save Draft' },
+  'dg.admit': { zh: '存进书房', en: 'Save to Study' },
+  'dg.aiBtn': { zh: '✨ AI 生成', en: '✨ AI Generate' },
+  'dg.quickNew': { zh: '新建图示', en: 'New Diagram' },
+  'dg.quickHint': { zh: '打开左侧已有图示继续编辑。', en: 'Open an existing diagram on the left to keep editing.' },
+  'xy.send': { zh: '发送', en: 'Send' },
+  'lg.openAuth': { zh: '打开授权页', en: 'Open Auth Page' },
   'ac.feedback': { zh: '问题反馈', en: 'Feedback' },
   'ac.settings': { zh: '个人设置', en: 'Account Settings' },
   'ac.logout': { zh: '退出登录', en: 'Sign Out' },
@@ -1132,7 +1179,7 @@ async function renderWork(nav, arg, label2) {
         </div>
         <div class="set-field" style="max-width:320px"><label>${t('ap.lang')}</label>
           <select id="sp-lang" class="set-select">
-            <option value="zh-CN" ${av.lang === 'zh-CN' || !av.lang ? 'selected' : ''}>中文简体</option>
+            <option value="zh-CN" ${av.lang === 'zh-CN' || !av.lang ? 'selected' : ''}>${t('ap.langZh')}</option>
             <option value="en" ${av.lang === 'en' ? 'selected' : ''}>English</option>
           </select>
         </div>
@@ -1247,9 +1294,9 @@ async function renderWork(nav, arg, label2) {
         dlg.innerHTML = `
           <div class="dlg-body" style="min-width:460px">
             <div class="sc-title" style="font-size:15px;font-weight:600;margin-bottom:8px">${t('lib.migrateTitle')}</div>
-            <div class="set-desc" style="margin-bottom:12px;line-height:1.7">当前：${$('sp-vault').value ?? t('lib.notChosenParen')}<br/>迁移会把当前书房的<b>全部内容</b>复制到新目录，完成后自动切换并重启内核；原目录保留不动（作为迁移前备份）。</div>
+            <div class="set-desc" style="margin-bottom:12px;line-height:1.7">${t('lib.migrateNow')}${$('sp-vault').value ?? t('lib.notChosenParen')}<br/>${t('lib.migrateDesc2')}</div>
             <div class="set-field"><label>${t('lib.migrateNew')}</label>
-              <div class="set-row" style="margin:0"><input id="mg-target" readonly placeholder="点击右侧选择…" style="flex:1" /><button type="button" class="btn ghost" id="mg-pick">选择…</button></div>
+              <div class="set-row" style="margin:0"><input id="mg-target" readonly placeholder="${t('lib.migPick')}" style="flex:1" /><button type="button" class="btn ghost" id="mg-pick">${t('lib.migChoose')}</button></div>
             </div>
             <div class="set-status" id="mg-status" style="margin-top:10px"></div>
             <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="mg-go" disabled>${t('lib.migrateStart')}</button><button class="btn ghost" id="mg-cancel">取消</button></div>
@@ -1376,7 +1423,7 @@ async function renderWork(nav, arg, label2) {
     } else if (cat.id === 'model' && currentSetSub === 'local') {
       // #310.11：本地部署四态探测（公用不私用：检测已有 Ollama 直接复用，不重复安装；失效给修复入口）
       panel(t('panel.model.local'), t('panel.sub.model.local'), `
-        <div id="sp-ol-state" class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.detecting')}</div><div class="sc-desc">检测服务与已安装版本。</div></div></div>
+        <div id="sp-ol-state" class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.detecting')}</div><div class="sc-desc">${t('ol.detectDesc')}</div></div></div>
         <div id="sp-ol-models"></div>
       `)
       {
@@ -1386,12 +1433,12 @@ async function renderWork(nav, arg, label2) {
           if (!p) { box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.detectFail')}</div><div class="sc-desc">请重试。</div></div>`; return }
           if (p.state === 'running') {
             box.innerHTML = `<div class="sc-main"><div class="sc-title">✅ 检测到 Ollama v${esc(p.version || '?')} · 运行中</div>
-              <div class="sc-desc">复用系统级服务（127.0.0.1:11434），与其他应用公用，不重复安装。</div></div>`
+              <div class="sc-desc">${t('ol.runningDesc')}</div></div>`
             await renderOllamaModels()
           } else if (p.state === 'installed_stopped') {
             box.innerHTML = `<div class="sc-main"><div class="sc-title">检测到 Ollama 已安装${p.version ? `（v${esc(p.version)}）` : ''}，但服务未运行</div>
-              <div class="sc-desc">启动后即可复用已有模型，无需重新安装。</div>
-              <button type="button" class="btn ghost" id="sp-ol-start" style="margin-top:8px">▶ 启动 Ollama</button></div>`
+              <div class="sc-desc">${t('ol.stoppedDesc')}</div>
+              <button type="button" class="btn ghost" id="sp-ol-start" style="margin-top:8px">${t('ol.startBtn')}</button></div>`
             $('sp-ol-start').onclick = async () => {
               const b = $('sp-ol-start'); b.disabled = true; b.textContent = t('ol.starting')
               const r = await shell.ollamaServe(p.cli)
@@ -1399,9 +1446,9 @@ async function renderWork(nav, arg, label2) {
             }
           } else {
             box.innerHTML = `<div class="sc-main"><div class="sc-title">未检测到 Ollama</div>
-              <div class="sc-desc">本机未安装 Ollama。可前往官网下载安装（安装后回到此页自动检测；也可以在「自定义」中直接填其他本地端点）。</div>
-              <button type="button" class="btn ghost" id="sp-ol-dl" style="margin-top:8px">⬇ 打开 Ollama 下载页</button>
-              <button type="button" class="btn ghost" id="sp-ol-recheck" style="margin-top:8px;margin-left:6px">↻ 重新检测</button></div>`
+              <div class="sc-desc">${t('ol.notFoundDesc')}</div>
+              <button type="button" class="btn ghost" id="sp-ol-dl" style="margin-top:8px">${t('ol.dlBtn')}</button>
+              <button type="button" class="btn ghost" id="sp-ol-recheck" style="margin-top:8px;margin-left:6px">${t('ol.recheck')}</button></div>`
             $('sp-ol-dl').onclick = () => shell.openExternal('https://ollama.com/download')
             $('sp-ol-recheck').onclick = () => renderState()
           }
@@ -1417,15 +1464,15 @@ async function renderWork(nav, arg, label2) {
           const models = (tags && Array.isArray(tags.models)) ? tags.models : []
           if (models.length === 0) {
             mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">尚未拉取模型</div>
-              <div class="sc-desc">在终端执行 <code>ollama pull qwen3:4b</code> 拉取模型后，回到此页即可一键接入。</div></div></div>`
+              <div class="sc-desc">${t('ol.pullHint')}</div></div></div>`
             return
           }
           mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">已装模型（勾选接入）</div>
-            <div class="sc-desc">接入后可在「对话默认模型」中选择；接入即复用 Ollama 现有模型，不复制文件。</div></div>
+            <div class="sc-desc">${t('ol.installedDesc')}</div></div>
             <div id="sp-ol-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
               ${models.map((mm2) => `<label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" data-olmodel="${esc(mm2.name)}"> <span>${esc(mm2.name)} · ${(mm2.size / 1073741824).toFixed(1)} GB</span></label>`).join('')}
             </div>
-            <button type="button" class="btn ghost" id="sp-ol-add" style="margin-top:10px">接入所选模型</button>
+            <button type="button" class="btn ghost" id="sp-ol-add" style="margin-top:10px">${t('ol.addPicked')}</button>
             <div class="set-status" id="sp-ol-status" style="margin-top:6px"></div></div>`
           $('sp-ol-add').onclick = async () => {
             const picked = [...mbox.querySelectorAll('input[data-olmodel]:checked')].map((el) => el.dataset.olmodel)
@@ -1461,8 +1508,8 @@ async function renderWork(nav, arg, label2) {
           <div class="set-field"><label>${t('mp.model')}</label><input id="sp-cu-model" placeholder="your-model" /></div>
           <div class="set-field"><label>${t('mp.key')}</label><input id="sp-cu-key" type="password" placeholder="sk-…" /></div>
           <div class="set-row">
-            <button type="button" class="btn" id="sp-cu-save">保存</button>
-            <button type="button" class="btn ghost" id="sp-cu-cancel">取消</button>
+            <button type="button" class="btn" id="sp-cu-save">${t('ui.save')}</button>
+            <button type="button" class="btn ghost" id="sp-cu-cancel">${t('ui.cancel')}</button>
             <span class="set-status" id="sp-cu-status"></span>
           </div>
         </div>`)
@@ -1630,8 +1677,8 @@ async function renderWork(nav, arg, label2) {
     } else if (cat.id === 'mcp' && currentSetSub === 'builtin') {
       const g = await loadAppSettings()
       panel(t('panel.mcp.builtin'), t('panel.sub.mcp.builtin'), `
-        <div class="set-card"><div class="sc-main"><div class="sc-title">工具（管家模式）· MoonLink（魔力宝盒内置）</div>
-          <div class="sc-desc">小月能否调用工具代你执行任务（总闸）：关闭后小月纯对话，不装配 MoonLink 工具；开启后写操作仍逐一确认。原「通用」分类的此项已升格至此统一管理。</div></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('mcp.title')}</div>
+          <div class="sc-desc">${t('mcp.desc')}</div></div>
           <button type="button" class="toggle ${g.mcp?.builtinEnabled !== false ? 'on' : ''}" id="sp-mcp-builtin"></button></div>
         <div class="set-status" id="sp-mcp-status"></div>
       `)
@@ -1650,12 +1697,12 @@ async function renderWork(nav, arg, label2) {
         <div id="sp-mcp-list">${list.map((m, i) => `<div class="set-field" style="border:1px solid var(--border);border-radius:8px;padding:10px">
           <div class="set-row" style="margin:0 0 6px"><b>${m.name || t('ui.untitled')}</b><span class="set-desc" style="margin:0">${m.enabled !== false ? '已启用' : '已停用'}${m.keyStored ? ' · Key 已存钥匙串' : ''}</span>
             <button type="button" class="btn ghost" data-mcptoggle="${i}" style="margin-left:auto">${m.enabled !== false ? t('ui.stop') : t('ui.enable')}</button>
-            <button type="button" class="btn ghost" data-mcpdel="${i}">删除</button></div>
+            <button type="button" class="btn ghost" data-mcpdel="${i}">${t('mcp.del')}</button></div>
           <div class="set-desc" style="margin:0">${m.url}</div></div>`).join('') || '<div class="set-status">暂无自定义 MCP 服务器。</div>'}</div>
-        <div class="set-field" style="margin-top:14px"><label>名称</label><input id="sp-mcp-name" placeholder="my-mcp" /></div>
+        <div class="set-field" style="margin-top:14px"><label>${t('mcp.name')}</label><input id="sp-mcp-name" placeholder="my-mcp" /></div>
         <div class="set-field"><label>URL</label><input id="sp-mcp-url" placeholder="https://…/mcp" /></div>
-        <div class="set-field"><label>API Key（可选，只存钥匙串）</label><input type="password" id="sp-mcp-key" placeholder="服务器要求鉴权时填写" /></div>
-        <div class="set-row"><button type="button" class="btn" id="sp-mcp-add">添加</button><span class="set-status" id="sp-mcp2-status"></span></div>
+        <div class="set-field"><label>${t('mcp.keyOpt')}</label><input type="password" id="sp-mcp-key" placeholder="${t('mcp.keyPh')}" /></div>
+        <div class="set-row"><button type="button" class="btn" id="sp-mcp-add">${t('mcp.add')}</button><span class="set-status" id="sp-mcp2-status"></span></div>
       `)
       w.querySelectorAll('[data-mcpdel]').forEach((b) => {
         b.onclick = async () => {
@@ -1693,14 +1740,14 @@ async function renderWork(nav, arg, label2) {
         if (lr.event === 'done' && lr.code === 0) {
           const items = JSON.parse(lr.text).skills ?? []
           listHtml = items.length
-            ? items.map((s) => `<div class="set-card"><div class="sc-main"><div class="sc-title">${s.name}</div><div class="sc-desc">${s.description || '（无描述）'}${s.files?.length ? ` · 关联文件 ${s.files.length}` : ''}</div></div></div>`).join('')
+            ? items.map((s) => `<div class="set-card"><div class="sc-main"><div class="sc-title">${s.name}</div><div class="sc-desc">${s.description || t('sk.noDesc')}${s.files?.length ? ` · 关联文件 ${s.files.length}` : ''}</div></div></div>`).join('')
             : '<div class="set-desc">书房暂无技能——在书房目录打开 .moonlybox/skills/&lt;技能名&gt;/SKILL.md（含 name/description 头部）即生效，随书房备份。</div>'
         } else listHtml = '<div class="set-desc">技能清单读取失败。</div>'
       } catch { listHtml = '<div class="set-desc">技能清单读取失败。</div>' }
       panel(t('panel.skills'), t('panel.sub.skills'), `
-        <div class="set-card"><div class="sc-main"><div class="sc-title">启用技能</div><div class="sc-desc">关闭后小月不加载技能清单与技能工具</div></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('sk.enable')}</div><div class="sc-desc">${t('sk.enableDesc')}</div></div>
           <button type="button" class="toggle ${openState ? 'on' : ''}" id="sp-sk-on"></button></div>
-        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn ghost" id="sp-sk-open" style="font-size:12px;padding:5px 10px">📁 打开技能目录</button><span class="set-desc" style="align-self:center">在书房 .moonlybox/skills/&lt;技能名&gt;/ 放置 SKILL.md 即生效</span></div>
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="btn ghost" id="sp-sk-open" style="font-size:12px;padding:5px 10px">${t('sk.openDir')}</button><span class="set-desc" style="align-self:center">在书房 .moonlybox/skills/&lt;技能名&gt;/ 放置 SKILL.md 即生效</span></div>
         <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px" id="sp-sk-list">${listHtml}</div>
       `)
       $('sp-sk-on').onclick = async (e) => {
@@ -1710,9 +1757,9 @@ async function renderWork(nav, arg, label2) {
       // #310.3：打开技能目录（书房 vault/.moonlybox/skills）——未选书房时提示
       $('sp-sk-open').onclick = async () => {
         const vault = await window.moonlybox.vaultGet()
-        if (!vault) { $('sp-sk-open').textContent = '⚠ 先在 设置 → 通用 选择书房目录'; return }
+        if (!vault) { $('sp-sk-open').textContent = t('sk.pickVaultFirst'); return }
         const err = await window.moonlybox.openPath(vault + '/.moonlybox/skills')
-        if (err) $('sp-sk-open').textContent = '⚠ 打开失败：' + err
+        if (err) $('sp-sk-open').textContent = t('sk.openFail') + err
       }
     } else if (cat.id === 'websearch') {
       // #256.2 用户 5 点：URL 提取并入网络搜索分类（分组块）；选项类=自定义下拉
@@ -1953,7 +2000,7 @@ async function renderWork(nav, arg, label2) {
           <h3>${t('bk.newTitle')}</h3>
           <p class="set-desc">${t('bk.newDesc')}<br/>
           <b>${t('bk.formats')}</b>${t('bk.skipNote')}；${t('bk.uploadOnly')}；
-          文件内容未变化时自动跳过。</p>
+          ${t('bk.newDesc2')}</p>
           <div class="set-field">
             <label>${t('bk.localDir')}</label>
             <div class="set-row" style="margin:0"><input id="bk-path" readonly placeholder="${t('bk.notChosen')}" style="flex:1" />
@@ -1961,24 +2008,24 @@ async function renderWork(nav, arg, label2) {
           </div>
           <div class="set-field">
             <label>${t('bk.targetDir')}</label>
-            <select id="bk-dir" class="set-select" style="max-width:340px"><option>加载中…</option></select>
+            <select id="bk-dir" class="set-select" style="max-width:340px"><option>${t('bk.dirLoading')}</option></select>
           </div>
           <div class="set-field">
-            <label>云端删除后（网页端删了这份文件）</label>
+            <label>${t('bk.onDeleteLabel')}</label>
             <select id="bk-ondel" class="set-select" style="max-width:340px">
-              <option value="resync">下次同步重新上传（备份目录为源）</option>
-              <option value="keep">不再同步该文件（保留云端删除动作）</option>
+              <option value="resync">${t('bk.resyncOpt')}</option>
+              <option value="keep">${t('bk.keepOpt')}</option>
             </select>
           </div>
           <div class="set-field">
-            <label>同名策略（云端已有同名文档，如另一台电脑备份过）</label>
+            <label>${t('bk.dupLabel')}</label>
             <select id="bk-onconf" class="set-select" style="max-width:340px">
-              <option value="rename" selected>重命名上传（保留双方，互不覆盖）</option>
+              <option value="rename" selected>${t('bk.dupRenameOpt')}</option>
             </select>
-            <p class="set-desc" style="margin:4px 0 0">同名文档上传为「笔记 2」，双方并存；重装/换机需接管云端同名文档时，新建时会先出现「同名认领」确认。</p>
+            <p class="set-desc" style="margin:4px 0 0">${t('bk.dupNote')}</p>
           </div>
           <div class="set-row">
-            <button type="button" class="btn" id="bk-save">注册并立即同步</button>
+            <button type="button" class="btn" id="bk-save">${t('bk.saveBtn')}</button>
             <span class="set-status" id="bk-status"></span>
           </div>
         </div>`
@@ -2192,20 +2239,20 @@ async function renderWork(nav, arg, label2) {
     w.innerHTML = `
       <div class="row" style="padding:10px 16px;border-bottom:1px solid var(--border)">
         <input id="dg-title" placeholder="图示标题" style="width:180px" />
-        <button class="btn" id="dg-save" style="font-size:12px;padding:5px 10px">保存草稿</button>
-        <button class="btn" id="dg-activate" style="background:var(--ok);font-size:12px;padding:5px 10px">存进书房</button>
-        <button class="btn" id="dg-ai" style="background:#7c3aed;font-size:12px;padding:5px 10px">✨ AI 生成</button>
+        <button class="btn" id="dg-save" style="font-size:12px;padding:5px 10px">${t('dg.saveDraft')}</button>
+        <button class="btn" id="dg-activate" style="background:var(--ok);font-size:12px;padding:5px 10px">${t('dg.admit')}</button>
+        <button class="btn" id="dg-ai" style="background:#7c3aed;font-size:12px;padding:5px 10px">${t('dg.aiBtn')}</button>
         <span id="dg-state" class="muted" style="font-size:11px;margin-left:auto"></span>
       </div>
       <div id="dg-empty" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px">
-        <div style="font-size:15px;font-weight:600">新建图示</div>
+        <div style="font-size:15px;font-weight:600">${t('dg.quickNew')}</div>
         <div class="set-desc">${t('dg.quickDesc')}</div>
         <div id="dg-quick-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:640px"></div>
         <div style="display:flex;gap:8px;width:100%;max-width:640px;margin-top:6px">
           <input id="dg-quick-title" placeholder="${t('dg.quickTitle')}" style="flex:1" maxlength="60" />
           <button class="btn" id="dg-quick-ok" style="background:var(--accent)">${t('dg.quickOk')}</button>
         </div>
-        <div class="set-desc" id="dg-quick-hint" style="margin-top:4px">打开左侧已有图示继续编辑。</div>
+        <div class="set-desc" id="dg-quick-hint" style="margin-top:4px">${t('dg.quickHint')}</div>
       </div>
       <div id="dg-editor" style="display:none;flex:1;min-height:0">
         <div style="flex:1;display:flex;min-height:0;height:100%">
@@ -2277,7 +2324,7 @@ async function renderWork(nav, arg, label2) {
       <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:16px;white-space:pre-wrap;user-select:text"></div>
       <div class="row" style="padding:12px 16px;border-top:1px solid var(--border)">
         <input id="q" placeholder="${meta ? (meta.workspaceId ? t('xy.qPlaceholder') : t('xy.docOnly')) : t('xy.pickFirst')}" style="flex:1" ${meta ? '' : 'disabled'} />
-        <button class="btn" id="btn-ask" ${meta ? '' : 'disabled'}>发送</button>
+        <button class="btn" id="btn-ask" ${meta ? '' : 'disabled'}>${t('xy.send')}</button>
       </div>`
     if (meta) bindChat({ meta })
     else w.insertAdjacentHTML('afterbegin', '<div class="muted" style="padding:16px">左侧新建工作空间或对话开始。</div>')
@@ -2435,7 +2482,7 @@ async function renderWork(nav, arg, label2) {
             <div class="set-desc" style="margin-top:2px">${t('about.slogan')}</div>
             <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
               <span style="font-size:11px;padding:2px 9px;border-radius:999px;background:var(--hover);color:var(--muted)">GUI v${v.shellVersion}</span>
-              <span style="font-size:11px;padding:2px 9px;border-radius:999px;background:var(--hover);color:var(--muted)">内核 v${v.kernelVersion}</span>
+              <span style="font-size:11px;padding:2px 9px;border-radius:999px;background:var(--hover);color:var(--muted)">${t('about.kernel')}${v.kernelVersion}</span>
               ${env?.packaged ? '' : '<span style="font-size:11px;padding:2px 9px;border-radius:999px;background:color-mix(in srgb, var(--accent) 14%, transparent);color:var(--accent)">开发模式</span>'}
             </div>
           </div>
@@ -2495,7 +2542,7 @@ function mbConfirm(message, okText = '删除') {
         <div style="font-size:14px;line-height:1.6;white-space:normal;margin-bottom:18px">${message}</div>
         <div class="set-row" style="justify-content:flex-end;gap:8px">
           <button class="btn" id="mbc-ok" style="background:var(--err,#dc2626);color:#fff;border-color:transparent">${okText}</button>
-          <button class="btn ghost" id="mbc-cancel">取消</button>
+          <button class="btn ghost" id="mbc-cancel">${t('ui.cancel')}</button>
         </div>
       </div>`
     document.body.appendChild(dlg)
@@ -3388,8 +3435,8 @@ async function showLoginDialog() {
     <p class="muted" style="font-size:12.5px;margin:10px 0">${t('lg.steps')}</p>
     <div class="mono" style="background:var(--hover);border-radius:8px;padding:10px;font-size:18px;letter-spacing:2px;text-align:center;margin:10px 0" id="lg-code">${t('lg.getCode')}</div>
     <div class="row" style="justify-content:center;gap:8px">
-      <button class="btn" id="lg-open">打开授权页</button>
-      <button class="btn ghost" id="lg-cancel">取消</button>
+      <button class="btn" id="lg-open">${t('lg.openAuth')}</button>
+      <button class="btn ghost" id="lg-cancel">${t('ui.cancel')}</button>
     </div>
     <p class="muted mono" id="lg-status" style="margin-top:10px;font-size:12px">${t('lg.waitAuth')}</p>`
   document.body.appendChild(dlg)
