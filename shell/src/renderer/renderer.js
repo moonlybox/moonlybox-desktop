@@ -497,6 +497,13 @@ const I18N_DICT = {
   'ol.stoppedDesc': { zh: '启动后即可复用已有模型，无需重新安装。', en: 'Start it to reuse installed models — no reinstall needed.' },
   'ol.startBtn': { zh: '▶ 启动 Ollama', en: '▶ Start Ollama' },
   'ol.notFoundDesc': { zh: '本机未安装 Ollama。可前往官网下载安装（安装后回到此页自动检测；也可以在「自定义」中直接填其他本地端点）。', en: 'Ollama is not installed. Download from the official site (this page re-detects afterwards); or point a Custom endpoint at another local server.' },
+  'ol.retryHint': { zh: '请重试。', en: 'Please retry.' },
+  'ol.runningTitle': { zh: '检测到 Ollama v{v} · 运行中', en: 'Ollama v{v} detected · running' },
+  'ol.installedStoppedTitle': { zh: '检测到 Ollama 已安装{v}，但服务未运行', en: 'Ollama is installed{v} but not running' },
+  'ol.notFoundTitle': { zh: '未检测到 Ollama', en: 'Ollama not found' },
+  'ol.noModelsTitle': { zh: '尚未拉取模型', en: 'No models pulled yet' },
+  'ol.installedModelsTitle': { zh: '已装模型（勾选接入）', en: 'Installed models (check to connect)' },
+  'ol.addedCount': { zh: '已接入 {n} 个模型', en: 'Connected {n} model(s)' },
   'ol.dlBtn': { zh: '⬇ 打开 Ollama 下载页', en: '⬇ Open Ollama Download Page' },
   'ol.recheck': { zh: '↻ 重新检测', en: '↻ Re-check' },
   'ol.pullHint': { zh: '在终端执行 <code>ollama pull qwen3:4b</code> 拉取模型后，回到此页即可一键接入。', en: 'Run <code>ollama pull qwen3:4b</code> in a terminal, then come back here to connect with one click.' },
@@ -1475,27 +1482,27 @@ async function renderWork(nav, arg, label2) {
       {
         const box = $('sp-ol-state')
         const renderState = async () => {
-          const p = await shell.ollamaProbe()
-          if (!p) { box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.detectFail')}</div><div class="sc-desc">请重试。</div></div>`; return }
+          const p = await window.moonlybox.ollamaProbe()
+          if (!p) { box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.detectFail')}</div><div class="sc-desc">${t('ol.retryHint')}</div></div>`; return }
           if (p.state === 'running') {
-            box.innerHTML = `<div class="sc-main"><div class="sc-title">✅ 检测到 Ollama v${esc(p.version || '?')} · 运行中</div>
+            box.innerHTML = `<div class="sc-main"><div class="sc-title">✅ ${t('ol.runningTitle').replace('{v}', esc(p.version || '?'))}</div>
               <div class="sc-desc">${t('ol.runningDesc')}</div></div>`
             await renderOllamaModels()
           } else if (p.state === 'installed_stopped') {
-            box.innerHTML = `<div class="sc-main"><div class="sc-title">检测到 Ollama 已安装${p.version ? `（v${esc(p.version)}）` : ''}，但服务未运行</div>
+            box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.installedStoppedTitle').replace('{v}', p.version ? `（v${esc(p.version)}）` : '')}</div>
               <div class="sc-desc">${t('ol.stoppedDesc')}</div>
               <button type="button" class="btn ghost" id="sp-ol-start" style="margin-top:8px">${t('ol.startBtn')}</button></div>`
             $('sp-ol-start').onclick = async () => {
               const b = $('sp-ol-start'); b.disabled = true; b.textContent = t('ol.starting')
-              const r = await shell.ollamaServe(p.cli)
+              const r = await window.moonlybox.ollamaServe(p.cli)
               if (r && r.ok) { await renderState() } else { b.disabled = false; b.textContent = t('ol.startRetry'); }
             }
           } else {
-            box.innerHTML = `<div class="sc-main"><div class="sc-title">未检测到 Ollama</div>
+            box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.notFoundTitle')}</div>
               <div class="sc-desc">${t('ol.notFoundDesc')}</div>
               <button type="button" class="btn ghost" id="sp-ol-dl" style="margin-top:8px">${t('ol.dlBtn')}</button>
               <button type="button" class="btn ghost" id="sp-ol-recheck" style="margin-top:8px;margin-left:6px">${t('ol.recheck')}</button></div>`
-            $('sp-ol-dl').onclick = () => shell.openExternal('https://ollama.com/download')
+            $('sp-ol-dl').onclick = () => window.moonlybox.openExternal('https://ollama.com/download')
             $('sp-ol-recheck').onclick = () => renderState()
           }
         }
@@ -1509,11 +1516,11 @@ async function renderWork(nav, arg, label2) {
           } catch {}
           const models = (tags && Array.isArray(tags.models)) ? tags.models : []
           if (models.length === 0) {
-            mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">尚未拉取模型</div>
+            mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.noModelsTitle')}</div>
               <div class="sc-desc">${t('ol.pullHint')}</div></div></div>`
             return
           }
-          mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">已装模型（勾选接入）</div>
+          mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.installedModelsTitle')}</div>
             <div class="sc-desc">${t('ol.installedDesc')}</div></div>
             <div id="sp-ol-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
               ${models.map((mm2) => `<label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" data-olmodel="${esc(mm2.name)}"> <span>${esc(mm2.name)} · ${(mm2.size / 1073741824).toFixed(1)} GB</span></label>`).join('')}
@@ -1533,7 +1540,7 @@ async function renderWork(nav, arg, label2) {
             }
             const r = await saveAppSettings({ model: { local: arr, ...(arr.length && !mcfg.default ? { default: `local:${arr[0].id}` } : {}) } })
             st.className = r.ok ? 'set-status ok' : 'set-status err'
-            st.textContent = r.ok ? `已接入 ${picked.length} 个模型` : (r.error ?? t('ui.saveFail'))
+            st.textContent = r.ok ? t('ol.addedCount').replace('{n}', picked.length) : (r.error ?? t('ui.saveFail'))
             if (r.ok) setTimeout(() => renderWork('settings'), 600)
           }
         }
