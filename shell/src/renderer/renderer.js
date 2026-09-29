@@ -295,6 +295,40 @@ const I18N_DICT = {
   'ui.restartUpdate': { zh: '重启更新', en: 'Restart to Update' },
   'ui.notLogin': { zh: '未登录（点击登录）', en: 'Not signed in (click to sign in)' },
   'ui.reqFail': { zh: '请求失败', en: 'Request failed' },
+  'help.debugMode': { zh: '调试模式', en: 'Debug Mode' },
+  'help.debugMode.desc': { zh: '开启后内核输出全量镜像到日志文件（mb-debug.log）；', en: 'Mirror full kernel output to log file (mb-debug.log); ' },
+  'help.debugLog': { zh: '调试日志 / 诊断包', en: 'Debug Log / Diagnostics' },
+  'help.debugLog.desc': { zh: '打开日志目录：mb-debug.log（调试日志）与系统信息；反馈问题时可整目录打包附上', en: 'Open log folder: mb-debug.log (debug log) and system info; attach the whole folder when reporting issues' },
+  'help.openLogs': { zh: '打开日志目录', en: 'Open Log Folder' },
+  'help.envInfo': { zh: '环境信息', en: 'Environment' },
+  'help.openFail': { zh: '打开失败：', en: 'Open failed: ' },
+  'help.devDefault': { zh: '开发模式默认开启', en: 'on by default in dev' },
+  'help.pkgDefault': { zh: '安装包默认关闭', en: 'off by default in packaged builds' },
+  'help.cloudAddr': { zh: '云端服务地址', en: 'Cloud Service URL' },
+  'help.copy': { zh: '复制', en: 'Copy' },
+  'help.copied': { zh: '已复制', en: 'Copied' },
+  'help.cloudAddr.desc': { zh: '云端功能（书房/收藏/条款/反馈等）与账号服务均由此地址提供。', en: 'Cloud features (study/bookmarks/terms/feedback) and account services are served from this URL.' },
+  'help.kernelOk': { zh: '✓ 已连接（daemon pong）', en: '✓ Connected (daemon pong)' },
+  'help.kernelDown': { zh: '未连接', en: 'Not connected' },
+  'help.kernelPick': { zh: '选择左侧项目开始', en: 'Select an item to begin' },
+  'about.name': { zh: '魔力宝盒', en: 'MoonlyBox' },
+  'about.slogan': { zh: '你的智能信息管家 · 收藏、便签、待办、书房与小月，一盒皆收', en: 'Your smart info butler · bookmarks, notes, todos, study and Moonie in one box' },
+  'about.autoUpdate': { zh: '自动更新', en: 'Auto Update' },
+  'about.autoUpdate.desc': { zh: '关闭后仅在打开本页点击「立即更新」时检查', en: 'When off, checks only when you click "Update Now" on this page' },
+  'about.notes': { zh: '当前版本说明', en: 'Release Notes' },
+  'about.notesDefault': { zh: '稳定性修复与细节优化。', en: 'Stability fixes and polish.' },
+  'about.env': { zh: '环境：', en: 'Environment: ' },
+  'about.newVer': { zh: '发现新版本', en: 'New Version Available' },
+  'about.installAsk': { zh: '已就绪，安装并重启？', en: 'is ready. Install and restart?' },
+  'dg.saveFirst': { zh: '先保存草稿', en: 'Save draft first' },
+  'dg.admitFail': { zh: '准入失败：', en: 'Admission failed: ' },
+  'dg.aiPrompt': { zh: '描述你要画的图', en: 'Describe the diagram to draw' },
+  'dg.aiDone': { zh: '✓ AI 已生成', en: '✓ AI generated' },
+  'dg.aiFail': { zh: 'AI 生成失败：', en: 'AI generation failed: ' },
+  'dg.saveFail': { zh: '保存失败：', en: 'Save failed: ' },
+  'xy.pickFirst': { zh: '先在左侧选择或新建对话', en: 'Pick or create a chat on the left first' },
+  'xy.qPlaceholder': { zh: '问小月（工作空间内可读写文件）…', en: 'Ask Moonie (can read/write files in workspaces)…' },
+  'xy.docOnly': { zh: '问小月（文档库/MCP，无本地目录访问）…', en: 'Ask Moonie (library/MCP, no local file access)…' },
 }
 function curLang() {
   const l = APP_SETTINGS?.appearance?.lang
@@ -845,7 +879,7 @@ async function renderWork(nav, arg, label2) {
     btnToggle.onclick = () => { mode = mode === 'read' ? 'edit' : 'read'; applyMode() }
     btnSave.onclick = async () => {
       const wr = await window.moonlybox.fsWrite(arg.rel, edit.value)
-      if (!wr.ok) { state.textContent = '保存失败：' + wr.message; return }
+      if (!wr.ok) { state.textContent = t('dg.saveFail') + wr.message; return }
       state.textContent = '✓ 已保存 · 回传云端中…'
       // 保存即回传（#253.49）：镜像区文件直接走 /library/import/files 版本管道；本地文档提示走收集箱
       try {
@@ -2068,7 +2102,7 @@ async function renderWork(nav, arg, label2) {
       ${meta ? `<div class="muted" style="padding:8px 16px 0;font-size:12px">${meta.title} · ${wsLabel}</div>` : ''}
       <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:16px;white-space:pre-wrap;user-select:text"></div>
       <div class="row" style="padding:12px 16px;border-top:1px solid var(--border)">
-        <input id="q" placeholder="${meta ? (meta.workspaceId ? '问小月（工作空间内可读写文件）…' : '问小月（文档库/MCP，无本地目录访问）…') : '先在左侧选择或新建对话'}" style="flex:1" ${meta ? '' : 'disabled'} />
+        <input id="q" placeholder="${meta ? (meta.workspaceId ? t('xy.qPlaceholder') : t('xy.docOnly')) : t('xy.pickFirst')}" style="flex:1" ${meta ? '' : 'disabled'} />
         <button class="btn" id="btn-ask" ${meta ? '' : 'disabled'}>发送</button>
       </div>`
     if (meta) bindChat({ meta })
@@ -2086,20 +2120,20 @@ async function renderWork(nav, arg, label2) {
       <div style="padding:24px 28px;overflow-y:auto;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:12px">
         <div class="set-card" style="display:flex;align-items:center;gap:12px;padding:14px 20px">
           <div style="flex:1">
-            <div style="font-size:13px;font-weight:600">调试模式</div>
-            <div class="set-desc" style="margin-top:2px">开启后内核输出全量镜像到日志文件（mb-debug.log）；${env ? (env.packaged ? '安装包默认关闭' : '开发模式默认开启') : ''}</div>
+            <div style="font-size:13px;font-weight:600">${t('help.debugMode')}</div>
+            <div class="set-desc" style="margin-top:2px">${t('help.debugMode.desc')}${env ? (env.packaged ? t('help.pkgDefault') : t('help.devDefault')) : ''}</div>
           </div>
           <button type="button" class="toggle ${on ? 'on' : ''}" id="dbg-on"></button>
         </div>
         <div class="set-card" style="display:flex;align-items:center;gap:12px;padding:14px 20px">
           <div style="flex:1">
-            <div style="font-size:13px;font-weight:600">调试日志 / 诊断包</div>
-            <div class="set-desc" style="margin-top:2px">打开日志目录：mb-debug.log（调试日志）与系统信息；反馈问题时可整目录打包附上</div>
+            <div style="font-size:13px;font-weight:600">${t('help.debugLog')}</div>
+            <div class="set-desc" style="margin-top:2px">${t('help.debugLog.desc')}</div>
           </div>
-          <button class="btn ghost" id="dbg-export">打开日志目录</button>
+          <button class="btn ghost" id="dbg-export">${t('help.openLogs')}</button>
         </div>
         <div class="set-card" style="padding:14px 20px">
-          <div style="font-size:13px;font-weight:600">环境信息</div>
+          <div style="font-size:13px;font-weight:600">${t('help.envInfo')}</div>
           <div class="set-desc" id="dbg-env" style="margin-top:6px;line-height:1.8"></div>
         </div>
       </div>`
@@ -2110,7 +2144,7 @@ async function renderWork(nav, arg, label2) {
     }
     $('dbg-export').onclick = async () => {
       const err = await window.moonlybox.openLogDir()
-      if (err) $('dbg-export').textContent = '打开失败：' + err
+      if (err) $('dbg-export').textContent = t('help.openFail') + err
     }
     if (env) $('dbg-env').innerHTML = `平台：${env.platform}<br/>Electron：${env.electron} · Node：${env.node}<br/>安装包：${env.packaged ? '是' : '否（开发模式）'}<br/>语言：${env.locale}`
     return
@@ -2128,22 +2162,22 @@ async function renderWork(nav, arg, label2) {
     w.innerHTML = `
       <div style="padding:24px 28px;overflow-y:auto;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:12px">
         <div class="set-card" style="padding:14px 20px">
-          <div style="font-size:13px;font-weight:600">云端服务地址</div>
+          <div style="font-size:13px;font-weight:600">${t('help.cloudAddr')}</div>
           <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
             <input readonly value="${webBase}" style="flex:1" id="cld-addr" />
-            <button class="btn ghost" id="cld-copy">复制</button>
+            <button class="btn ghost" id="cld-copy">${t('help.copy')}</button>
           </div>
-          <div class="set-desc" style="margin-top:8px">云端功能（书房/收藏/条款/反馈等）与账号服务均由此地址提供。</div>
+          <div class="set-desc" style="margin-top:8px">${t('help.cloudAddr.desc')}</div>
         </div>
       </div>`
     $('cld-copy').onclick = async () => {
-      try { await navigator.clipboard.writeText($('cld-addr').value); $('cld-copy').textContent = '已复制'; setTimeout(() => { const b = $('cld-copy'); if (b) b.textContent = '复制' }, 1500) } catch {}
+      try { await navigator.clipboard.writeText($('cld-addr').value); $('cld-copy').textContent = t('help.copied'); setTimeout(() => { const b = $('cld-copy'); if (b) b.textContent = '复制' }, 1500) } catch {}
     }
     return
   }
   if (nav === 'help' && arg === 'kernel') {
     const r = await window.moonlybox.rpc('ping', {}, 10_000)
-    w.innerHTML = `<div style="padding:20px" class="mono">内核：${r.event === 'done' ? '✓ 已连接（daemon pong）' : '✗ ' + (r.message ?? '未连接')}<br/>vault：${await window.moonlybox.vaultGet() ?? '未选择'}</div>`
+    w.innerHTML = `<div style="padding:20px" class="mono">内核：${r.event === 'done' ? t('help.kernelOk') : '✗ ' + (r.message ?? t('help.kernelDown'))}<br/>vault：${await window.moonlybox.vaultGet() ?? '未选择'}</div>`
     return
   }
   if (nav === 'help' && (arg === 'feedback' || arg === 'terms')) {
@@ -2211,20 +2245,20 @@ async function renderWork(nav, arg, label2) {
       '0.5.1': '设置中心 11 分类；云端内嵌主题跟随；图示快建与侧栏细节批；小月对话 UI 与工作空间。',
       '0.5.0': '图示（Mermaid 代码面板+实时预览+AI 生成）；工作空间与对话持久化；消息平台八通道。',
     }
-    const notes = VERSION_NOTES[v.shellVersion] ?? '稳定性修复与细节优化。'
+    const notes = VERSION_NOTES[v.shellVersion] ?? t('about.notesDefault')
     const prog = st?.progress != null ? `<div style="margin-top:8px;height:6px;border-radius:999px;background:var(--hover);overflow:hidden"><div style="width:${st.progress}%;height:100%;background:var(--accent);transition:width .3s"></div></div>` : ''
     const updateSection = st?.downloaded
       ? `<div class="set-card" style="border-color:var(--ok)"><div class="sc-main"><div class="sc-title" style="color:var(--ok)">✓ 新版本 v${st.version} 已就绪</div><div class="sc-desc">重启应用后完成安装</div></div><button class="btn" id="abt-install" style="background:var(--ok)">立即安装</button></div>`
       : st?.available
-        ? `<div class="set-card" style="border-color:var(--accent)"><div class="sc-main"><div class="sc-title" style="color:var(--accent)">发现新版本 v${st.version}</div><div class="sc-desc">${VERSION_NOTES[st.version] ?? '修复与优化，详见官网更新日志。'}${st?.checking ? ' · 下载中…' : ''}</div></div></div>${prog}`
+        ? `<div class="set-card" style="border-color:var(--accent)"><div class="sc-main"><div class="sc-title" style="color:var(--accent)">${t('about.newVer')} v${st.version}</div><div class="sc-desc">${VERSION_NOTES[st.version] ?? '修复与优化，详见官网更新日志。'}${st?.checking ? ' · 下载中…' : ''}</div></div></div>${prog}`
         : ''
     w.innerHTML = `
       <div style="padding:24px 28px;overflow-y:auto;height:100%;box-sizing:border-box">
         <div class="set-card" style="display:flex;align-items:center;gap:16px;padding:18px 20px">
           <div style="width:52px;height:52px;border-radius:14px;background:var(--hover);display:flex;align-items:center;justify-content:center;flex:none">${LOGO_SVG.replace('viewBox="132 72 236 343" style="width:18px;height:18px;flex:none"', 'viewBox="132 72 236 343" style="width:34px;height:34px"')}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:17px;font-weight:700">魔力宝盒</div>
-            <div class="set-desc" style="margin-top:2px">你的智能信息管家 · 收藏、便签、待办、书房与小月，一盒皆收</div>
+            <div style="font-size:17px;font-weight:700">${t('about.name')}</div>
+            <div class="set-desc" style="margin-top:2px">${t('about.slogan')}</div>
             <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
               <span style="font-size:11px;padding:2px 9px;border-radius:999px;background:var(--hover);color:var(--muted)">GUI v${v.shellVersion}</span>
               <span style="font-size:11px;padding:2px 9px;border-radius:999px;background:var(--hover);color:var(--muted)">内核 v${v.kernelVersion}</span>
@@ -2235,8 +2269,8 @@ async function renderWork(nav, arg, label2) {
 
         <div class="set-card" style="margin-top:12px;display:flex;align-items:center;gap:12px;padding:14px 20px">
           <div style="flex:1">
-            <div style="font-size:13px;font-weight:600">自动更新</div>
-            <div class="set-desc" style="margin-top:2px">关闭后仅在打开本页点击「立即更新」时检查</div>
+            <div style="font-size:13px;font-weight:600">${t('about.autoUpdate')}</div>
+            <div class="set-desc" style="margin-top:2px">${t('about.autoUpdate.desc')}</div>
           </div>
           <button type="button" class="toggle ${autoOn ? 'on' : ''}" id="abt-auto"></button>
           <button class="btn" id="btn-check2">${st?.checking ? t('ui.checking') : t('ui.updateNow')}</button>
@@ -2244,11 +2278,11 @@ async function renderWork(nav, arg, label2) {
         ${updateSection}
 
         <div class="set-card" style="margin-top:12px;padding:14px 20px">
-          <div style="font-size:13px;font-weight:600">当前版本说明</div>
+          <div style="font-size:13px;font-weight:600">${t('about.notes')}</div>
           <div class="set-desc" style="margin-top:6px;line-height:1.7">v${v.shellVersion} · ${notes}</div>
         </div>
 
-        <div class="set-desc" style="margin-top:14px">环境：${env ? `${env.platform} · Electron ${env.electron}` : ''}</div>
+        <div class="set-desc" style="margin-top:14px">${t('about.env')}${env ? `${env.platform} · Electron ${env.electron}` : ''}</div>
       </div>`
     $('abt-auto').onclick = async (e) => {
       e.currentTarget.classList.toggle('on')
@@ -2267,7 +2301,7 @@ async function renderWork(nav, arg, label2) {
     if (inst) inst.onclick = () => window.moonlybox.updateInstall()
     return
   }
-  w.innerHTML = `<div style="padding:20px" class="muted">选择左侧项目开始</div>`
+  w.innerHTML = `<div style="padding:20px" class="muted">${t('help.kernelPick')}</div>`
 }
 
 // ---------- 上下文菜单关闭助手（#304）：移除菜单+清锚定行 hover 保持 ----------
@@ -2518,18 +2552,18 @@ function bindDiagramWorkbench(existing, pick) {
       // #291：保存后立刻刷新侧栏列表（新建首存/改名都不用再切功能回来）
       void renderList('diagram')
       if (isNew) $('dg-state').textContent += t('lib.addedTip')
-    } else $('dg-state').textContent = '保存失败：' + (r.text || r.message)
+    } else $('dg-state').textContent = t('dg.saveFail') + (r.text || r.message)
   }
   $('dg-activate').onclick = async () => {
-    if (!dgCurrentId) { $('dg-state').textContent = '先保存草稿'; return }
+    if (!dgCurrentId) { $('dg-state').textContent = t('dg.saveFirst'); return }
     const r = await window.moonlybox.rpc('diagram', { op: 'activate', id: dgCurrentId }, 60_000)
     if (r.event === 'done' && r.code === 0) {
       $('dg-state').textContent = '📚 已存进书房'
       void renderList('diagram') // #291：📝→📚 徽标即时更新
-    } else $('dg-state').textContent = '准入失败：' + (r.text || r.message)
+    } else $('dg-state').textContent = t('dg.admitFail') + (r.text || r.message)
   }
   $('dg-ai').onclick = async () => {
-    const prompt = window.prompt('描述你要画的图')
+    const prompt = window.prompt(t('dg.aiPrompt'))
     if (!prompt?.trim()) return
     const aiBtn = $('dg-ai') // #283.11：await 期间面板可能重渲——持有引用而非事后 querySelector（重渲后为 null）
     aiBtn.disabled = true
@@ -2539,10 +2573,10 @@ function bindDiagramWorkbench(existing, pick) {
     if (r.event === 'done' && r.code === 0) {
       $('dg-code').value = JSON.parse(r.text).source
       dgCurrentId = null
-      $('dg-state').textContent = '✓ AI 已生成'
+      $('dg-state').textContent = t('dg.aiDone')
       document.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active')) // #302：AI 新内容未保存，清列表选中高亮
       render()
-    } else $('dg-state').textContent = 'AI 生成失败：' + (r.text || r.message)
+    } else $('dg-state').textContent = t('dg.aiFail') + (r.text || r.message)
   }
 }
 
@@ -3117,7 +3151,7 @@ window.moonlybox.onUpdateReady((msg) => setUpgradeState('ready', msg.version))
 $('btn-upgrade').onclick = async () => {
   const st = await window.moonlybox.updateState()
   if (st?.downloaded) {
-    mbConfirm(`v${st.version} 已就绪，安装并重启？`, t('ui.install')).then((ok) => { if (ok) window.moonlybox.updateInstall() })
+    mbConfirm(`v${st.version} ${t('about.installAsk')}`, t('ui.install')).then((ok) => { if (ok) window.moonlybox.updateInstall() })
     return
   }
   setUpgradeState('available', st?.version ?? '')
