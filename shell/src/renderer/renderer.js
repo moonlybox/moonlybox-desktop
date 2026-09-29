@@ -609,6 +609,11 @@ function resolveThemeDark() {
   if (mode === 'time') return (new Date().getHours() >= 18 || new Date().getHours() < 6) ? 'dark' : 'light'
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
+// #315：mermaid 主题跟随明暗（饼图/思维导图等配色由 theme 决定；deep dark 下 default 主题文字浅色不可读）
+function mmApplyTheme() {
+  if (!window.mermaid) return
+  try { mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: resolveThemeDark() === 'dark' ? 'dark' : 'default' }) } catch {}
+}
 // 跟随时间：每 10 分钟校一次主题（分号必须：下行 IIFE 以 ( 开头——ASI 陷阱 #253.20 同款）
 setInterval(() => { if (APP_SETTINGS?.appearance?.theme === 'time') applyThemeSettings() }, 10 * 60 * 1000);
 
@@ -1078,6 +1083,7 @@ async function renderWork(nav, arg, label2) {
       view.querySelectorAll('.mb-mermaid').forEach(async (el) => {
         const code = decodeURIComponent(el.dataset.mbcode ?? '')
         if (!code || !window.mermaid) return
+        mmApplyTheme()
         try {
           const { svg } = await window.mermaid.render('wfmd-' + Date.now() + '-' + Math.floor(Math.random() * 1e6), code)
           el.innerHTML = svg
@@ -1198,6 +1204,8 @@ async function renderWork(nav, arg, label2) {
         APP_SETTINGS.appearance = { ...(APP_SETTINGS.appearance ?? {}), theme: e.target.value }
         applyThemeSettings()
         await saveAppSettings({ appearance: { theme: e.target.value } })
+        // #315：mermaid 主题随明暗切换——重渲当前工作区让已出图重上色
+        if (currentNav !== 'settings') { try { await renderWork(currentNav) } catch {} }
       }
       $('sp-lang').onchange = async (e) => {
         APP_SETTINGS.appearance = { ...(APP_SETTINGS.appearance ?? {}), lang: e.target.value }
@@ -2738,7 +2746,7 @@ let dgLastError = null
 
 function bindDiagramWorkbench(existing, pick) {
   dgCurrentId = existing?.id ?? null
-  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' })
+  mmApplyTheme()
   // #290：pick=模板弹窗选择结果——填充名称+示例代码，新草稿从这一刻开始
   $('dg-code').value = pick ? (pick.code ?? '') : (existing?.content ?? '')
   $('dg-title').value = pick ? pick.title : (existing?.title ?? '')
@@ -2755,6 +2763,7 @@ function bindDiagramWorkbench(existing, pick) {
     const code = (m ? m[1] : src).trim()
     if (!code) { box.innerHTML = '<span class="muted" style="font-size:12px">输入 mermaid 代码即时预览</span>'; return }
     try {
+      mmApplyTheme()
       const { svg } = await mermaid.render('dg-' + Date.now(), code)
       box.innerHTML = svg
       err.style.display = 'none'
@@ -3278,6 +3287,7 @@ function renderMarkdownSafe(src) {
       el.dataset.mbdone = '1'
       const code = decodeURIComponent(el.dataset.mbcode ?? '')
       if (!code || !window.mermaid) return
+      mmApplyTheme()
       try {
         const id = 'mbm' + Math.random().toString(36).slice(2, 8)
         const svg = await window.mermaid.render(id, code)
