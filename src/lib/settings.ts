@@ -37,7 +37,7 @@ export interface SettingsSchema {
     /** 自定义多模型（OpenAI 兼容端点；本地推理 key 可空） */
     custom: Array<{ id: string; name: string; baseUrl: string; model: string; enabled: boolean }>
     /** 本地部署（预留，结构同 custom；v1 恒空数组） */
-    local: Array<{ id: string; name: string; model: string; enabled: boolean }>
+    local: Array<{ id: string; name: string; model: string; enabled: boolean; baseUrl?: string }> // #310.11：本地端点（默认 Ollama /v1）
     /** 遗留字段（<=#282 单模型形态），迁移后零消费 */
     provider?: string
     /** 遗留字段（<=#282），迁移后零消费 */

@@ -966,13 +966,78 @@ async function renderWork(nav, arg, label2) {
         else st.textContent = r.error ?? '保存失败'
       }
     } else if (cat.id === 'model' && currentSetSub === 'local') {
-      // #274：本地模型改为预留预告（真·本地部署：内置模型下载+本地推理，参考 Cherry Studio 模型列表）——端点式接入归自定义
-      panel('模型 · 本地部署', '在本地设备下载并运行模型，数据不出本机。', `
-        <div class="set-card"><div class="sc-main"><div class="sc-title">内置模型下载与本地部署</div>
-          <div class="sc-desc">将提供模型列表（如 Qwen3 Embedding 0.6B · 约 614MB）一键下载与本地运行，无需 GPU 也可运行小型模型；下载后数据不出本机。</div></div></div>
-        <div class="set-card"><div class="sc-main"><div class="sc-title">已有本地推理服务？</div>
-          <div class="sc-desc">Ollama / LM Studio / vLLM 等本地端点请到「自定义」接入（API 地址填 http://127.0.0.1:11434/v1 这类端点即可）。</div></div></div>
+      // #310.11：本地部署四态探测（公用不私用：检测已有 Ollama 直接复用，不重复安装；失效给修复入口）
+      panel('模型 · 本地部署', '连接本机已有的 Ollama 服务，模型数据不出本机；已装则直接复用，不重复安装。', `
+        <div id="sp-ol-state" class="set-card"><div class="sc-main"><div class="sc-title">正在检测本机 Ollama…</div><div class="sc-desc">检测服务与已安装版本。</div></div></div>
+        <div id="sp-ol-models"></div>
       `)
+      {
+        const box = $('sp-ol-state')
+        const renderState = async () => {
+          const p = await shell.ollamaProbe()
+          if (!p) { box.innerHTML = `<div class="sc-main"><div class="sc-title">检测失败</div><div class="sc-desc">请重试。</div></div>`; return }
+          if (p.state === 'running') {
+            box.innerHTML = `<div class="sc-main"><div class="sc-title">✅ 检测到 Ollama v${esc(p.version || '?')} · 运行中</div>
+              <div class="sc-desc">复用系统级服务（127.0.0.1:11434），与其他应用公用，不重复安装。</div></div>`
+            await renderOllamaModels()
+          } else if (p.state === 'installed_stopped') {
+            box.innerHTML = `<div class="sc-main"><div class="sc-title">检测到 Ollama 已安装${p.version ? `（v${esc(p.version)}）` : ''}，但服务未运行</div>
+              <div class="sc-desc">启动后即可复用已有模型，无需重新安装。</div>
+              <button type="button" class="btn ghost" id="sp-ol-start" style="margin-top:8px">▶ 启动 Ollama</button></div>`
+            $('sp-ol-start').onclick = async () => {
+              const b = $('sp-ol-start'); b.disabled = true; b.textContent = '启动中…'
+              const r = await shell.ollamaServe(p.cli)
+              if (r && r.ok) { await renderState() } else { b.disabled = false; b.textContent = '启动失败，重试'; }
+            }
+          } else {
+            box.innerHTML = `<div class="sc-main"><div class="sc-title">未检测到 Ollama</div>
+              <div class="sc-desc">本机未安装 Ollama。可前往官网下载安装（安装后回到此页自动检测；也可以在「自定义」中直接填其他本地端点）。</div>
+              <button type="button" class="btn ghost" id="sp-ol-dl" style="margin-top:8px">⬇ 打开 Ollama 下载页</button>
+              <button type="button" class="btn ghost" id="sp-ol-recheck" style="margin-top:8px;margin-left:6px">↻ 重新检测</button></div>`
+            $('sp-ol-dl').onclick = () => shell.openExternal('https://ollama.com/download')
+            $('sp-ol-recheck').onclick = () => renderState()
+          }
+        }
+        // #310.11：从 /api/tags 列已装模型，勾选即建实例（写入 settings.model.local + baseUrl 默认）
+        const renderOllamaModels = async () => {
+          const mbox = $('sp-ol-models'); if (!mbox) return
+          let tags = null
+          try {
+            const res = await fetch('http://127.0.0.1:11434/api/tags')
+            tags = res.ok ? await res.json() : null
+          } catch {}
+          const models = (tags && Array.isArray(tags.models)) ? tags.models : []
+          if (models.length === 0) {
+            mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">尚未拉取模型</div>
+              <div class="sc-desc">在终端执行 <code>ollama pull qwen3:4b</code> 拉取模型后，回到此页即可一键接入。</div></div></div>`
+            return
+          }
+          mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">已装模型（勾选接入）</div>
+            <div class="sc-desc">接入后可在「对话默认模型」中选择；接入即复用 Ollama 现有模型，不复制文件。</div></div>
+            <div id="sp-ol-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+              ${models.map((mm2) => `<label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" data-olmodel="${esc(mm2.name)}"> <span>${esc(mm2.name)} · ${(mm2.size / 1073741824).toFixed(1)} GB</span></label>`).join('')}
+            </div>
+            <button type="button" class="btn ghost" id="sp-ol-add" style="margin-top:10px">接入所选模型</button>
+            <div class="set-status" id="sp-ol-status" style="margin-top:6px"></div></div>`
+          $('sp-ol-add').onclick = async () => {
+            const picked = [...mbox.querySelectorAll('input[data-olmodel]:checked')].map((el) => el.dataset.olmodel)
+            const st = $('sp-ol-status')
+            if (picked.length === 0) { st.className = 'set-status err'; st.textContent = '请先勾选模型'; return }
+            const g = await loadAppSettings()
+            const mcfg = g.model ?? {}
+            const arr = [...(mcfg.local ?? [])]
+            for (const name of picked) {
+              if (arr.some((x) => x.model === name)) continue // 已接入去重
+              arr.push({ id: `ol-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: `Ollama · ${name}`, model: name, enabled: true, baseUrl: 'http://127.0.0.1:11434/v1' })
+            }
+            const r = await saveAppSettings({ model: { local: arr, ...(arr.length && !mcfg.default ? { default: `local:${arr[0].id}` } : {}) } })
+            st.className = r.ok ? 'set-status ok' : 'set-status err'
+            st.textContent = r.ok ? `已接入 ${picked.length} 个模型` : (r.error ?? '保存失败')
+            if (r.ok) setTimeout(() => renderWork('settings'), 600)
+          }
+        }
+        renderState()
+      }
     } else if (cat.id === 'model' && currentSetSub === 'custom') {
       // #283：自定义=多模型列表——每条单独启停/删除，任一可设为对话默认；key 走钥匙串
       const g = await loadAppSettings()

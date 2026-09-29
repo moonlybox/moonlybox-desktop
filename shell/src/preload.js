@@ -42,6 +42,9 @@ contextBridge.exposeInMainWorld('moonlybox', {
   openPath: (p) => ipcRenderer.invoke('shell:openPath', p),
   // #310.10：书房迁移（老→新目录；目标非空阻断）
   vaultMigrate: (target) => ipcRenderer.invoke('vault:migrate', target),
+  // #310.11：Ollama 探测/启动
+  ollamaProbe: () => ipcRenderer.invoke('ollama:probe'),
+  ollamaServe: (cli) => ipcRenderer.invoke('ollama:serve', cli),
   // #310.7：调试日志镜像/日志目录打开/环境信息/自动更新开关
   debugLog: (line) => ipcRenderer.invoke('shell:debugLog', line),
   openLogDir: () => ipcRenderer.invoke('shell:openLogDir'),

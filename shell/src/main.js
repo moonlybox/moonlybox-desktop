@@ -53,6 +53,40 @@ function setKeepAwake(on) {
 }
 
 // ---------- 内核定位：开发=仓根 bun 源；打包=resources/kernel/moonlybox 单文件 ----------
+// #310.11：Ollama HTTP 探测（/api/version）——服务在跑即返回版本
+async function probeOllamaHttp() {
+  const base = process.env.MOONLYBOX_OLLAMA_URL || 'http://127.0.0.1:11434'
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(), 1200)
+  try {
+    const res = await fetch(base + '/api/version', { signal: ctl.signal })
+    if (!res.ok) return null
+    const j = await res.json().catch(() => null)
+    return j && j.version ? { version: String(j.version) } : null
+  } finally {
+    clearTimeout(t)
+  }
+}
+// #310.11：Ollama CLI 三级探测（官方默认路径→MOONLYBOX_OLLAMA env→PATH 解析）——kernelCmd 同款范式
+function findOllamaCli() {
+  const exe = process.platform === 'win32' ? 'ollama.exe' : 'ollama'
+  const defaults = process.platform === 'win32'
+    ? [
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Ollama', 'ollama.exe'),
+        path.join(process.env['ProgramFiles'] || '', 'Ollama', 'ollama.exe'),
+      ]
+    : ['/usr/local/bin/ollama', '/Applications/Ollama.app/Contents/Resources/ollama', path.join(homeDir(), '.local', 'bin', 'ollama')]
+  for (const p of defaults) {
+    if (p && fs.existsSync(p)) return p
+  }
+  if (process.env.MOONLYBOX_OLLAMA && fs.existsSync(process.env.MOONLYBOX_OLLAMA)) return process.env.MOONLYBOX_OLLAMA
+  try {
+    const hit = require('child_process').execFileSync(process.platform === 'win32' ? 'where' : 'which', [exe], { timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().split(/\r?\n/)[0].trim()
+    return hit || null
+  } catch {
+    return null
+  }
+}
 function kernelCmd() {
   // 打包态判定用 app.isPackaged（dev 下 electron 也有 resourcesPath——指向 node_modules/electron/dist，
   // 用它判断会把 dev 误判为打包态 →「内核缺失」假警报；0.5.0/0.5.1 dev 首跑即此坑）
@@ -421,6 +455,34 @@ app.whenReady().then(() => {
       return { ok: true, root: absTo, files: copied.length }
     } catch (e) {
       return { ok: false, message: String(e?.message ?? e) }
+    }
+  })
+  // #310.11：Ollama 四态探测（服务在跑/装了没跑/没装/失效修复由 renderer 侧对话失败触发）
+  ipcMain.handle('ollama:probe', async () => {
+    const running = await probeOllamaHttp().catch(() => null)
+    if (running && running.version) return { state: 'running', version: running.version }
+    const cli = findOllamaCli()
+    if (!cli) return { state: 'not_found' }
+    let version = null
+    try {
+      version = require('child_process').execFileSync(cli, ['--version'], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+    } catch {}
+    return { state: 'installed_stopped', cli, version }
+  })
+  // #310.11：启动系统级 Ollama 服务（spawn 分离，不随应用退出被杀）
+  ipcMain.handle('ollama:serve', async (_e, cli) => {
+    try {
+      const child = require('child_process').spawn(cli, ['serve'], { detached: true, stdio: 'ignore', windowsHide: true })
+      child.unref()
+      // 等 HTTP 就绪（最多 8s）
+      for (let i = 0; i < 16; i++) {
+        await new Promise((r) => setTimeout(r, 500))
+        const v = await probeOllamaHttp().catch(() => null)
+        if (v && v.version) return { ok: true, version: v.version }
+      }
+      return { ok: false, error: '启动超时（服务未响应）' }
+    } catch (e) {
+      return { ok: false, error: String(e && e.message ? e.message : e) }
     }
   })
   ipcMain.handle('vault:pick', async () => {
