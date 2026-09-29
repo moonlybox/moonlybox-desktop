@@ -328,7 +328,125 @@ const I18N_DICT = {
   'dg.saveFail': { zh: '保存失败：', en: 'Save failed: ' },
   'xy.pickFirst': { zh: '先在左侧选择或新建对话', en: 'Pick or create a chat on the left first' },
   'xy.qPlaceholder': { zh: '问小月（工作空间内可读写文件）…', en: 'Ask Moonie (can read/write files in workspaces)…' },
-  'xy.docOnly': { zh: '问小月（文档库/MCP，无本地目录访问）…', en: 'Ask Moonie (library/MCP, no local file access)…' },
+  'xy.docOnly': { zh: '问小月（文档库/MCP，无本地目录访问）…', en: 'Ask Moonie (library/MCP, no local file access)…' },  'list.settings': { zh: '设置', en: 'Settings' },
+  'list.vaultNotChosen': { zh: '未选择书房目录<br/>请到 设置 → Vault 目录 选择', en: 'No study folder selected<br/>Go to Settings → Vault Folder to choose one' },
+  'tree.collapseAll': { zh: '全部收起', en: 'Collapse All' },
+  'tree.isExpanded': { zh: '全部展开', en: 'Expand All' },
+  'list.backup': { zh: '备份', en: 'Backup' },
+  'ui.new': { zh: '＋ 新建', en: '＋ New' },
+  'list.loading': { zh: '加载中…', en: 'Loading…' },
+  'list.bkEmpty': { zh: '还没有备份目录<br/>点右上「＋ 新建」注册一个本地目录，<br/>把它同步到云端书房的指定目录下。', en: 'No backup folders yet<br/>Click "＋ New" (top right) to register a local folder,<br/>and sync it into a folder in your cloud study.' },
+  'bk.holdN': { zh: ' 项已停更', en: ' items on hold' },
+  'list.loadFail': { zh: '加载失败', en: 'Load failed' },
+  'list.navLoadFail': { zh: '导航加载失败：', en: 'Failed to load navigation: ' },
+  'list.navParseFail': { zh: '导航解析失败（登录后可用）', en: 'Failed to parse navigation (sign in first)' },
+  'dg.newBtn': { zh: '＋ 新建图示', en: '＋ New Diagram' },
+  'dg.more': { zh: '更多', en: 'More' },
+  'dg.delItem': { zh: '删除', en: 'Delete' },
+  'dg.delConfirm': { zh: '删除图示「{t}」？将移入回收站（30 天内可在云端书房恢复）。', en: 'Delete diagram "{t}"? It moves to trash (restorable in cloud study for 30 days).' },
+  'dg.none': { zh: '暂无图示', en: 'No diagrams' },
+  'dg.listFail': { zh: '列表加载失败（登录后可用）', en: 'Failed to load list (sign in first)' },
+  'xy.newWs': { zh: '＋ 工作空间', en: '＋ Workspace' },
+  'xy.newChat': { zh: '＋ 对话', en: '＋ Chat' },
+  'xy.delMenu': { zh: '删除', en: 'Delete' },
+  'xy.delChatConfirm': { zh: '删除对话「{t}」？', en: 'Delete chat "{t}"?' },
+  'xy.freeGroup': { zh: '💬 对话', en: '💬 Chats' },
+  'xy.noWs': { zh: '无工作空间', en: 'No workspace' },
+  'xy.freeAddTip': { zh: '新建无工作空间对话', en: 'New chat without workspace' },
+  'xy.wsAddTip': { zh: '在此工作空间新建对话', en: 'New chat in this workspace' },
+  'xy.addDir': { zh: '增加工作目录', en: 'Add Work Folder' },
+  'xy.delWsConfirm': { zh: '删除工作空间「{t}」？其下对话将变为无工作空间对话（历史保留）。', en: 'Delete workspace "{t}"? Its chats become workspace-free (history kept).' },
+  'xy.newWsTitle': { zh: '新建工作空间', en: 'New Workspace' },
+  'xy.wsName': { zh: '名称（必填）', en: 'Name (required)' },
+  'xy.wsNamePh': { zh: '例：毕业论文', en: 'e.g. Thesis' },
+  'xy.wsDirs': { zh: '工作目录（必选，可多个）', en: 'Work folders (required, multiple allowed)' },
+  'xy.addDirBtn': { zh: '＋ 添加目录', en: '＋ Add Folder' },
+  'xy.create': { zh: '创建', en: 'Create' },
+  'xy.primary': { zh: '主', en: 'Main' },
+  'chat.ctxDesc': { zh: '小月记住本次会话中的对话', en: 'What Moonie remembers within this session' },
+  'chat.compactDesc': { zh: '历史过长时自动摘要，节省 token', en: 'Auto-summarize long history to save tokens' },
+  'chat.ctLabel': { zh: '压缩阈值（历史达到容量的比例时触发）：', en: 'Compact threshold (trigger at this share of capacity): ' },
+  'chat.cgLabel': { zh: '压缩目标（压缩后保留的容量）：', en: 'Compact target (capacity kept after compact): ' },
+  'chat.retryLabel': { zh: '模型重试次数（调用失败自动重试）', en: 'Model retries (auto-retry on failure)' },
+  'mp.groupCloud': { zh: '平台 API', en: 'Platform APIs' },
+  'mp.groupCustom': { zh: '自定义', en: 'Custom' },
+  'mp.groupLocal': { zh: '本地部署（预留）', en: 'Local (reserved)' },
+  'mp.wxHint': { zh: '（只存钥匙串）', en: ' (stored in keychain only)' },
+  'mp.keyDocs': { zh: 'API Key 获取：', en: 'Get API key: ' },
+  'mp.addPv': { zh: '＋ 添加平台', en: '＋ Add Platform' },
+  'mp.pvLabel': { zh: '平台提供商', en: 'Platform provider' },
+  'mp.pickPv': { zh: '— 选择提供商 —', en: '— Pick a provider —' },
+  'mp.pickModel': { zh: '— 推荐模型 —', en: '— Recommended models —' },
+  'mp.save': { zh: '保存', en: 'Save' },
+  'mp.cancel': { zh: '取消', en: 'Cancel' },
+  'mp.emptyPv': { zh: '尚未添加平台——点「＋ 添加平台」接入第一个模型服务', en: 'No platforms yet — click "＋ Add Platform" to connect your first model service' },
+  'mp.setDefault': { zh: '设为默认', en: 'Set Default' },
+  'mp.del': { zh: '删除', en: 'Delete' },
+  'mp.addCustom': { zh: '＋ 添加自定义模型', en: '＋ Add Custom Model' },
+  'mp.baseUrlAuto': { zh: 'API 地址（自动填入）', en: 'API URL (auto-filled)' },
+  'mp.customEmpty': { zh: '尚未添加自定义模型', en: 'No custom models yet' },
+  'mp.reqBoth': { zh: 'API 地址与模型名必填', en: 'API URL and model name are required' },
+  'mp.urlScheme': { zh: 'API 地址需以 http(s):// 开头', en: 'API URL must start with http(s)://' },
+  'mp.customName': { zh: '自定义模型', en: 'Custom Model' },
+  'msg.gateway': { zh: '启动网关', en: 'Start Gateway' },
+  'msg.starting': { zh: '启动中…', en: 'Starting…' },
+  'msg.runningN': { zh: '运行中：', en: 'Running: ' },
+  'msg.noneEnabled': { zh: '无已启用平台', en: 'No enabled platforms' },
+  'msg.startFail': { zh: '启动失败：', en: 'Start failed: ' },
+  'msg.qrWait': { zh: '等待扫码…', en: 'Waiting for scan…' },
+  'msg.qrScanned': { zh: '已扫码，请在微信里确认…', en: 'Scanned — confirm in WeChat…' },
+  'msg.qrExpired': { zh: '✗ 二维码已过期，请重新点击扫码登录', en: '✗ QR expired — click scan login again' },
+  'msg.qrGet': { zh: '获取二维码…', en: 'Getting QR code…' },
+  'msg.qrGetFail': { zh: '获取二维码失败', en: 'Failed to get QR code' },
+  'msg.qrHint': { zh: '请用微信扫描上方二维码（有效期约 5 分钟）…', en: 'Scan the QR above with WeChat (valid ~5 minutes)…' },
+  'msg.loginOk': { zh: '登录成功', en: 'Signed in' },
+  'msg.tokenKept': { zh: '——Token 已存钥匙串，可直接启动网关', en: ' — token stored in keychain; you can start the gateway now' },
+  'msg.queryFail': { zh: '查询失败', en: 'Query failed' },
+  'msg.notStarted': { zh: '未启动', en: 'Not started' },
+  'ws.title': { zh: '搜索服务商', en: 'Search Provider' },
+  'ws.pvLabel': { zh: '服务商', en: 'Provider' },
+  'ws.none': { zh: '— 未启用 —', en: '— Disabled —' },
+  'ue.title': { zh: 'URL 提取（收藏网页正文）', en: 'URL Extraction (web page content)' },
+  'ue.modeLabel': { zh: '提取方式', en: 'Extraction Mode' },
+  'ue.local': { zh: '本地提取（内置 Readability，零成本）', en: 'Local (built-in Readability, free)' },
+  'ue.provider': { zh: '服务商 API（质量更高）', en: 'Provider API (higher quality)' },
+  'ue.baseUrlAuto': { zh: 'API 地址（选商自动填）', en: 'API URL (auto-filled per provider)' },
+  'ue.localDesc': { zh: '本地提取：内置 Readability 算法在本机解析正文，零流量零成本。', en: 'Local extraction: built-in Readability parses content on this machine — no traffic, no cost.' },
+  'dp.pvLabel': { zh: '处理方式与服务商', en: 'Processing & Provider' },
+  'dp.localGroup': { zh: '本地处理', en: 'Local' },
+  'dp.cloudGroup': { zh: '第三方服务', en: 'Third-party Services' },
+  'dp.baseUrlAuto': { zh: 'API 地址（选商自动填）', en: 'API URL (auto-filled per provider)' },
+  'mm.enable': { zh: '启用持久记忆', en: 'Persistent Memory' },
+  'mm.enableDesc': { zh: '对话中的关键事实自动沉淀到本机记忆层，跨会话可 recall', en: 'Key facts from chats settle into local memory, recallable across sessions' },
+  'mm.sync': { zh: '同步到月忆', en: 'Sync to Memories' },
+  'mm.syncDesc': { zh: '本机沉淀的记忆条目同时上行到云端月忆候选池，你确认后才进入云端正式记忆（跨设备可用）', en: 'Local memory entries also upload to the cloud candidate pool; they enter cloud Memories only after your confirmation (cross-device)' },
+  'mm.modeLabel': { zh: '记忆模式', en: 'Memory Mode' },
+  'mm.modeBuiltin': { zh: '本机内置 + 月忆（MoonRecall）增强', en: 'Local built-in + Memories (MoonRecall) enhanced' },
+  'mm.modeDesc': { zh: '本机记忆层恒在（MEMORY.md/USER.md，明文可编辑、不出本机），月忆作为云端增强跨设备可用。', en: 'Local memory is always on (MEMORY.md/USER.md, plain-text, stays on this device); cloud Memories add cross-device access.' },
+  'mm.limitLabel': { zh: '记忆注入上限（字符）', en: 'Memory injection limit (chars)' },
+  'mm.limitDesc': { zh: '每次对话注入小月的记忆上下文上限，超出按新旧保留截断。默认 5000。', en: 'Max memory context injected per chat; overflow trimmed oldest-first. Default 5000.' },
+  'mm.candidate': { zh: '云端候选池', en: 'Cloud Candidate Pool' },
+  'mm.candidateDesc': { zh: '对话沉淀的候选记忆（含重复命中的合并建议）在此确认后进入云端正式记忆；未登录或未开启同步时为空。', en: 'Candidate memories from chats (with merge suggestions on duplicates) await confirmation here; empty when signed out or sync is off.' },
+  'mm.loading': { zh: '加载中…', en: 'Loading…' },
+  'mm.loadFail': { zh: '加载失败', en: 'Load failed' },
+  'mm.empty': { zh: '候选池为空——对话中沉淀的候选记忆会出现在这里，确认后进入云端正式记忆。', en: 'No candidates — memories distilled from chats appear here and enter cloud memory after confirmation.' },
+  'mm.pending': { zh: ' 条待确认', en: ' pending' },
+  'mm.mergeSugg': { zh: '合并建议：', en: 'Merge suggestions: ' },
+  'mm.confirm': { zh: '确认', en: 'Confirm' },
+  'mm.drop': { zh: '丢弃', en: 'Drop' },
+  'mm.allDone': { zh: '已全部处理完 ✓', en: 'All done ✓' },
+  'mm.opFail': { zh: '操作失败', en: 'Operation failed' },
+  'mm.catDesc': { zh: '此分类的配置项随功能开启逐步展示。', en: 'Settings for this category appear as features roll out.' },
+  'bk.newTitle': { zh: '新建备份目录', en: 'New Backup Folder' },
+  'bk.newDesc': { zh: '把一个本地文件夹持续备份到云端书房的指定目录（归属目录）下。', en: 'Continuously back up a local folder into a chosen cloud study folder.' },
+  'bk.formats': { zh: '可识别的文件格式：.md、.txt 文本文件', en: 'Recognized formats: .md and .txt text files' },
+  'bk.uploadOnly': { zh: '备份只上传、不改动本地文件；文件内容未变化时自动跳过。', en: 'Backup only uploads and never modifies local files; unchanged content is skipped automatically.' },
+  'bk.localDir': { zh: '本地目录', en: 'Local Folder' },
+  'bk.notChosen': { zh: '未选择', en: 'Not chosen' },
+  'bk.pick': { zh: '选择…', en: 'Browse…' },
+  'bk.targetDir': { zh: '云端归属目录（同步目标）', en: 'Cloud Target Folder (sync destination)' },
+  'bk.skipNote': { zh: '（其它格式自动跳过）', en: ' (other formats are skipped automatically)' },
+  'bk.rootDir': { zh: '书房根目录', en: 'Study root' },
 }
 function curLang() {
   const l = APP_SETTINGS?.appearance?.lang
@@ -523,7 +641,7 @@ async function renderList(nav) {
 
   // 设置中心：第二列=分类列表（#253.48）
   if (nav === 'settings') {
-    head.textContent = '设置'
+    head.textContent = t('list.settings')
     body.innerHTML = ''
     for (const cat of SETTINGS_CATS) {
       const el = document.createElement('div')
@@ -547,13 +665,13 @@ async function renderList(nav) {
   if (nav === 'vault') {
     const v = await window.moonlybox.vaultGet()
     if (!v || !require_exists(v)) {
-      body.innerHTML = '<div class="muted" style="padding:10px">未选择书房目录<br/>请到 设置 → Vault 目录 选择</div>'
+      body.innerHTML = `<div class="muted" style="padding:10px">${t('list.vaultNotChosen')}</div>`
       return
     }
     // 全展开/全收起（#253.29）
     head.innerHTML = `${t(NAVS[nav].label)} <span id="tree-exp" style="float:right;font-weight:400;font-size:11px;color:var(--muted);cursor:pointer">${t('tree.expandAll')}</span>`
     $('tree-exp').onclick = async () => {
-      const expanding = $('tree-exp').textContent === '全部展开'
+      const expanding = $('tree-exp').textContent === t('tree.isExpanded')
       if (expanding) treeCollapsed.clear()
       else {
         // 收起全部：收集当前 DOM 里所有目录 rel（含子层——重渲染前抓全量）
@@ -566,19 +684,19 @@ async function renderList(nav) {
       await renderList('vault')
       // renderList 重建了 head——按目标态写文案
       const exp = $('tree-exp')
-      if (exp) exp.textContent = expanding ? '全部收起' : '全部展开'
+      if (exp) exp.textContent = expanding ? t('tree.collapseAll') : t('tree.isExpanded')
     }
     await renderTree(body, '', 0)
   } else if (nav === 'backup') {
     // #257 备份：第二列=注册的备份目录列表
-    head.innerHTML = `备份 <span id="bk-add" style="float:right;font-weight:400;font-size:12px;color:var(--accent);cursor:pointer">＋ 新建</span>`
+    head.innerHTML = `${t('list.backup')} <span id="bk-add" style="float:right;font-weight:400;font-size:12px;color:var(--accent);cursor:pointer">${t('ui.new')}</span>`
     $('bk-add').onclick = () => renderWork('backup', { create: true })
-    body.innerHTML = '<div class="muted" style="padding:10px">加载中…</div>'
+    body.innerHTML = `<div class="muted" style="padding:10px">${t('list.loading')}</div>`
     try {
       const r = await window.moonlybox.rpc('backup', { op: 'list' }, 10_000)
       const d = JSON.parse(r.text)
       if (!d.entries?.length) {
-        body.innerHTML = '<div class="muted" style="padding:10px">还没有备份目录<br/>点右上「＋ 新建」注册一个本地目录，<br/>把它同步到云端书房的指定目录下。</div>'
+        body.innerHTML = `<div class="muted" style="padding:10px">${t('list.bkEmpty')}</div>`
         return
       }
       body.innerHTML = ''
@@ -587,19 +705,19 @@ async function renderList(nav) {
         const el = document.createElement('div')
         el.className = 'tree-item' + (currentBkId === e.id ? ' active' : '')
         el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">📁 ${e.localPath.split(/[\\/]/).pop()}</span>
-          <span class="muted" style="font-size:10.5px;flex:none">${e.enabled ? (holdN ? `${holdN} 项已停更` : t('ui.enable')) : t('ui.stop')}</span>`
+          <span class="muted" style="font-size:10.5px;flex:none">${e.enabled ? (holdN ? `${holdN}${t('bk.holdN')}` : t('ui.enable')) : t('ui.stop')}</span>`
         el.onclick = () => { currentBkId = e.id; renderList('backup'); renderWork('backup', { id: e.id }) }
         body.appendChild(el)
       }
     } catch (e) {
-      body.innerHTML = '<div class="muted" style="padding:10px">加载失败</div>'
+      body.innerHTML = `<div class="muted" style="padding:10px">${t('list.loadFail')}</div>`
     }
     return
   } else if (nav === 'cloud') {
     // #254：云端功能=服务端下发 manifest（功能升级/新增零客户端发版）
     const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
     if (r.event !== 'done' || r.code !== 0) {
-      body.innerHTML = '<div class="muted" style="padding:10px">导航加载失败：' + (r.text || r.message) + '</div>'
+      body.innerHTML = `<div class="muted" style="padding:10px">${t('list.navLoadFail')}` + (r.text || r.message) + '</div>'
       return
     }
     try {
@@ -619,14 +737,14 @@ async function renderList(nav) {
         body.appendChild(el)
       }
     } catch {
-      body.innerHTML = '<div class="muted" style="padding:10px">导航解析失败（登录后可用）</div>'
+      body.innerHTML = `<div class="muted" style="padding:10px">${t('list.navParseFail')}</div>`
     }
   } else if (nav === 'diagram') {
     // #290：顶部「＋ 新建」→ renderWork('diagram', { __new: true }) 进空态（编辑器按钮隐藏，工作台内点「＋ 新建」走模板弹窗）
     const newBtn = document.createElement('div')
     newBtn.className = 'tree-item'
     newBtn.style.color = 'var(--accent)'
-    newBtn.textContent = '＋ 新建图示'
+    newBtn.textContent = t('dg.newBtn')
     newBtn.onclick = () => {
       body.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active')) // #302：新建=离开编辑态，清选中高亮
       renderWork('diagram', {})
@@ -643,7 +761,7 @@ async function renderList(nav) {
         // #292：图标=图示类型（存档标签优先，内容嗅探兜底）——草稿半透明+title 标状态，废除 📝/📚（风格与小月/文档统一）
         // #300：悬停显示最后修改时间（居右）+「⋯」更多菜单（行级：删除）
         const fmtTime = (() => { try { const d = new Date(it.updatedAt); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` } catch { return '' } })()
-        el.innerHTML = `<span style="opacity:${it.state === 'draft' ? '.55' : '1'}">${dgTypeIcon(it)}</span> <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(it.title).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span><span class="dg-time" style="display:none;font-size:10.5px;color:var(--muted);flex:none">${fmtTime}</span><span class="dg-more" style="display:none;cursor:pointer;padding:0 4px;color:var(--muted);flex:none" title="更多">⋯</span>`
+        el.innerHTML = `<span style="opacity:${it.state === 'draft' ? '.55' : '1'}">${dgTypeIcon(it)}</span> <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(it.title).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span><span class="dg-time" style="display:none;font-size:10.5px;color:var(--muted);flex:none">${fmtTime}</span><span class="dg-more" style="display:none;cursor:pointer;padding:0 4px;color:var(--muted);flex:none" title="${t('dg.more')}">⋯</span>`
         el.title = `${it.state === 'draft' ? t('lib.draft') : t('lib.inStudy')} · ${it.diagramType ?? sniffDiagramType(it.content) ?? t('lib.unknownType')}`
         el.onmouseenter = () => {
           el.querySelector('.dg-time').style.display = ''
@@ -678,11 +796,11 @@ async function renderList(nav) {
           menu.style.left = `${Math.min(rect.right - 118, window.innerWidth - 126)}px`
           menu.style.top = `${below ? rect.bottom + 2 : rect.top - mh - 2}px`
           menu.style.visibility = ''
-          menu.innerHTML = `<div class="dg-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err,#f87171)">删除</div>`
+          menu.innerHTML = `<div class="dg-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err,#f87171)">${t('dg.delItem')}</div>`
           menu.querySelector('.dg-del').onclick = async (e2) => {
             e2.stopPropagation()
             closeCtxMenu(menu)
-            if (!(await mbConfirm(`删除图示「${it.title}」？将移入回收站（30 天内可在云端书房恢复）。`))) return
+            if (!(await mbConfirm(t('dg.delConfirm').replace('{t}', it.title)))) return
             const rr = await window.moonlybox.rpc('diagram', { op: 'delete', id: it.id }, 30_000)
             if (rr.event === 'done' && rr.code === 0 && JSON.parse(rr.text).ok !== false) {
               void renderList('diagram')
@@ -700,16 +818,16 @@ async function renderList(nav) {
         }
         body.appendChild(el)
       }
-      if (!items.length) body.insertAdjacentHTML('beforeend', '<div class="muted" style="padding:10px">暂无图示</div>')
+      if (!items.length) body.insertAdjacentHTML('beforeend', `<div class="muted" style="padding:10px">${t('dg.none')}</div>`)
     } catch {
-      body.insertAdjacentHTML('beforeend', '<div class="muted" style="padding:10px">列表加载失败（登录后可用）</div>')
+      body.insertAdjacentHTML('beforeend', `<div class="muted" style="padding:10px">${t('dg.listFail')}</div>`)
     }
   } else if (nav === 'xiaoyue') {
     // #282 会话列表：工作空间分组 + 对话（无工作空间）分类
     body.innerHTML = `
       <div style="padding:8px 8px 4px;display:flex;gap:6px">
-        <button class="btn" id="xy-new-ws" style="flex:1;font-size:12px">＋ 工作空间</button>
-        <button class="btn ghost" id="xy-new-chat" style="flex:1;font-size:12px" title="${xyActiveWorkspace ? t('xy.inWorkspace') : t('xy.noWorkspace')}">＋ 对话</button>
+        <button class="btn" id="xy-new-ws" style="flex:1;font-size:12px">${t('xy.newWs')}</button>
+        <button class="btn ghost" id="xy-new-chat" style="flex:1;font-size:12px" title="${xyActiveWorkspace ? t('xy.inWorkspace') : t('xy.noWorkspace')}">${t('xy.newChat')}</button>
       </div>
       <div id="xy-list" style="flex:1;overflow-y:auto;padding:4px 8px 12px"></div>`
     $('xy-new-ws').onclick = () => showWorkspaceDialog()
@@ -993,12 +1111,12 @@ async function renderWork(nav, arg, label2) {
       // #283：默认模型下拉=平台API/自定义/本地部署（预留）所有已启用实例分组列出
       const mm = g.model ?? {}
       const modelOpts =
-        `<optgroup label="平台 API">${(mm.providers ?? []).filter((x) => x.enabled).map((x) => {
+        `<optgroup label="${t('mp.groupCloud')}">${(mm.providers ?? []).filter((x) => x.enabled).map((x) => {
           const pv = (APP_PROVIDERS?.platform ?? PLATFORM_PROVIDERS_FALLBACK).find((p) => p.id === x.providerId)
           return `<option value="platform:${x.id}" ${mm.default === `platform:${x.id}` ? 'selected' : ''}>${pv?.label ?? x.providerId} · ${x.model}</option>`
         }).join('')}</optgroup>` +
-        `<optgroup label="自定义">${(mm.custom ?? []).filter((x) => x.enabled).map((x) => `<option value="custom:${x.id}" ${mm.default === `custom:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>` +
-        `<optgroup label="本地部署（预留）">${(mm.local ?? []).filter((x) => x.enabled).map((x) => `<option value="local:${x.id}" ${mm.default === `local:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>`
+        `<optgroup label="${t('mp.groupCustom')}">${(mm.custom ?? []).filter((x) => x.enabled).map((x) => `<option value="custom:${x.id}" ${mm.default === `custom:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>` +
+        `<optgroup label="${t('mp.groupLocal')}">${(mm.local ?? []).filter((x) => x.enabled).map((x) => `<option value="local:${x.id}" ${mm.default === `local:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>`
       panel(t('panel.chat'), t('panel.sub.chat'), `
         <div class="set-field" style="margin-bottom:14px"><label>${t('chat.defaultModel')}</label>
           <select id="sp-chat-model" class="set-select set-select-sm" style="max-width:420px">
@@ -1007,15 +1125,15 @@ async function renderWork(nav, arg, label2) {
           </select>
           <div class="set-desc" style="margin-top:4px" id="sp-chat-model-hint"></div>
         </div>
-        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('chat.ctx')}</div><div class="sc-desc">小月记住本次会话中的对话</div></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('chat.ctx')}</div><div class="sc-desc">${t('chat.ctxDesc')}</div></div>
           <button type="button" class="toggle ${cv.contextEnabled !== false ? 'on' : ''}" id="sp-ctx"></button></div>
-        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('chat.compact')}</div><div class="sc-desc">历史过长时自动摘要，节省 token</div></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('chat.compact')}</div><div class="sc-desc">${t('chat.compactDesc')}</div></div>
           <button type="button" class="toggle ${cv.autoCompress !== false ? 'on' : ''}" id="sp-compress" ${cv.contextEnabled === false ? 'disabled' : ''}></button></div>
-        <div class="set-field"><label>压缩阈值（历史达到容量的比例时触发）：<span id="sp-ct-v">${cv.compressThreshold ?? 80}%</span></label>
+        <div class="set-field"><label>${t('chat.ctLabel')}<span id="sp-ct-v">${cv.compressThreshold ?? 80}%</span></label>
           <input type="range" id="sp-ct" min="50" max="100" step="5" value="${cv.compressThreshold ?? 80}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
-        <div class="set-field"><label>压缩目标（压缩后保留的容量）：<span id="sp-cg-v">${cv.compressTarget ?? 20}%</span></label>
+        <div class="set-field"><label>${t('chat.cgLabel')}<span id="sp-cg-v">${cv.compressTarget ?? 20}%</span></label>
           <input type="range" id="sp-cg" min="10" max="30" step="5" value="${cv.compressTarget ?? 20}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
-        <div class="set-field"><label>模型重试次数（调用失败自动重试）</label>
+        <div class="set-field"><label>${t('chat.retryLabel')}</label>
           <input type="number" id="sp-retry" min="1" max="50" value="${cv.maxRetries ?? 10}" style="width:120px" /></div>
         <div class="set-status" id="sp-chat-status"></div>
       `)
@@ -1119,23 +1237,23 @@ async function renderWork(nav, arg, label2) {
       const isDefault = (id) => mcfg.default === `platform:${id}`
       const html = (defOpen) => panel(t('panel.model.platform'), t('panel.sub.model.platform'), `
         <div id="sp-pv-list" style="display:flex;flex-direction:column;gap:8px"></div>
-        <button type="button" class="btn ghost" id="sp-pv-add" style="margin-top:10px">＋ 添加平台</button>
+        <button type="button" class="btn ghost" id="sp-pv-add" style="margin-top:10px">${t('mp.addPv')}</button>
         <div id="sp-pv-form" style="display:${defOpen ? 'block' : 'none'};margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:10px">
-          <div class="set-field"><label>平台提供商</label>
+          <div class="set-field"><label>${t('mp.pvLabel')}</label>
             <select id="sp-pv-prov" class="set-select set-select-sm">
-              <option value="">— 选择提供商 —</option>
+              <option value="">${t('mp.pickPv')}</option>
               ${provs.map((p) => `<option value="${p.id}">${p.label}</option>`).join('')}
             </select>
             <div class="set-desc" style="margin-top:4px" id="sp-pv-docs"></div>
           </div>
           <div class="set-field"><label>${t('mp.model')}</label>
             <div class="set-row" style="margin:0"><input id="sp-pv-model" placeholder="glm-4.5" style="flex:1" />
-              <select id="sp-pv-models" class="set-select set-select-sm"><option value="">— 推荐模型 —</option></select></div>
+              <select id="sp-pv-models" class="set-select set-select-sm"><option value="">${t('mp.pickModel')}</option></select></div>
           </div>
           <div class="set-field"><label>API Key</label><input id="sp-pv-key" type="password" placeholder="sk-…" /></div>
           <div class="set-row">
-            <button type="button" class="btn" id="sp-pv-save">保存</button>
-            <button type="button" class="btn ghost" id="sp-pv-cancel">取消</button>
+            <button type="button" class="btn" id="sp-pv-save">${t('mp.save')}</button>
+            <button type="button" class="btn ghost" id="sp-pv-cancel">${t('mp.cancel')}</button>
             <span class="set-status" id="sp-pv-status"></span>
           </div>
         </div>`)
@@ -1143,7 +1261,7 @@ async function renderWork(nav, arg, label2) {
       const renderList = () => {
         const box = $('sp-pv-list')
         box.innerHTML = ''
-        if (!insts.length) { box.innerHTML = '<div class="set-desc">尚未添加平台——点「＋ 添加平台」接入第一个模型服务</div>'; return }
+        if (!insts.length) { box.innerHTML = `<div class="set-desc">${t('mp.emptyPv')}</div>`; return }
         for (const inst of insts) {
           const pv = provs.find((x) => x.id === inst.providerId)
           const card = document.createElement('div')
@@ -1151,8 +1269,8 @@ async function renderWork(nav, arg, label2) {
           card.innerHTML = `<div class="sc-main"><div class="sc-title">${pv?.label ?? inst.providerId}${isDefault(inst.id) ? ` <span style=\"color:var(--accent);font-size:11px\">${t('mp.default')}</span>` : ''}</div>
             <div class="sc-desc">${inst.model || t('dg.noModel')}${inst.hasKey || inst.enabled ? '' : t('mp.noKey')}</div></div>
             <div style="display:flex;align-items:center;gap:8px">
-              ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">设为默认</button>`}
-              <button type="button" class="btn ghost" data-act="del" style="padding:2px 8px;font-size:11px">删除</button>
+              ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">${t('mp.setDefault')}</button>`}
+              <button type="button" class="btn ghost" data-act="del" style="padding:2px 8px;font-size:11px">${t('mp.del')}</button>
               <button type="button" class="toggle ${inst.enabled ? 'on' : ''}" data-act="toggle"></button>
             </div>`
           const defBtnP = card.querySelector('[data-act=default]')
@@ -1180,7 +1298,7 @@ async function renderWork(nav, arg, label2) {
       $('sp-pv-cancel').onclick = () => { $('sp-pv-form').style.display = 'none' }
       $('sp-pv-prov').onchange = () => {
         const pv = provs.find((x) => x.id === $('sp-pv-prov').value)
-        $('sp-pv-docs').innerHTML = pv ? `API Key 获取：<a href="#" data-ext="${pv.docs}">${pv.docs}</a>` : ''
+        $('sp-pv-docs').innerHTML = pv ? `${t('mp.keyDocs')}<a href="#" data-ext="${pv.docs}">${pv.docs}</a>` : ''
         $('sp-pv-docs').querySelectorAll('[data-ext]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); window.moonlybox.openExternal(a.dataset.ext) } })
         $('sp-pv-models').innerHTML = '<option value="">' + t('mp.recommended') + '</option>' + (pv ? pv.models.map((m) => `<option value="${m}">${m}</option>`).join('') : '')
       }
@@ -1280,7 +1398,7 @@ async function renderWork(nav, arg, label2) {
       const isDefault = (id) => mcfg.default === `custom:${id}`
       panel(t('panel.model.custom'), t('panel.sub.model.custom'), `
         <div id="sp-cu-list" style="display:flex;flex-direction:column;gap:8px"></div>
-        <button type="button" class="btn ghost" id="sp-cu-add" style="margin-top:10px">＋ 添加自定义模型</button>
+        <button type="button" class="btn ghost" id="sp-cu-add" style="margin-top:10px">${t('mp.addCustom')}</button>
         <div id="sp-cu-form" style="display:${insts.length === 0 ? 'block' : 'none'};margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:10px">
           <div class="set-field"><label>${t('mp.name')}</label><input id="sp-cu-name" placeholder="${t('mp.ollamaEg')}" /></div>
           <div class="set-field"><label>${t('mp.baseUrl')}</label><input id="sp-cu-url" placeholder="http://127.0.0.1:11434/v1（Ollama）或 https://your-endpoint.example.com/v1" /></div>
@@ -1295,14 +1413,14 @@ async function renderWork(nav, arg, label2) {
       const renderList = () => {
         const box = $('sp-cu-list')
         box.innerHTML = ''
-        if (!insts.length) { box.innerHTML = '<div class="set-desc">尚未添加自定义模型</div>'; return }
+        if (!insts.length) { box.innerHTML = `<div class="set-desc">${t('mp.customEmpty')}</div>`; return }
         for (const inst of insts) {
           const card = document.createElement('div')
           card.className = 'set-card'
           card.innerHTML = `<div class="sc-main"><div class="sc-title">${inst.name || t('ui.untitled')}${isDefault(inst.id) ? ` <span style=\"color:var(--accent);font-size:11px\">${t('mp.default')}</span>` : ''}</div>
             <div class="sc-desc">${inst.model} · ${inst.baseUrl}</div></div>
             <div style="display:flex;align-items:center;gap:8px">
-              ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">设为默认</button>`}
+              ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">${t('mp.setDefault')}</button>`}
               <button type="button" class="toggle ${inst.enabled ? 'on' : ''}" data-act="toggle"></button>
               <span data-act="del" style="color:var(--muted);cursor:pointer;padding:0 4px">×</span>
             </div>`
@@ -1335,9 +1453,9 @@ async function renderWork(nav, arg, label2) {
         const baseUrl = $('sp-cu-url').value.trim().replace(/\/+$/, '')
         const model = $('sp-cu-model').value.trim()
         const apiKey = $('sp-cu-key').value.trim()
-        if (!baseUrl || !model) { st.className = 'set-status err'; st.textContent = 'API 地址与模型名必填'; return }
-        if (!/^https?:\/\//.test(baseUrl)) { st.className = 'set-status err'; st.textContent = 'API 地址需以 http(s):// 开头'; return }
-        const inst = { id: `custom_${Date.now().toString(36)}`, name: name || '自定义模型', baseUrl, model, enabled: true, ...(apiKey ? { apiKey } : {}) }
+        if (!baseUrl || !model) { st.className = 'set-status err'; st.textContent = t('mp.reqBoth'); return }
+        if (!/^https?:\/\//.test(baseUrl)) { st.className = 'set-status err'; st.textContent = t('mp.urlScheme'); return }
+        const inst = { id: `custom_${Date.now().toString(36)}`, name: name || t('mp.customName'), baseUrl, model, enabled: true, ...(apiKey ? { apiKey } : {}) }
         const r = await saveAppSettings({ model: { custom: [...insts, inst], ...(insts.length === 0 ? { default: `custom:${inst.id}` } : {}) } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         if (r.ok) renderWork('settings')
@@ -1354,22 +1472,22 @@ async function renderWork(nav, arg, label2) {
           return `<div class="set-card"><div class="sc-main"><div class="sc-title">${p.label}</div><div class="sc-desc">${cur.enabled ? '已开启' : '对接后可在此平台收发消息'}</div></div>
             <button type="button" class="toggle ${cur.enabled ? 'on' : ''}" data-msg="${p.id}"></button></div>
           <div data-msgcfg="${p.id}" style="display:${cur.enabled ? 'block' : 'none'};margin:0 0 10px">
-            ${p.needs.map((n) => `<div class="set-field" style="max-width:340px"><label>${n.label}${n.secret ? '（只存钥匙串）' : ''}</label><input type="${n.secret ? 'password' : 'text'}" data-msgkey="${p.id}.${n.key}" value="${(cur.config ?? {})[n.key] && !n.secret ? (cur.config ?? {})[n.key] : ''}" placeholder="${n.secret ? '已配置时不回显' : ''}" /></div>`).join('')}
+            ${p.needs.map((n) => `<div class="set-field" style="max-width:340px"><label>${n.label}${n.secret ? t('mp.wxHint') : ''}</label><input type="${n.secret ? 'password' : 'text'}" data-msgkey="${p.id}.${n.key}" value="${(cur.config ?? {})[n.key] && !n.secret ? (cur.config ?? {})[n.key] : ''}" placeholder="${n.secret ? '已配置时不回显' : ''}" /></div>`).join('')}
             ${p.id === 'weixin' ? `<div class="set-row" style="margin-top:8px"><button type="button" class="btn" id="sp-wx-login">扫码登录（获取 Token）</button><span class="set-desc" id="sp-wx-login-state"></span></div><div id="sp-wx-qr" style="margin-top:8px;max-width:200px"></div>` : ''}
           </div>`
         }).join('')}
         <div class="set-status" id="sp-msg-status"></div>
-        <div class="set-row" style="margin-top:10px"><button type="button" class="btn" id="sp-msg-start">启动网关</button><span class="set-desc" id="sp-msg-run"></span></div>
+        <div class="set-row" style="margin-top:10px"><button type="button" class="btn" id="sp-msg-start">${t('msg.gateway')}</button><span class="set-desc" id="sp-msg-run"></span></div>
       `)
       $('sp-msg-start').onclick = async () => {
         const run = $('sp-msg-run')
-        run.textContent = '启动中…'
+        run.textContent = t('msg.starting')
         const r = await window.moonlybox.rpc('messaging', { op: 'start' }, 30_000)
         if (r.event === 'done' && r.code === 0) {
           const statuses = JSON.parse(r.text).statuses ?? []
-          const parts = statuses.map((s) => `${s.platform}：${s.running ? '✓ 运行中' : `✗ ${s.error ?? '未启动'}`}`)
-          run.textContent = parts.join('  ') || '无已启用平台'
-        } else run.textContent = `启动失败：${r.message ?? r.text}`
+          const parts = statuses.map((s) => `${s.platform}：${s.running ? '✓ ' + t('ui.enable') : `✗ ${s.error ?? t('msg.notStarted')}`}`)
+          run.textContent = parts.join('  ') || t('msg.noneEnabled')
+        } else run.textContent = `${t('msg.startFail')}${r.message ?? r.text}`
       }
       const wxLoginBtn = $('sp-wx-login')
       if (wxLoginBtn) {
@@ -1385,21 +1503,21 @@ async function renderWork(nav, arg, label2) {
           const r = await window.moonlybox.rpc('messaging', { op: 'wxLoginPoll', qrcode: wxQrcode, baseUrl: wxBase }, 40_000)
           if (r.event !== 'done' || r.code !== 0) {
             stopWx()
-            st.textContent = `✗ ${r.message ?? r.text ?? '查询失败'}`
+            st.textContent = `✗ ${r.message ?? r.text ?? t('msg.queryFail')}`
             return
           }
           const j = JSON.parse(r.text)
-          if (j.status === 'wait') st.textContent = '等待扫码…'
-          else if (j.status === 'scaned') st.textContent = '已扫码，请在微信里确认…'
+          if (j.status === 'wait') st.textContent = t('msg.qrWait')
+          else if (j.status === 'scaned') st.textContent = t('msg.qrScanned')
           else if (j.status === 'scaned_but_redirect' && j.redirectHost) {
             wxBase = `https://${j.redirectHost}`
-            st.textContent = '已扫码，请在微信里确认…'
+            st.textContent = t('msg.qrScanned')
           } else if (j.status === 'expired') {
             stopWx()
-            st.textContent = '✗ 二维码已过期，请重新点击扫码登录'
+            st.textContent = t('msg.qrExpired')
           } else if (j.status === 'confirmed') {
             stopWx()
-            st.textContent = `✓ 登录成功（账号 ${j.accountId}）——Token 已存钥匙串，可直接启动网关`
+            st.textContent = `✓ ${t('msg.loginOk')} (${j.accountId})${t('msg.tokenKept')}`
             const qr = $('sp-wx-qr')
             if (qr) qr.innerHTML = ''
             renderWork('settings')
@@ -1409,17 +1527,17 @@ async function renderWork(nav, arg, label2) {
           stopWx()
           const st = $('sp-wx-login-state')
           const qrBox = $('sp-wx-qr')
-          st.textContent = '获取二维码…'
+          st.textContent = t('msg.qrGet')
           const r = await window.moonlybox.rpc('messaging', { op: 'wxLoginStart' }, 40_000)
           if (r.event !== 'done' || r.code !== 0) {
-            st.textContent = `✗ ${r.message ?? r.text ?? '获取二维码失败'}`
+            st.textContent = `✗ ${r.message ?? r.text ?? t('msg.qrGetFail')}`
             return
           }
           const j = JSON.parse(r.text)
           wxQrcode = j.qrcode
           wxBase = ''
           if (qrBox) qrBox.innerHTML = j.svg
-          st.textContent = '请用微信扫描上方二维码（有效期约 5 分钟）…'
+          st.textContent = t('msg.qrHint')
           stopWx()
           wxTimer = setInterval(pollWx, 3000)
           void pollWx()
@@ -1428,7 +1546,7 @@ async function renderWork(nav, arg, label2) {
       window.moonlybox.rpc('messaging', { op: 'status' }, 10_000).then((r) => {
         if (r.event === 'done' && r.code === 0) {
           const running = JSON.parse(r.text).running ?? []
-          if (running.length) $('sp-msg-run').textContent = `运行中：${running.join('、')}`
+          if (running.length) $('sp-msg-run').textContent = `${t('msg.runningN')}${running.join('、')}`
         }
       })
       w.querySelectorAll('[data-msg]').forEach((tg) => {
@@ -1547,20 +1665,20 @@ async function renderWork(nav, arg, label2) {
       const ws = g.websearch ?? {}
       const ue = g.urlextract ?? {}
       panel(t('panel.websearch'), t('panel.sub.websearch'), `
-        <div class="sc-title" style="font-size:13.5px;font-weight:600;margin:0 0 10px">搜索服务商</div>
-        <div class="set-field" style="max-width:340px"><label>服务商</label>
+        <div class="sc-title" style="font-size:13.5px;font-weight:600;margin:0 0 10px">${t('ws.title')}</div>
+        <div class="set-field" style="max-width:340px"><label>${t('ws.pvLabel')}</label>
           <select id="sp-ws-prov" class="set-select">
-            <option value="">— 未启用 —</option>
+            <option value="">${t('ws.none')}</option>
             ${provs.filter((p) => p.id !== 'custom').map((p) => `<option value="${p.id}" ${ws.provider === p.id ? 'selected' : ''}>${p.label}</option>`).join('')}
           </select>
         </div>
         <div id="sp-ws-cfg"></div>
         <div class="set-row"><button type="button" class="btn" id="sp-ws-save">保存</button><span class="set-status" id="sp-ws-status"></span></div>
-        <div class="sc-title" style="font-size:13.5px;font-weight:600;margin:26px 0 10px">URL 提取（收藏网页正文）</div>
-        <div class="set-field" style="max-width:340px"><label>提取方式</label>
+        <div class="sc-title" style="font-size:13.5px;font-weight:600;margin:26px 0 10px">${t('ue.title')}</div>
+        <div class="set-field" style="max-width:340px"><label>${t('ue.modeLabel')}</label>
           <select id="sp-ue-mode" class="set-select">
-            <option value="local" ${ue.mode !== 'provider' ? 'selected' : ''}>本地提取（内置 Readability，零成本）</option>
-            <option value="provider" ${ue.mode === 'provider' ? 'selected' : ''}>服务商 API（质量更高）</option>
+            <option value="local" ${ue.mode !== 'provider' ? 'selected' : ''}>${t('ue.local')}</option>
+            <option value="provider" ${ue.mode === 'provider' ? 'selected' : ''}>${t('ue.provider')}</option>
           </select>
         </div>
         <div id="sp-ue-cfg"></div>
@@ -1570,7 +1688,7 @@ async function renderWork(nav, arg, label2) {
         const pv = provs.find((x) => x.id === $('sp-ws-prov').value)
         const box = $('sp-ws-cfg')
         if (!pv) { box.innerHTML = ''; return }
-        if (pv.baseUrl) box.innerHTML = `<div class="set-field" style="max-width:340px"><label>API 地址（自动填入）</label><input id="sp-ws-baseUrl" value="${pv.baseUrl}" readonly /></div>`
+        if (pv.baseUrl) box.innerHTML = `<div class="set-field" style="max-width:340px"><label>${t('mp.baseUrlAuto')}</label><input id="sp-ws-baseUrl" value="${pv.baseUrl}" readonly /></div>`
         else box.innerHTML = `<div class="set-field" style="max-width:340px"><label>API 地址</label><input id="sp-ws-baseUrl" value="${ws.config?.baseUrl ?? ''}" placeholder="https://…" /></div>`
         box.innerHTML += `<div class="set-field" style="max-width:340px"><label>API Key（只存钥匙串）</label><input type="password" id="sp-ws-apiKey" placeholder="${ws.config?.apiKey ? '已配置，不回显' : ''}" /></div>`
       }
@@ -1598,13 +1716,13 @@ async function renderWork(nav, arg, label2) {
       const renderUeCfg = () => {
         const mode = $('sp-ue-mode').value
         const box = $('sp-ue-cfg')
-        if (mode !== 'provider') { box.innerHTML = '<div class="set-desc" style="margin:0">本地提取：内置 Readability 算法在本机解析正文，零流量零成本。</div>'; return }
+        if (mode !== 'provider') { box.innerHTML = `<div class="set-desc" style="margin:0">${t('ue.localDesc')}</div>`; return }
         const cur = UE_PROVIDERS.find((x) => x.id === (ue.provider ?? 'jina')) ?? UE_PROVIDERS[0]
         box.innerHTML = `
-          <div class="set-field" style="max-width:340px"><label>服务商</label>
+          <div class="set-field" style="max-width:340px"><label>${t('ws.pvLabel')}</label>
             <select id="sp-ue-prov" class="set-select">${UE_PROVIDERS.map((x) => `<option value="${x.id}" ${x.id === cur.id ? 'selected' : ''}>${x.label}</option>`).join('')}</select>
           </div>
-          <div class="set-field" style="max-width:340px"><label>API 地址（选商自动填）</label><input id="sp-ue-url" value="${ue.config?.baseUrl ?? cur.baseUrl}" placeholder="https://…" /></div>
+          <div class="set-field" style="max-width:340px"><label>${t('ue.baseUrlAuto')}</label><input id="sp-ue-url" value="${ue.config?.baseUrl ?? cur.baseUrl}" placeholder="https://…" /></div>
           <div class="set-field" style="max-width:340px"><label>API Key（只存钥匙串）</label><input type="password" id="sp-ue-key" placeholder="${ue.config?.apiKey ? '已配置，不回显' : ''}" /></div>`
         $('sp-ue-prov').onchange = () => {
           const pv = UE_PROVIDERS.find((x) => x.id === $('sp-ue-prov').value)
@@ -1644,10 +1762,10 @@ async function renderWork(nav, arg, label2) {
       const cur = DP_PROVIDERS.find((x) => x.id === (dp.provider ?? 'builtin')) ?? DP_PROVIDERS[0]
       const mode = dp.mode ?? (cur.local ? 'local' : 'provider')
       panel(t('panel.docproc'), t('panel.sub.docproc'), `
-        <div class="set-field" style="max-width:400px"><label>处理方式与服务商</label>
+        <div class="set-field" style="max-width:400px"><label>${t('dp.pvLabel')}</label>
           <select id="sp-dp-prov" class="set-select">
-            <optgroup label="本地处理">${DP_PROVIDERS.filter((x) => x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${x.label}</option>`).join('')}</optgroup>
-            <optgroup label="第三方服务">${DP_PROVIDERS.filter((x) => !x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${x.label}</option>`).join('')}</optgroup>
+            <optgroup label="${t('dp.localGroup')}">${DP_PROVIDERS.filter((x) => x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${x.label}</option>`).join('')}</optgroup>
+            <optgroup label="${t('dp.cloudGroup')}">${DP_PROVIDERS.filter((x) => !x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${x.label}</option>`).join('')}</optgroup>
           </select>
         </div>
         <div id="sp-dp-cfg"></div>
@@ -1658,7 +1776,7 @@ async function renderWork(nav, arg, label2) {
         const box = $('sp-dp-cfg')
         if (!pv) { box.innerHTML = ''; return }
         let html = ''
-        if (pv.baseUrl) html += `<div class="set-field" style="max-width:400px"><label>API 地址（选商自动填）</label><input id="sp-dp-url" value="${pv.baseUrl}" ${pv.local ? 'readonly' : ''} /></div>`
+        if (pv.baseUrl) html += `<div class="set-field" style="max-width:400px"><label>${t('dp.baseUrlAuto')}</label><input id="sp-dp-url" value="${pv.baseUrl}" ${pv.local ? 'readonly' : ''} /></div>`
         else html += `<div class="set-field" style="max-width:400px"><label>API 地址</label><input id="sp-dp-url" value="${dp.config?.baseUrl && dp.provider === pv.id ? dp.config.baseUrl : ''}" placeholder="本地引擎无需地址" ${pv.local && !pv.baseUrl ? 'readonly' : ''} /></div>`
         if (pv.needsKey) html += `<div class="set-field" style="max-width:400px"><label>API Key（只存钥匙串）</label><input type="password" id="sp-dp-key" placeholder="${dp.config?.keyStored ? '已配置，不回显' : ''}" /></div>`
         box.innerHTML = html
@@ -1682,24 +1800,24 @@ async function renderWork(nav, arg, label2) {
       const g = await loadAppSettings()
       const mm = g.memory ?? {}
       panel(t('panel.memory'), t('panel.sub.memory'), `
-        <div class="set-card"><div class="sc-main"><div class="sc-title">启用持久记忆</div><div class="sc-desc">对话中的关键事实自动沉淀到本机记忆层，跨会话可 recall</div></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('mm.enable')}</div><div class="sc-desc">${t('mm.enableDesc')}</div></div>
           <button type="button" class="toggle ${mm.enabled !== false ? 'on' : ''}" id="sp-mm-on"></button></div>
-        <div class="set-card"><div class="sc-main"><div class="sc-title">同步到月忆</div><div class="sc-desc">本机沉淀的记忆条目同时上行到云端月忆候选池，你确认后才进入云端正式记忆（跨设备可用）</div></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('mm.sync')}</div><div class="sc-desc">${t('mm.syncDesc')}</div></div>
           <button type="button" class="toggle ${mm.syncToMoon !== false ? 'on' : ''}" id="sp-mm-sync"></button></div>
-        <div class="set-field"><label>记忆模式</label>
+        <div class="set-field"><label>${t('mm.modeLabel')}</label>
           <select id="sp-mm-mode" class="set-select set-select-sm">
-            <option value="builtin_moonrecall" selected>本机内置 + 月忆（MoonRecall）增强</option>
+            <option value="builtin_moonrecall" selected>${t('mm.modeBuiltin')}</option>
           </select>
-          <div class="set-desc" style="margin-top:4px">本机记忆层恒在（MEMORY.md/USER.md，明文可编辑、不出本机），月忆作为云端增强跨设备可用。</div>
+          <div class="set-desc" style="margin-top:4px">${t('mm.modeDesc')}</div>
         </div>
-        <div class="set-field"><label>记忆注入上限（字符）</label>
+        <div class="set-field"><label>${t('mm.limitLabel')}</label>
           <input id="sp-mm-limit" type="number" min="500" step="100" value="${mm.injectLimit ?? 5000}" style="max-width:180px" />
-          <div class="set-desc" style="margin-top:4px">每次对话注入小月的记忆上下文上限，超出按新旧保留截断。默认 5000。</div>
+          <div class="set-desc" style="margin-top:4px">${t('mm.limitDesc')}</div>
         </div>
         <div class="set-row"><button type="button" class="btn" id="sp-mm-save">保存</button><span class="set-status" id="sp-mm-status"></span></div>
         <div style="border-top:1px solid var(--border);margin:14px 0 10px"></div>
-        <div class="sc-title" style="margin-bottom:2px">云端候选池</div>
-        <div class="set-desc" style="margin-bottom:8px">对话沉淀的候选记忆（含重复命中的合并建议）在此确认后进入云端正式记忆；未登录或未开启同步时为空。</div>
+        <div class="sc-title" style="margin-bottom:2px">${t('mm.candidate')}</div>
+        <div class="set-desc" style="margin-bottom:8px">${t('mm.candidateDesc')}</div>
         <div class="set-status" id="sp-mm-cand-state"></div>
         <div id="sp-mm-cand-body" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
       `)
@@ -1718,28 +1836,28 @@ async function renderWork(nav, arg, label2) {
       const TYPE_LABELS = { fact: '事实', opinion: '观点', preference: '偏好', goal: '目标', project: '项目', person: '人物', action: '行动' }
       const loadCandidates = async () => {
         if (!mmBox) return
-        mmState.textContent = '加载中…'
+        mmState.textContent = t('mm.loading')
         const r = await window.moonlybox.rpc('candidates', { op: 'list' }, 20_000)
         if (!(r.event === 'done' && r.code === 0)) {
-          mmState.textContent = `✗ ${r.message ?? r.text ?? '加载失败'}`
+          mmState.textContent = `✗ ${r.message ?? r.text ?? t('mm.loadFail')}`
           mmBox.innerHTML = ''
           return
         }
         const items = JSON.parse(r.text).items ?? []
         if (!items.length) {
-          mmState.textContent = '候选池为空——对话中沉淀的候选记忆会出现在这里，确认后进入云端正式记忆。'
+          mmState.textContent = t('mm.empty')
           mmBox.innerHTML = ''
           return
         }
-        mmState.textContent = `${items.length} 条待确认`
+        mmState.textContent = `${items.length}${t('mm.pending')}`
         mmBox.innerHTML = items.map((it) => {
           const sugg = (() => { try { return (JSON.parse(it.attributes ?? '{}')?.suggested ?? []) } catch { return [] } })()
-          const suggHtml = sugg.length ? `<div class="set-desc" style="margin:3px 0 0 26px">合并建议：${sugg.map((s) => `「${String(s).slice(0, 40)}」`).join('、')}</div>` : ''
+          const suggHtml = sugg.length ? `<div class="set-desc" style="margin:3px 0 0 26px">${t('mm.mergeSugg')}${sugg.map((s) => `「${String(s).slice(0, 40)}」`).join('、')}</div>` : ''
           return `<div class="set-card" data-mmid="${it.id}" style="flex-direction:column;align-items:stretch"><div style="display:flex;align-items:center;gap:8px">
             <span class="set-desc" style="flex:0 0 auto">${TYPE_LABELS[it.type] ?? it.type ?? '—'}</span>
             <span style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(it.subject ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span>
-            <button type="button" class="btn" style="font-size:11.5px;padding:3px 10px" data-mmact="confirm">确认</button>
-            <button type="button" class="btn ghost" style="font-size:11.5px;padding:3px 10px" data-mmact="drop">丢弃</button>
+            <button type="button" class="btn" style="font-size:11.5px;padding:3px 10px" data-mmact="confirm">${t('mm.confirm')}</button>
+            <button type="button" class="btn ghost" style="font-size:11.5px;padding:3px 10px" data-mmact="drop">${t('mm.drop')}</button>
           </div>${suggHtml}</div>`
         }).join('')
         mmBox.querySelectorAll('[data-mmact]').forEach((btn) => {
@@ -1753,11 +1871,11 @@ async function renderWork(nav, arg, label2) {
             if (rr.event === 'done' && rr.code === 0 && JSON.parse(rr.text).ok) {
               card.remove()
               const left = mmBox.querySelectorAll('[data-mmid]').length
-              mmState.textContent = left ? `${left} 条待确认` : '已全部处理完 ✓'
+              mmState.textContent = left ? `${left}${t('mm.pending')}` : t('mm.allDone')
               if (!left) mmBox.innerHTML = ''
             } else {
               btn.disabled = false
-              mmState.textContent = `✗ ${rr.message ?? '操作失败'}`
+              mmState.textContent = `✗ ${rr.message ?? t('mm.opFail')}`
             }
           }
         })
@@ -1765,7 +1883,7 @@ async function renderWork(nav, arg, label2) {
       void loadCandidates()
         } else {
       const subLabel = currentSetSub ? ` · ${t(SET_SUB_LABELS[currentSetSub] ?? currentSetSub)}` : ''
-      panel(`${t(cat.label)}${subLabel}`, '此分类的配置项随功能开启逐步展示。', '')
+      panel(`${t(cat.label)}${subLabel}`, t('mm.catDesc'), '')
     }
     return
   }
@@ -1773,20 +1891,20 @@ async function renderWork(nav, arg, label2) {
   if (nav === 'backup') {
     if (arg?.create) {
       // 新建界面：本地目录选择 + 归属目录下拉 + 格式说明
-      let dirs = [{ id: null, label: '书房根目录' }]
+      let dirs = [{ id: null, label: t('bk.rootDir') }]
       w.innerHTML = `
         <div class="set-panel">
-          <h3>新建备份目录</h3>
-          <p class="set-desc">把一个本地文件夹持续备份到云端书房的指定目录（归属目录）下。<br/>
-          <b>可识别的文件格式：.md、.txt 文本文件</b>（其它格式自动跳过）；备份只上传、不改动本地文件；
+          <h3>${t('bk.newTitle')}</h3>
+          <p class="set-desc">${t('bk.newDesc')}<br/>
+          <b>${t('bk.formats')}</b>${t('bk.skipNote')}；${t('bk.uploadOnly')}；
           文件内容未变化时自动跳过。</p>
           <div class="set-field">
-            <label>本地目录</label>
-            <div class="set-row" style="margin:0"><input id="bk-path" readonly placeholder="未选择" style="flex:1" />
-              <button type="button" class="btn ghost" id="bk-pick">选择…</button></div>
+            <label>${t('bk.localDir')}</label>
+            <div class="set-row" style="margin:0"><input id="bk-path" readonly placeholder="${t('bk.notChosen')}" style="flex:1" />
+              <button type="button" class="btn ghost" id="bk-pick">${t('bk.pick')}</button></div>
           </div>
           <div class="set-field">
-            <label>云端归属目录（同步目标）</label>
+            <label>${t('bk.targetDir')}</label>
             <select id="bk-dir" class="set-select" style="max-width:340px"><option>加载中…</option></select>
           </div>
           <div class="set-field">
@@ -1824,7 +1942,7 @@ async function renderWork(nav, arg, label2) {
         const localPath = $('bk-path').value
         if (!localPath) { st.className = 'set-status err'; st.textContent = '先选择本地目录'; return }
         const dirId = sel.value || null
-        const dirName = sel.options[sel.selectedIndex]?.text ?? '书房根目录'
+        const dirName = sel.options[sel.selectedIndex]?.text ?? t('bk.rootDir')
         // #260 预检：云端同名清单 → 有则内嵌确认（重命名/覆盖认领二选一）
         st.textContent = '检查云端同名文件…'
         let hits = []
@@ -2608,7 +2726,7 @@ async function renderXiaoyueList() {
     el.style.paddingLeft = '26px'
     el.dataset.chat = c.id
     // #303：删除收敛进 ⋯ 更多菜单（挂 body+fixed，#301 范式）
-    el.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💬 ${c.title}</span><span data-more="1" style="color:var(--muted);cursor:pointer;padding:0 4px" title="更多">⋯</span>`
+    el.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💬 ${c.title}</span><span data-more="1" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('dg.more')}">⋯</span>`
     el.onclick = (e) => { if (!e.target.dataset.more) openChat(c.id, wsId) }
     el.querySelector('[data-more]').onclick = (e) => {
       e.stopPropagation()
@@ -2621,7 +2739,7 @@ async function renderXiaoyueList() {
       const rect = el.getBoundingClientRect()
       menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:96px;box-shadow:0 8px 24px rgba(0,0,0,.35);visibility:hidden'
       document.body.appendChild(menu)
-      menu.innerHTML = `<div class="xy-mi-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err)">删除</div>`
+      menu.innerHTML = `<div class="xy-mi-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err)">${t('xy.delMenu')}</div>`
       const mh = menu.offsetHeight
       const below = rect.bottom + 2 + mh <= window.innerHeight - 8
       menu.style.left = `${Math.min(rect.right - 104, window.innerWidth - 112)}px`
@@ -2630,7 +2748,7 @@ async function renderXiaoyueList() {
       menu.querySelector('.xy-mi-del').onclick = async (e2) => {
         e2.stopPropagation()
         closeCtxMenu(menu)
-        if (!(await mbConfirm(`删除对话「${c.title}」？`))) return
+        if (!(await mbConfirm(t('xy.delChatConfirm').replace('{t}', c.title)))) return
         await window.moonlybox.rpc('workspace', { op: 'deleteChat', id: c.id }, 10_000)
         if (xyActiveChat === c.id) { xyActiveChat = null; await renderWork('xiaoyue') }
         await renderXiaoyueList()
@@ -2648,7 +2766,7 @@ async function renderXiaoyueList() {
   freeGroup.className = 'xy-ws-group'
   // #303：组头副标签改内联样式（原 .set-desc 行高致「无工作空间」与主文字不齐平）
   // #310：＋ 居右——与工作空间组头（名称 flex:1 → 图标居右）同构
-  freeGroup.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💬 对话<span style="margin-left:6px;font-weight:400;font-size:11px;color:var(--muted)">无工作空间</span></span><span class="xy-free-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="新建无工作空间对话">＋</span></div>`
+  freeGroup.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t('xy.freeGroup')}<span style="margin-left:6px;font-weight:400;font-size:11px;color:var(--muted)">${t('xy.noWs')}</span></span><span class="xy-free-add" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('xy.freeAddTip')}">＋</span></div>`
   box.appendChild(freeGroup)
   freeGroup.querySelector('.xy-free-add').onclick = async () => {
     if (xyCreating) return // #305 防重入
@@ -2670,7 +2788,7 @@ async function renderXiaoyueList() {
     const group = document.createElement('div')
     group.className = 'xy-ws-group'
     // #303：组头收敛——保留「💬 在此工作空间新建对话」（单图标），「增加工作目录/删除」收进 ⋯ 更多菜单（参照图示 #300/#301：挂 body+fixed）
-    group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.map((d, i) => (i === (ws.primaryIndex ?? 0) ? `【主】${d}` : d)).join('\n')}">📁 ${ws.name}</span><span class="xy-ws-chat" style="color:var(--muted);cursor:pointer;padding:0 4px" title="在此工作空间新建对话">💬</span><span class="xy-ws-more" style="color:var(--muted);cursor:pointer;padding:0 4px" title="更多">⋯</span></div>`
+    group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.map((d, i) => (i === (ws.primaryIndex ?? 0) ? `【主】${d}` : d)).join('\n')}">📁 ${ws.name}</span><span class="xy-ws-chat" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('xy.wsAddTip')}">💬</span><span class="xy-ws-more" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('dg.more')}">⋯</span></div>`
     group.querySelector('.xy-ws-chat').onclick = async () => {
       if (xyCreating) return // #305 防重入
       xyCreating = true
@@ -2697,7 +2815,7 @@ async function renderXiaoyueList() {
       const rect = row.getBoundingClientRect()
       menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:132px;box-shadow:0 8px 24px rgba(0,0,0,.35);visibility:hidden'
       document.body.appendChild(menu)
-      menu.innerHTML = `<div class="xy-mi-add" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px">增加工作目录</div><div class="xy-mi-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err)">删除工作空间</div>`
+      menu.innerHTML = `<div class="xy-mi-add" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px">${t('xy.addDir')}</div><div class="xy-mi-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err)">删除工作空间</div>`
       const mh = menu.offsetHeight
       const below = rect.bottom + 2 + mh <= window.innerHeight - 8
       menu.style.left = `${Math.min(rect.right - 140, window.innerWidth - 148)}px`
@@ -2715,7 +2833,7 @@ async function renderXiaoyueList() {
       menu.querySelector('.xy-mi-del').onclick = async (e2) => {
         e2.stopPropagation()
         closeCtxMenu(menu)
-        if (!(await mbConfirm(`删除工作空间「${ws.name}」？其下对话将变为无工作空间对话（历史保留）。`))) return
+        if (!(await mbConfirm(t('xy.delWsConfirm').replace('{t}', ws.name)))) return
         await window.moonlybox.rpc('workspace', { op: 'delete', id: ws.id }, 10_000)
         await renderXiaoyueList()
       }
@@ -2735,13 +2853,13 @@ function showWorkspaceDialog() {
   const dlg = document.createElement('dialog')
   dlg.innerHTML = `
     <div class="dlg-body" style="min-width:420px">
-      <div class="sc-title" style="font-size:15px;font-weight:600;margin-bottom:12px">新建工作空间</div>
-      <div class="set-field"><label>名称（必填）</label><input id="ws-name" placeholder="例：毕业论文" /></div>
-      <div class="set-field"><label>工作目录（必选，可多个）</label>
+      <div class="sc-title" style="font-size:15px;font-weight:600;margin-bottom:12px">${t('xy.newWsTitle')}</div>
+      <div class="set-field"><label>${t('xy.wsName')}</label><input id="ws-name" placeholder="${t('xy.wsNamePh')}" /></div>
+      <div class="set-field"><label>${t('xy.wsDirs')}</label>
         <div id="ws-dirs" style="margin:4px 0 6px;display:flex;flex-direction:column;gap:4px"></div>
-        <button class="btn ghost" id="ws-add-dir">＋ 添加目录</button>
+        <button class="btn ghost" id="ws-add-dir">${t('xy.addDirBtn')}</button>
       </div>
-      <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="ws-create">创建</button><button class="btn ghost" id="ws-cancel">取消</button></div>
+      <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="ws-create">${t('xy.create')}</button><button class="btn ghost" id="ws-cancel">取消</button></div>
       <div class="set-status" id="ws-status"></div>
     </div>`
   document.body.appendChild(dlg)
@@ -2756,7 +2874,7 @@ function showWorkspaceDialog() {
     dirs.forEach((d, i) => {
       const row = document.createElement('div')
       row.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px'
-      const tag = i === primaryIdx ? '<span style="color:var(--accent);font-weight:600;flex-shrink:0">主</span>' : ''
+      const tag = i === primaryIdx ? `<span style="color:var(--accent);font-weight:600;flex-shrink:0">${t('xy.primary')}</span>` : ''
       row.innerHTML = `${tag}<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d}">${d}</span>`
       if (i !== primaryIdx) {
         const setMain = document.createElement('span')
