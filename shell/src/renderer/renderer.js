@@ -239,6 +239,62 @@ const I18N_DICT = {
   'dg.noModel': { zh: '未设模型', en: 'No model set' },
   'lib.notChosenParen': { zh: '（未选择）', en: '(not chosen)' },
   'ui.appliesInstant': { zh: '（即刻生效）', en: ' (applies instantly)' },
+  'dg.tpl.flowchart': { zh: '流程图', en: 'Flowchart' },
+  'dg.tpld.flowchart': { zh: '步骤流转 / 判断分支', en: 'Steps & branches' },
+  'dg.tpl.sequence': { zh: '时序图', en: 'Sequence' },
+  'dg.tpld.sequence': { zh: '模块间调用时序', en: 'Calls between modules' },
+  'dg.tpl.mindmap': { zh: '思维导图', en: 'Mind Map' },
+  'dg.tpld.mindmap': { zh: '主题发散 / 知识梳理', en: 'Topic branches / knowledge' },
+  'dg.tpl.pie': { zh: '饼图', en: 'Pie Chart' },
+  'dg.tpld.pie': { zh: '占比分布', en: 'Proportions' },
+  'dg.tpl.gantt': { zh: '甘特图', en: 'Gantt' },
+  'dg.tpld.gantt': { zh: '项目排期', en: 'Project schedule' },
+  'dg.tpl.er': { zh: 'ER 图', en: 'ER Diagram' },
+  'dg.tpld.er': { zh: '数据模型 / 实体关系', en: 'Data model / relations' },
+  'dg.tpl.state': { zh: '状态图', en: 'State Diagram' },
+  'dg.tpld.state': { zh: '状态机流转', en: 'State machine' },
+  'dg.tpl.journey': { zh: '用户旅程', en: 'User Journey' },
+  'dg.tpld.journey': { zh: '体验流程 / 满意度', en: 'Experience / satisfaction' },
+  'dg.tpl.timeline': { zh: '时间线', en: 'Timeline' },
+  'dg.tpld.timeline': { zh: '事件脉络', en: 'Event timeline' },
+  'dg.tpl.quadrant': { zh: '象限图', en: 'Quadrant' },
+  'dg.tpld.quadrant': { zh: '四象限分析', en: 'Quadrant analysis' },
+  'dg.tpl.gitgraph': { zh: 'Git 图', en: 'Git Graph' },
+  'dg.tpld.gitgraph': { zh: '分支策略', en: 'Branch strategy' },
+  'dg.tpl.class': { zh: '类图', en: 'Class Diagram' },
+  'dg.tpld.class': { zh: '类结构 / 继承关系', en: 'Class structure' },
+  'dg.tpl.empty': { zh: '空图示', en: 'Blank' },
+  'dg.tpld.empty': { zh: '从空白开始', en: 'Start from scratch' },  'dg.nameRequired': { zh: '请先填写图示名称（必填）', en: 'Diagram name is required' },
+  'dg.pickedTpl': { zh: '已选模板', en: 'Selected template' },
+  'dg.tplFilled': { zh: '示例已填充，可编辑后保存', en: 'Sample filled — edit and save' },
+  'dg.draft': { zh: '📝 云端草稿', en: '📝 Cloud draft' },
+  'dg.inStudy': { zh: '📚 已存书房', en: '📚 In Study' },
+  'dg.newDraft': { zh: '新草稿', en: 'New draft' },
+  'dg.quickTitle': { zh: '图示名称（必填）', en: 'Diagram name (required)' },
+  'dg.quickOk': { zh: '创建并编辑', en: 'Create & Edit' },
+  'dg.quickDesc': { zh: '选择图示类型，创建后自动填充该类型的示例代码，稍后可修改。', en: 'Pick a type — sample code is filled on create, editable later.' },
+  'dg.untitled': { zh: '未命名图示', en: 'Untitled diagram' },
+  'xy.historySep': { zh: '—— 以上为历史 ——', en: '—— history above ——' },
+  'xy.createFail': { zh: '创建失败', en: 'Create failed' },
+  'xy.wsNameReq': { zh: '名称必填', en: 'Name is required' },
+  'xy.wsDirsReq': { zh: '至少选择一个工作目录', en: 'Pick at least one directory' },
+  'xy.inWorkspace': { zh: '将在当前选中的工作空间下新建对话', en: 'New chat will be created in the selected workspace' },
+  'xy.noWorkspace': { zh: '将新建无工作空间对话（无本地文件访问）', en: 'New chat without workspace (no local file access)' },
+  'lib.draft': { zh: '草稿', en: 'Draft' },
+  'lib.inStudy': { zh: '已存书房', en: 'In Study' },
+  'lib.unknownType': { zh: '未知类型', en: 'Unknown' },
+  'lib.delFail': { zh: '删除失败：', en: 'Delete failed: ' },
+  'lib.setPrimary': { zh: '设为主目录', en: 'Set Primary' },
+  'lib.addedTip': { zh: '（已加入左侧列表）', en: '(added to the list)' },
+  'ui.cancel': { zh: '取消', en: 'Cancel' },
+  'ui.confirm': { zh: '确认', en: 'OK' },
+  'ui.install': { zh: '安装', en: 'Install' },
+  'ui.latest': { zh: '已是最新版本', en: 'Up to date' },
+  'ui.checkUpdate': { zh: '检查更新', en: 'Check for Updates' },
+  'ui.updating': { zh: '更新中', en: 'Updating' },
+  'ui.restartUpdate': { zh: '重启更新', en: 'Restart to Update' },
+  'ui.notLogin': { zh: '未登录（点击登录）', en: 'Not signed in (click to sign in)' },
+  'ui.reqFail': { zh: '请求失败', en: 'Request failed' },
 }
 function curLang() {
   const l = APP_SETTINGS?.appearance?.lang
@@ -554,7 +610,7 @@ async function renderList(nav) {
         // #300：悬停显示最后修改时间（居右）+「⋯」更多菜单（行级：删除）
         const fmtTime = (() => { try { const d = new Date(it.updatedAt); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` } catch { return '' } })()
         el.innerHTML = `<span style="opacity:${it.state === 'draft' ? '.55' : '1'}">${dgTypeIcon(it)}</span> <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(it.title).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span><span class="dg-time" style="display:none;font-size:10.5px;color:var(--muted);flex:none">${fmtTime}</span><span class="dg-more" style="display:none;cursor:pointer;padding:0 4px;color:var(--muted);flex:none" title="更多">⋯</span>`
-        el.title = `${it.state === 'draft' ? '草稿' : '已存书房'} · ${it.diagramType ?? sniffDiagramType(it.content) ?? '未知类型'}`
+        el.title = `${it.state === 'draft' ? t('lib.draft') : t('lib.inStudy')} · ${it.diagramType ?? sniffDiagramType(it.content) ?? t('lib.unknownType')}`
         el.onmouseenter = () => {
           el.querySelector('.dg-time').style.display = ''
           el.querySelector('.dg-more').style.display = ''
@@ -599,7 +655,7 @@ async function renderList(nav) {
               if (typeof dgCurrentId === 'string' && dgCurrentId === it.id) renderWork('diagram', {})
             } else {
               const st = $('dg-state')
-              if (st) st.textContent = '删除失败：' + (rr.text || rr.message)
+              if (st) st.textContent = t('lib.delFail') + (rr.text || rr.message)
             }
           }
           // 点外部/列表滚动关闭（menu 已挂 document.body）
@@ -619,7 +675,7 @@ async function renderList(nav) {
     body.innerHTML = `
       <div style="padding:8px 8px 4px;display:flex;gap:6px">
         <button class="btn" id="xy-new-ws" style="flex:1;font-size:12px">＋ 工作空间</button>
-        <button class="btn ghost" id="xy-new-chat" style="flex:1;font-size:12px" title="${xyActiveWorkspace ? '将在当前选中的工作空间下新建对话' : '将新建无工作空间对话（无本地文件访问）'}">＋ 对话</button>
+        <button class="btn ghost" id="xy-new-chat" style="flex:1;font-size:12px" title="${xyActiveWorkspace ? t('xy.inWorkspace') : t('xy.noWorkspace')}">＋ 对话</button>
       </div>
       <div id="xy-list" style="flex:1;overflow-y:auto;padding:4px 8px 12px"></div>`
     $('xy-new-ws').onclick = () => showWorkspaceDialog()
@@ -1935,11 +1991,11 @@ async function renderWork(nav, arg, label2) {
       </div>
       <div id="dg-empty" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px">
         <div style="font-size:15px;font-weight:600">新建图示</div>
-        <div class="set-desc">选择图示类型，创建后自动填充该类型的示例代码，稍后可修改。</div>
+        <div class="set-desc">${t('dg.quickDesc')}</div>
         <div id="dg-quick-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:640px"></div>
         <div style="display:flex;gap:8px;width:100%;max-width:640px;margin-top:6px">
-          <input id="dg-quick-title" placeholder="图示名称（必填）" style="flex:1" maxlength="60" />
-          <button class="btn" id="dg-quick-ok" style="background:var(--accent)">创建</button>
+          <input id="dg-quick-title" placeholder="${t('dg.quickTitle')}" style="flex:1" maxlength="60" />
+          <button class="btn" id="dg-quick-ok" style="background:var(--accent)">${t('dg.quickOk')}</button>
         </div>
         <div class="set-desc" id="dg-quick-hint" style="margin-top:4px">打开左侧已有图示继续编辑。</div>
       </div>
@@ -1975,7 +2031,7 @@ async function renderWork(nav, arg, label2) {
     })
     const quickCreate = () => {
       const title = $('dg-quick-title').value.trim()
-      if (!title) { const inp = $('dg-quick-title'); inp.focus(); inp.placeholder = '请先填写图示名称（必填）'; return }
+      if (!title) { const inp = $('dg-quick-title'); inp.focus(); inp.placeholder = t('dg.nameRequired'); return }
       const tpl = DG_TEMPLATES.find((t) => t.key === picked)
       openEditor(null, { key: tpl.key, name: tpl.name, title, code: tpl.code })
     }
@@ -2205,7 +2261,7 @@ async function renderWork(nav, arg, label2) {
       const st2 = await window.moonlybox.updateCheck()
       if (st2?.downloaded) renderWork('help', 'about')
       else if (st2?.available) { e.currentTarget.textContent = t('ui.updateNow'); renderWork('help', 'about') }
-      else e.currentTarget.textContent = '已是最新版本'
+      else e.currentTarget.textContent = t('ui.latest')
     }
     const inst = $('abt-install')
     if (inst) inst.onclick = () => window.moonlybox.updateInstall()
@@ -2304,7 +2360,7 @@ function dgTypeIcon(item) {
 
 // ---------- 图示模板（#290 创建返工：新建→模板弹窗→名称→自动填充示例） ----------
 const DG_TEMPLATES = [
-  { key: 'flowchart', name: '流程图', icon: '🔀', desc: '步骤流转 / 判断分支', common: true,
+  { key: 'flowchart', name: 'dg.tpl.flowchart', icon: '🔀', desc: 'dg.tpld.flowchart', common: true,
     code: `flowchart TD
     A[开始] --> B{是否已登录?}
     B -- 是 --> C[进入首页]
@@ -2314,7 +2370,7 @@ const DG_TEMPLATES = [
     F -- 通过 --> C
     F -- 失败 --> D
     C --> G[结束]` },
-  { key: 'sequence', name: '时序图', icon: '🔗', desc: '模块间调用时序', common: true,
+  { key: 'sequence', name: 'dg.tpl.sequence', icon: '🔗', desc: 'dg.tpld.sequence', common: true,
     code: `sequenceDiagram
     participant U as 用户
     participant C as 客户端
@@ -2323,7 +2379,7 @@ const DG_TEMPLATES = [
     C->>S: 提交账密
     S-->>C: 返回 token
     C-->>U: 进入首页` },
-  { key: 'mindmap', name: '思维导图', icon: '🧠', desc: '主题发散 / 知识梳理', common: true,
+  { key: 'mindmap', name: 'dg.tpl.mindmap', icon: '🧠', desc: 'dg.tpld.mindmap', common: true,
     code: `mindmap
   root((产品规划))
     核心功能
@@ -2334,13 +2390,13 @@ const DG_TEMPLATES = [
       内容营销
     商业化
       订阅制` },
-  { key: 'pie', name: '饼图', icon: '🥧', desc: '占比分布', common: true,
+  { key: 'pie', name: 'dg.tpl.pie', icon: '🥧', desc: 'dg.tpld.pie', common: true,
     code: `pie title 时间分配
     "开发" : 45
     "设计" : 20
     "会议" : 15
     "其他" : 20` },
-  { key: 'gantt', name: '甘特图', icon: '📅', desc: '项目排期', common: true,
+  { key: 'gantt', name: 'dg.tpl.gantt', icon: '📅', desc: 'dg.tpld.gantt', common: true,
     code: `gantt
     title 项目排期
     dateFormat YYYY-MM-DD
@@ -2350,7 +2406,7 @@ const DG_TEMPLATES = [
     section 开发
     前端开发 :b1, after a2, 10d
     联调测试 :b2, after b1, 5d` },
-  { key: 'er', name: 'ER 图', icon: '🗄️', desc: '数据模型 / 实体关系', common: true,
+  { key: 'er', name: 'dg.tpl.er', icon: '🗄️', desc: 'dg.tpld.er', common: true,
     code: `erDiagram
     USER ||--o{ ORDER : places
     ORDER ||--|{ LINE_ITEM : contains
@@ -2362,14 +2418,14 @@ const DG_TEMPLATES = [
         string id PK
         datetime created_at
     }` },
-  { key: 'state', name: '状态图', icon: '🚦', desc: '状态机流转', common: false,
+  { key: 'state', name: 'dg.tpl.state', icon: '🚦', desc: 'dg.tpld.state', common: false,
     code: `stateDiagram-v2
     [*] --> 草稿
     草稿 --> 待审核 : 提交
     待审核 --> 已发布 : 通过
     待审核 --> 草稿 : 驳回
     已发布 --> [*]` },
-  { key: 'journey', name: '用户旅程', icon: '🛤️', desc: '体验流程 / 满意度', common: false,
+  { key: 'journey', name: 'dg.tpl.journey', icon: '🛤️', desc: 'dg.tpld.journey', common: false,
     code: `journey
     title 用户注册旅程
     section 发现
@@ -2378,13 +2434,13 @@ const DG_TEMPLATES = [
     section 转化
       注册账号: 3: 用户
       首次使用: 4: 用户` },
-  { key: 'timeline', name: '时间线', icon: '🗓️', desc: '事件脉络', common: false,
+  { key: 'timeline', name: 'dg.tpl.timeline', icon: '🗓️', desc: 'dg.tpld.timeline', common: false,
     code: `timeline
     title 产品里程碑
     2026-01 : 立项
     2026-04 : 内测上线
     2026-09 : 正式发布` },
-  { key: 'quadrant', name: '象限图', icon: '🎯', desc: '四象限分析', common: false,
+  { key: 'quadrant', name: 'dg.tpl.quadrant', icon: '🎯', desc: 'dg.tpld.quadrant', common: false,
     code: `quadrantChart
     title 需求优先级
     x-axis "低紧迫 --> 高紧迫"
@@ -2392,7 +2448,7 @@ const DG_TEMPLATES = [
     "需求A": [0.8, 0.9]
     "需求B": [0.3, 0.7]
     "需求C": [0.6, 0.2]` },
-  { key: 'gitgraph', name: 'Git 图', icon: '🌿', desc: '分支策略', common: false,
+  { key: 'gitgraph', name: 'dg.tpl.gitgraph', icon: '🌿', desc: 'dg.tpld.gitgraph', common: false,
     code: `gitGraph
     commit id: "init"
     branch dev
@@ -2400,7 +2456,7 @@ const DG_TEMPLATES = [
     commit
     merge main
     commit id: "v1.0" tag: "v1.0"` },
-  { key: 'class', name: '类图', icon: '📦', desc: '类结构 / 继承关系', common: false,
+  { key: 'class', name: 'dg.tpl.class', icon: '📦', desc: 'dg.tpld.class', common: false,
     code: `classDiagram
     class Animal {
         +String name
@@ -2410,7 +2466,7 @@ const DG_TEMPLATES = [
         +bark()
     }
     Animal <|-- Dog` },
-  { key: 'empty', name: '空图示', icon: '📄', desc: '从空白开始', common: false, code: '' },
+  { key: 'empty', name: 'dg.tpl.empty', icon: '📄', desc: 'dg.tpld.empty', common: false, code: '' },
 ]
 
 
@@ -2428,7 +2484,7 @@ function bindDiagramWorkbench(existing, pick) {
   // 从空态新建：显示标题框与保存/存书房/AI 按钮（打开已有图示时本就显示）
   const show = ['dg-save', 'dg-activate', 'dg-ai', 'dg-title']
   for (const id of show) { const el = $(id); if (el) el.style.display = '' }
-  $('dg-state').textContent = pick ? `已选模板：${pick.name}——示例已填充，可编辑后保存` : existing?.state === 'draft' ? '📝 云端草稿' : existing?.state ? '📚 已存书房' : '新草稿'
+  $('dg-state').textContent = pick ? `${t('dg.pickedTpl')}：${t(pick.name)}——${t('dg.tplFilled')}` : existing?.state === 'draft' ? t('dg.draft') : existing?.state ? t('dg.inStudy') : t('dg.newDraft')
 
   const render = async () => {
     const err = $('dg-err')
@@ -2452,7 +2508,7 @@ function bindDiagramWorkbench(existing, pick) {
   render()
 
   $('dg-save').onclick = async () => {
-    const title = $('dg-title').value.trim() || '未命名图示'
+    const title = $('dg-title').value.trim() || t('dg.untitled')
     const r = await window.moonlybox.rpc('diagram', { op: 'save', id: dgCurrentId, title, content: $('dg-code').value, diagramType: sniffDiagramType($('dg-code').value) }, 60_000)
     if (r.event === 'done' && r.code === 0) {
       const d = JSON.parse(r.text).data
@@ -2461,7 +2517,7 @@ function bindDiagramWorkbench(existing, pick) {
       $('dg-state').textContent = `✓ 已保存草稿 v${d.version}`
       // #291：保存后立刻刷新侧栏列表（新建首存/改名都不用再切功能回来）
       void renderList('diagram')
-      if (isNew) $('dg-state').textContent += '（已加入左侧列表）'
+      if (isNew) $('dg-state').textContent += t('lib.addedTip')
     } else $('dg-state').textContent = '保存失败：' + (r.text || r.message)
   }
   $('dg-activate').onclick = async () => {
@@ -2670,7 +2726,7 @@ function showWorkspaceDialog() {
       row.innerHTML = `${tag}<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d}">${d}</span>`
       if (i !== primaryIdx) {
         const setMain = document.createElement('span')
-        setMain.textContent = '设为主目录'
+        setMain.textContent = t('lib.setPrimary')
         setMain.style.cssText = 'color:var(--muted);cursor:pointer;flex-shrink:0'
         setMain.onclick = () => { primaryIdx = i; renderDirs() }
         row.appendChild(setMain)
@@ -2699,8 +2755,8 @@ function showWorkspaceDialog() {
   dlg.querySelector('#ws-create').onclick = async () => {
     const name = dlg.querySelector('#ws-name').value.trim()
     const st = dlg.querySelector('#ws-status')
-    if (!name) { st.className = 'set-status err'; st.textContent = '名称必填'; return }
-    if (!dirs.length) { st.className = 'set-status err'; st.textContent = '至少选择一个工作目录'; return }
+    if (!name) { st.className = 'set-status err'; st.textContent = t('xy.wsNameReq'); return }
+    if (!dirs.length) { st.className = 'set-status err'; st.textContent = t('xy.wsDirsReq'); return }
     const r = await window.moonlybox.rpc('workspace', { op: 'create', name, dirs, primaryIndex: primaryIdx }, 15_000)
     if (r.event === 'done' && r.code === 0) {
       dlg.close(); dlg.remove()
@@ -2721,7 +2777,7 @@ function showWorkspaceDialog() {
       }
       await renderXiaoyueList() // #283.3：第二列会话列表刷新（原只重渲第三列工作台——新工作空间不出现）
       await renderWork('xiaoyue')
-    } else { st.className = 'set-status err'; st.textContent = r.text || '创建失败' }
+    } else { st.className = 'set-status err'; st.textContent = r.text || t('xy.createFail') }
   }
 }
 
@@ -2879,7 +2935,7 @@ function bindChat(chatInfo) {
       flushCur()
       const errEl = document.createElement('div')
       errEl.className = 'chat-err'
-      errEl.textContent = '⚠ ' + (r.message ?? r.text ?? '请求失败')
+      errEl.textContent = '⚠ ' + (r.message ?? r.text ?? t('ui.reqFail'))
       logEl().appendChild(errEl)
       scroll()
     }
@@ -2904,7 +2960,7 @@ function bindChat(chatInfo) {
     logEl().appendChild(sep)
     for (const t of meta.turns.slice(-40)) addMsg(t.role === 'user' ? 'user' : 'ai', t.content)
     const sep2 = sep.cloneNode(true)
-    sep2.textContent = '—— 以上为历史 ——'
+    sep2.textContent = t('xy.historySep')
     logEl().appendChild(sep2)
     scroll()
   }
@@ -2917,9 +2973,9 @@ function renderConfirmBar(rpcId, payload) {
   bar.style.cssText = 'background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.55);border-radius:8px;padding:8px;margin:6px 0'
   bar.textContent = `⚙ ${payload.tool} ${payload.argsJson}（写操作，确认执行？）`
   const yes = document.createElement('button')
-  yes.className = 'btn'; yes.textContent = '确认'; yes.style.marginRight = '6px'
+  yes.className = 'btn'; yes.textContent = t('ui.confirm'); yes.style.marginRight = '6px'
   const no = document.createElement('button')
-  no.className = 'btn ghost'; no.textContent = '取消'
+  no.className = 'btn ghost'; no.textContent = t('ui.cancel')
   yes.onclick = async () => { await window.moonlybox.confirmResponse(rpcId, true); bar.remove() }
   no.onclick = async () => { await window.moonlybox.confirmResponse(rpcId, false); bar.remove() }
   bar.append(yes, no)
@@ -3037,16 +3093,16 @@ function setUpgradeState(state, version) {
   const text = $('upgrade-text')
   if (state === 'available') {
     dot.style.display = 'block'; btn.classList.remove('ready'); btn.classList.add('active')
-    text.textContent = '更新中'
+    text.textContent = t('ui.updating')
     btn.dataset.tip = `新版本 v${version} 后台下载中…`
   } else if (state === 'ready') {
     dot.style.display = 'block'; btn.classList.add('ready', 'active')
-    text.textContent = '重启更新'
+    text.textContent = t('ui.restartUpdate')
     btn.dataset.tip = `v${version} 已就绪，点击安装并重启`
   } else {
     dot.style.display = 'none'; btn.classList.remove('ready', 'active')
     text.textContent = ''
-    btn.dataset.tip = '检查更新'
+    btn.dataset.tip = t('ui.checkUpdate')
   }
 }
 window.moonlybox.onUpdateReady((msg) => setUpgradeState('ready', msg.version))
@@ -3061,7 +3117,7 @@ window.moonlybox.onUpdateReady((msg) => setUpgradeState('ready', msg.version))
 $('btn-upgrade').onclick = async () => {
   const st = await window.moonlybox.updateState()
   if (st?.downloaded) {
-    mbConfirm(`v${st.version} 已就绪，安装并重启？`, '安装').then((ok) => { if (ok) window.moonlybox.updateInstall() })
+    mbConfirm(`v${st.version} 已就绪，安装并重启？`, t('ui.install')).then((ok) => { if (ok) window.moonlybox.updateInstall() })
     return
   }
   setUpgradeState('available', st?.version ?? '')
@@ -3093,7 +3149,7 @@ function applyRailAvatar(avatarUrl, email, loggedIn) {
     btn.dataset.tip = `已登录：${email}`
   } else {
     btn.textContent = '未'
-    btn.dataset.tip = '未登录（点击登录）'
+    btn.dataset.tip = t('ui.notLogin')
   }
 }
 
