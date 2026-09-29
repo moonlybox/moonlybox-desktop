@@ -81,8 +81,8 @@ const SET_ICONS = {
 }
 const setIconSvg = (id, size = 15) => `<svg viewBox="0 0 24 24" style="width:${size}px;height:${size}px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">${SET_ICONS[id] ?? SET_ICONS.general}</svg>`
 const SETTINGS_CATS = [
-  { id: 'general', label: '通用' },
-  { id: 'appearance', label: '外观' },
+  { id: 'general', label: 'set.cat.general' },
+  { id: 'appearance', label: 'set.cat.appearance' },
   { id: 'library', label: 'set.cat.library' },
   { id: 'chat', label: 'set.cat.chat' },
   { id: 'model', label: 'set.cat.model', subs: ['platform', 'custom', 'local'] }, // #310.2：平台API→自定义→本地部署
@@ -415,6 +415,9 @@ const I18N_DICT = {
   'dp.pvLabel': { zh: '处理方式与服务商', en: 'Processing & Provider' },
   'dp.localGroup': { zh: '本地处理', en: 'Local' },
   'dp.cloudGroup': { zh: '第三方服务', en: 'Third-party Services' },
+  'dp.prov.builtin': { zh: '内置解析（纯文本/PDF 文本层，无需网络）', en: 'Built-in parser (plain text / PDF text layer, offline)' },
+  'dp.prov.winocr': { zh: 'Windows OCR（系统自带，离线）', en: 'Windows OCR (system, offline)' },
+  'dp.prov.paddle': { zh: 'PaddleOCR（本地服务）', en: 'PaddleOCR (local service)' },
   'dp.baseUrlAuto': { zh: 'API 地址（选商自动填）', en: 'API URL (auto-filled per provider)' },
   'mm.enable': { zh: '启用持久记忆', en: 'Persistent Memory' },
   'mm.enableDesc': { zh: '对话中的关键事实自动沉淀到本机记忆层，跨会话可 recall', en: 'Key facts from chats settle into local memory, recallable across sessions' },
@@ -1897,9 +1900,9 @@ async function renderWork(nav, arg, label2) {
       const g = await loadAppSettings()
       const dp = g.docproc ?? {}
       const DP_PROVIDERS = [
-        { id: 'builtin', label: '内置解析（纯文本/PDF 文本层，无需网络）', baseUrl: '', local: true, needsKey: false },
-        { id: 'winocr', label: 'Windows OCR（系统自带，离线）', baseUrl: '', local: true, needsKey: false },
-        { id: 'paddle', label: 'PaddleOCR（本地服务）', baseUrl: 'http://127.0.0.1:8866', local: true, needsKey: false },
+        { id: 'builtin', label: 'dp.prov.builtin', baseUrl: '', local: true, needsKey: false },
+        { id: 'winocr', label: 'dp.prov.winocr', baseUrl: '', local: true, needsKey: false },
+        { id: 'paddle', label: 'dp.prov.paddle', baseUrl: 'http://127.0.0.1:8866', local: true, needsKey: false },
         { id: 'doc2x', label: 'Doc2X', baseUrl: 'https://v2.doc2x.noedgeai.com', local: false, needsKey: true },
         { id: 'mineru', label: 'MinerU', baseUrl: 'https://mineru.net/api/v4', local: false, needsKey: true },
         { id: 'mathpix', label: 'Mathpix', baseUrl: 'https://api.mathpix.com', local: false, needsKey: true },
@@ -1910,8 +1913,8 @@ async function renderWork(nav, arg, label2) {
       panel(t('panel.docproc'), t('panel.sub.docproc'), `
         <div class="set-field" style="max-width:400px"><label>${t('dp.pvLabel')}</label>
           <select id="sp-dp-prov" class="set-select">
-            <optgroup label="${t('dp.localGroup')}">${DP_PROVIDERS.filter((x) => x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${x.label}</option>`).join('')}</optgroup>
-            <optgroup label="${t('dp.cloudGroup')}">${DP_PROVIDERS.filter((x) => !x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${x.label}</option>`).join('')}</optgroup>
+            <optgroup label="${t('dp.localGroup')}">${DP_PROVIDERS.filter((x) => x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${t(x.label)}</option>`).join('')}</optgroup>
+            <optgroup label="${t('dp.cloudGroup')}">${DP_PROVIDERS.filter((x) => !x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${t(x.label)}</option>`).join('')}</optgroup>
           </select>
         </div>
         <div id="sp-dp-cfg"></div>
