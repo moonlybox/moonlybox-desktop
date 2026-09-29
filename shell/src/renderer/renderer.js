@@ -447,6 +447,62 @@ const I18N_DICT = {
   'bk.targetDir': { zh: '云端归属目录（同步目标）', en: 'Cloud Target Folder (sync destination)' },
   'bk.skipNote': { zh: '（其它格式自动跳过）', en: ' (other formats are skipped automatically)' },
   'bk.rootDir': { zh: '书房根目录', en: 'Study root' },
+  'bk.pickFirst': { zh: '先选择本地目录', en: 'Choose a local folder first' },
+  'bk.checking': { zh: '检查云端同名文件…', en: 'Checking cloud for same-name files…' },
+  'bk.preFail': { zh: '预检失败：', en: 'Pre-check failed: ' },
+  'bk.preFailShort': { zh: '预检失败', en: 'Pre-check failed' },
+  'bk.foundN': { zh: '发现 {n} 个同名文件', en: 'Found {n} same-name file(s)' },
+  'bk.claimDesc': { zh: '云端归属目录中已存在同名文档。若这是<b>重装/换机后的认领</b>（本机就是这些文件的原始作者，且<b>确保没有其他电脑同时在同步这些文件</b>），可选择覆盖认领；否则请选重命名上传（保留双方）。', en: 'Same-name documents already exist in the cloud folder. If this is a <b>claim after reinstall/new machine</b> (this machine is the original author and <b>no other computer is syncing these files</b>), you may claim and overwrite; otherwise choose rename-upload (keep both).' },
+  'bk.claimBtn': { zh: '覆盖认领（重装机）', en: 'Claim & Overwrite (reinstall)' },
+  'bk.renameBtn': { zh: '重命名上传（推荐）', en: 'Rename Upload (recommended)' },
+  'bk.registering': { zh: '注册中…', en: 'Registering…' },
+  'bk.regFail': { zh: '注册失败', en: 'Registration failed' },
+  'bk.registered': { zh: '已注册，首次同步中…', en: 'Registered — first sync running…' },
+  'bk.notExist': { zh: '备份目录不存在', en: 'Backup folder does not exist' },
+  'bk.targetCard': { zh: '云端归属目录', en: 'Cloud Target Folder' },
+  'bk.enableCard': { zh: '启用备份', en: 'Enable Backup' },
+  'bk.enableDesc': { zh: '停用后此目录不再参与同步（已上传内容保留在云端）', en: 'When off, this folder stops syncing (uploaded content stays in cloud)' },
+  'bk.onDeleteCard': { zh: '云端删除后', en: 'After Cloud Deletion' },
+  'bk.onDeleteDesc': { zh: '网页端删除此备份上传的文档后，下次同步的行为', en: 'What happens on next sync after the web app deletes an uploaded document' },
+  'bk.resync': { zh: '重新上传', en: 'Re-upload' },
+  'bk.keep': { zh: '不再同步', en: 'Stop syncing' },
+  'bk.dupCard': { zh: '同名策略', en: 'Same-name Policy' },
+  'bk.dupDesc': { zh: '云端已有同名文档时重命名上传（重装认领走新建时的「同名认领」一次性确认，不在此列）', en: 'Same-name cloud documents get renamed on upload (reinstall claims use the one-time "same-name claim" prompt at creation, not here)' },
+  'bk.dupRename': { zh: '重命名上传（保留双方）', en: 'Rename Upload (keep both)' },
+  'bk.lastSync': { zh: '上次同步', en: 'Last Sync' },
+  'bk.neverSync': { zh: '从未同步', en: 'Never synced' },
+  'bk.syncNow': { zh: '立即同步', en: 'Sync Now' },
+  'bk.delSelf': { zh: '删除此备份目录', en: 'Remove this Backup Folder' },
+  'bk.upN': { zh: '上传 {n}', en: 'Uploaded {n}' },
+  'bk.updN': { zh: '更新 {n}', en: 'Updated {n}' },
+  'bk.skipN': { zh: '跳过 {n}', en: 'Skipped {n}' },
+  'bk.cloudDelN': { zh: '云端删除感知 {n}', en: 'Cloud deletions detected {n}' },
+  'bk.cloudUpdN': { zh: '云端更新采纳 {n}', en: 'Cloud updates adopted {n}' },
+  'bk.conflictN': { zh: '需处理 {n}', en: 'Needs attention {n}' },
+  'bk.doneJoin': { zh: '同步完成：', en: 'Sync done: ' },
+  'bk.doneJoin2': { zh: '完成：', en: 'Done: ' },
+  'bk.syncing': { zh: '同步中…', en: 'Syncing…' },
+  'bk.syncFail': { zh: '同步失败', en: 'Sync failed' },
+  'ui.joinComma': { zh: '，', en: ', ' },
+  'ac.feedback': { zh: '问题反馈', en: 'Feedback' },
+  'ac.settings': { zh: '个人设置', en: 'Account Settings' },
+  'ac.logout': { zh: '退出登录', en: 'Sign Out' },
+  'up.downloading': { zh: '新版本 v{v} 后台下载中…', en: 'New version v{v} downloading in background…' },
+  'up.ready': { zh: 'v{v} 已就绪，点击安装并重启', en: 'v{v} ready — click to install and restart' },
+  'up.latest': { zh: '最新', en: 'Latest' },
+  'ac.signedAs': { zh: '已登录：{e}', en: 'Signed in: {e}' },
+  'ac.notSigned': { zh: '未', en: 'Off' },
+  'lg.title': { zh: '登录魔力宝盒', en: 'Sign in to MoonlyBox' },
+  'lg.steps': { zh: '1. 点击下方按钮在浏览器打开授权页（手机也可以）<br/>2. 输入用户码确认 → 回到本窗口等待', en: '1. Click below to open the auth page in a browser (phone works too)<br/>2. Enter the code, confirm, then come back and wait' },
+  'lg.getCode': { zh: '获取中…', en: 'Getting…' },
+  'lg.waitAuth': { zh: '等待授权…', en: 'Waiting for authorization…' },
+  'lg.startFail': { zh: '发起失败：', en: 'Failed to start: ' },
+  'lg.openFail': { zh: '打开失败，请手动访问：', en: 'Open failed — visit manually: ' },
+  'lg.copyLink': { zh: '手动复制授权链接', en: 'Copy auth link manually' },
+  'lg.signedIn': { zh: '✓ 已登录：', en: '✓ Signed in: ' },
+  'lg.waitConfirm': { zh: '等待你在浏览器/手机确认…', en: 'Waiting for you to confirm in browser/phone…' },
+  'lg.denied': { zh: '已在网页拒绝', en: 'Denied on the web page' },
+  'lg.expired': { zh: '用户码过期，重新点击头像', en: 'Code expired — click avatar again' },
 }
 function curLang() {
   const l = APP_SETTINGS?.appearance?.lang
@@ -1940,17 +1996,17 @@ async function renderWork(nav, arg, label2) {
         const st = $('bk-status')
         st.className = 'set-status'; st.textContent = ''
         const localPath = $('bk-path').value
-        if (!localPath) { st.className = 'set-status err'; st.textContent = '先选择本地目录'; return }
+        if (!localPath) { st.className = 'set-status err'; st.textContent = t('bk.pickFirst'); return }
         const dirId = sel.value || null
         const dirName = sel.options[sel.selectedIndex]?.text ?? t('bk.rootDir')
         // #260 预检：云端同名清单 → 有则内嵌确认（重命名/覆盖认领二选一）
-        st.textContent = '检查云端同名文件…'
+        st.textContent = t('bk.checking')
         let hits = []
         try {
           const rc = await window.moonlybox.rpc('backup', { op: 'check', localPath, directoryId: dirId }, 20_000)
-          if (rc.event !== 'done' || rc.code !== 0) { st.className = 'set-status err'; st.textContent = rc.message ?? rc.text ?? '预检失败'; return }
+          if (rc.event !== 'done' || rc.code !== 0) { st.className = 'set-status err'; st.textContent = rc.message ?? rc.text ?? t('bk.preFailShort'); return }
           hits = JSON.parse(rc.text).hits ?? []
-        } catch (e) { st.className = 'set-status err'; st.textContent = '预检失败：' + String(e?.message ?? e); return }
+        } catch (e) { st.className = 'set-status err'; st.textContent = t('bk.preFail') + String(e?.message ?? e); return }
         let claims = null
         if (hits.length) {
           st.className = 'set-status'; st.textContent = ''
@@ -1959,12 +2015,12 @@ async function renderWork(nav, arg, label2) {
           const confirmBox = document.createElement('div')
           confirmBox.innerHTML = `
             <div style="margin:14px 0;padding:12px;border:1px solid var(--border);border-radius:10px">
-              <div style="font-weight:600;margin-bottom:4px">发现 ${hits.length} 个同名文件</div>
-              <p class="set-desc">云端归属目录中已存在同名文档。若这是<b>重装/换机后的认领</b>（本机就是这些文件的原始作者，且<b>确保没有其他电脑同时在同步这些文件</b>），可选择覆盖认领；否则请选重命名上传（保留双方）。</p>
+              <div style="font-weight:600;margin-bottom:4px">${t('bk.foundN').replace('{n}', hits.length)}</div>
+              <p class="set-desc">${t('bk.claimDesc')}</p>
               ${listHtml}
               <div class="set-row" style="margin-top:10px">
-                <button type="button" class="btn" id="bk-claim">覆盖认领（重装机）</button>
-                <button type="button" class="btn ghost" id="bk-rename">重命名上传（推荐）</button>
+                <button type="button" class="btn" id="bk-claim">${t('bk.claimBtn')}</button>
+                <button type="button" class="btn ghost" id="bk-rename">${t('bk.renameBtn')}</button>
               </div>
             </div>`
           panel.appendChild(confirmBox)
@@ -1978,11 +2034,11 @@ async function renderWork(nav, arg, label2) {
             for (const h of hits) claims[h.title] = h.docId
           }
         }
-        st.textContent = '注册中…'
+        st.textContent = t('bk.registering')
         const r = await window.moonlybox.rpc('backup', { op: 'add', localPath, directoryId: dirId, directoryName: dirName, onDelete: $('bk-ondel').value, onConflict: $('bk-onconf').value, ...(claims ? { claims } : {}) }, 15_000)
-        if (r.event !== 'done' || r.code !== 0) { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? '注册失败'; return }
+        if (r.event !== 'done' || r.code !== 0) { st.className = 'set-status err'; st.textContent = r.message ?? r.text ?? t('bk.regFail'); return }
         const entry = JSON.parse(r.text).entry
-        st.textContent = '已注册，首次同步中…'
+        st.textContent = t('bk.registered')
         const rs = await window.moonlybox.rpc('backup', { op: 'sync', id: entry.id }, 120_000)
         currentBkId = entry.id
         renderList('backup')
@@ -1995,37 +2051,37 @@ async function renderWork(nav, arg, label2) {
       const r = await window.moonlybox.rpc('backup', { op: 'list' }, 10_000)
       const d = JSON.parse(r.text)
       const e = d.entries.find((x) => x.id === arg.id)
-      if (!e) { w.innerHTML = '<div class="set-panel"><p class="set-desc">备份目录不存在</p></div>'; return }
+      if (!e) { w.innerHTML = `<div class="set-panel"><p class="set-desc">${t('bk.notExist')}</p></div>`; return }
       w.innerHTML = `
         <div class="set-panel">
           <h3>${e.localPath.split(/[\\/]/).pop()}</h3>
           <p class="set-desc">${e.localPath}</p>
-          <div class="set-card"><div class="sc-main"><div class="sc-title">云端归属目录</div><div class="sc-desc">${e.directoryName}</div></div></div>
-          <div class="set-card"><div class="sc-main"><div class="sc-title">启用备份</div><div class="sc-desc">停用后此目录不再参与同步（已上传内容保留在云端）</div></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">${t('bk.targetCard')}</div><div class="sc-desc">${e.directoryName}</div></div></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">${t('bk.enableCard')}</div><div class="sc-desc">${t('bk.enableDesc')}</div></div>
             <button type="button" class="toggle ${e.enabled ? 'on' : ''}" id="bk-toggle"></button></div>
-          <div class="set-card"><div class="sc-main"><div class="sc-title">云端删除后</div><div class="sc-desc">网页端删除此备份上传的文档后，下次同步的行为</div></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">${t('bk.onDeleteCard')}</div><div class="sc-desc">${t('bk.onDeleteDesc')}</div></div>
             <select class="set-select" id="bk-ondel" style="max-width:220px">
-              <option value="resync"${e.onDelete !== 'keep' ? ' selected' : ''}>重新上传</option>
-              <option value="keep"${e.onDelete === 'keep' ? ' selected' : ''}>不再同步</option>
+              <option value="resync"${e.onDelete !== 'keep' ? ' selected' : ''}>${t('bk.resync')}</option>
+              <option value="keep"${e.onDelete === 'keep' ? ' selected' : ''}>${t('bk.keep')}</option>
             </select></div>
-          <div class="set-card"><div class="sc-main"><div class="sc-title">同名策略</div><div class="sc-desc">云端已有同名文档时重命名上传（重装认领走新建时的「同名认领」一次性确认，不在此列）</div></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">${t('bk.dupCard')}</div><div class="sc-desc">${t('bk.dupDesc')}</div></div>
             <select class="set-select" id="bk-onconf" style="max-width:220px">
-              <option value="rename" selected>重命名上传（保留双方）</option>
+              <option value="rename" selected>${t('bk.dupRename')}</option>
             </select></div>
-          <div class="set-card"><div class="sc-main"><div class="sc-title">上次同步</div><div class="sc-desc">${e.lastSyncAt ? new Date(e.lastSyncAt).toLocaleString() : '从未'}</div></div>
-            <button type="button" class="btn" id="bk-sync">立即同步</button></div>
-          <div class="set-row" style="margin-top:20px"><button type="button" class="btn ghost" id="bk-del" style="color:var(--err)">删除此备份目录</button></div>
+          <div class="set-card"><div class="sc-main"><div class="sc-title">${t('bk.lastSync')}</div><div class="sc-desc">${e.lastSyncAt ? new Date(e.lastSyncAt).toLocaleString() : t('bk.neverSync')}</div></div>
+            <button type="button" class="btn" id="bk-sync">${t('bk.syncNow')}</button></div>
+          <div class="set-row" style="margin-top:20px"><button type="button" class="btn ghost" id="bk-del" style="color:var(--err)">${t('bk.delSelf')}</button></div>
           <div class="set-status" id="bk-detail-status"></div>
         </div>`
       if (arg.justSynced) {
         const rep = arg.justSynced
         const st = $('bk-detail-status')
         st.className = 'set-status ok'
-        const parts = [`上传 ${rep.uploaded.length}`, `更新 ${rep.updated.length}`, `跳过 ${rep.skipped.length}`]
-        if (rep.cloudDeleted?.length) parts.push(`云端删除感知 ${rep.cloudDeleted.length}`)
-        if (rep.cloudUpdated?.length) parts.push(`云端更新采纳 ${rep.cloudUpdated.length}`)
-        if (rep.conflicts.length) parts.push(`需处理 ${rep.conflicts.length}`)
-        st.textContent = `同步完成：${parts.join('，')}`
+        const parts = [t('bk.upN').replace('{n}', rep.uploaded.length), t('bk.updN').replace('{n}', rep.updated.length), t('bk.skipN').replace('{n}', rep.skipped.length)]
+        if (rep.cloudDeleted?.length) parts.push(t('bk.cloudDelN').replace('{n}', rep.cloudDeleted.length))
+        if (rep.cloudUpdated?.length) parts.push(t('bk.cloudUpdN').replace('{n}', rep.cloudUpdated.length))
+        if (rep.conflicts.length) parts.push(t('bk.conflictN').replace('{n}', rep.conflicts.length))
+        st.textContent = t('bk.doneJoin') + parts.join(t('ui.joinComma'))
       }
       $('bk-toggle').onclick = async (ev) => {
         ev.currentTarget.classList.toggle('on')
@@ -2034,17 +2090,17 @@ async function renderWork(nav, arg, label2) {
       }
       $('bk-sync').onclick = async (ev) => {
         const st = $('bk-detail-status')
-        st.className = 'set-status'; st.textContent = '同步中…'
+        st.className = 'set-status'; st.textContent = t('bk.syncing')
         const rs = await window.moonlybox.rpc('backup', { op: 'sync', id: e.id }, 120_000)
         if (rs.event === 'done' && rs.code === 0) {
           const rep = JSON.parse(rs.text).report
           st.className = 'set-status ok'
-          const parts = [`上传 ${rep.uploaded.length}`, `更新 ${rep.updated.length}`, `跳过 ${rep.skipped.length}`]
-          if (rep.cloudDeleted?.length) parts.push(`云端删除感知 ${rep.cloudDeleted.length}`)
-          if (rep.cloudUpdated?.length) parts.push(`云端更新采纳 ${rep.cloudUpdated.length}`)
-          if (rep.conflicts.length) parts.push(`需处理 ${rep.conflicts.length}（${rep.conflicts[0].reason.slice(0, 60)}）`)
-          st.textContent = `完成：${parts.join('，')}`
-        } else { st.className = 'set-status err'; st.textContent = rs.message ?? rs.text ?? '同步失败' }
+          const parts = [t('bk.upN').replace('{n}', rep.uploaded.length), t('bk.updN').replace('{n}', rep.updated.length), t('bk.skipN').replace('{n}', rep.skipped.length)]
+          if (rep.cloudDeleted?.length) parts.push(t('bk.cloudDelN').replace('{n}', rep.cloudDeleted.length))
+          if (rep.cloudUpdated?.length) parts.push(t('bk.cloudUpdN').replace('{n}', rep.cloudUpdated.length))
+          if (rep.conflicts.length) parts.push(t('bk.conflictN').replace('{n}', rep.conflicts.length) + `(${rep.conflicts[0].reason.slice(0, 60)})`)
+          st.textContent = t('bk.doneJoin2') + parts.join(t('ui.joinComma'))
+        } else { st.className = 'set-status err'; st.textContent = rs.message ?? rs.text ?? t('bk.syncFail') }
         renderList('backup')
       }
       $('bk-ondel').onchange = async (ev) => {
@@ -3212,9 +3268,9 @@ $('btn-avatar').onclick = async () => {
         </div>
       </div>
       <div style="border-top:1px solid var(--border);margin:14px 0 6px"></div>
-      <div id="ac-feedback" style="display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px">问题反馈 ${extSvg}</div>
-      <div id="ac-settings" style="display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px">个人设置 ${extSvg}</div>
-      <div id="ac-logout" style="display:flex;align-items:center;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#f87171">退出登录</div>
+      <div id="ac-feedback" style="display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px">${t('ac.feedback')} ${extSvg}</div>
+      <div id="ac-settings" style="display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px">${t('ac.settings')} ${extSvg}</div>
+      <div id="ac-logout" style="display:flex;align-items:center;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#f87171">${t('ac.logout')}</div>
       </div>`
     document.body.appendChild(dlg)
     dlg.showModal()
@@ -3246,11 +3302,11 @@ function setUpgradeState(state, version) {
   if (state === 'available') {
     dot.style.display = 'block'; btn.classList.remove('ready'); btn.classList.add('active')
     text.textContent = t('ui.updating')
-    btn.dataset.tip = `新版本 v${version} 后台下载中…`
+    btn.dataset.tip = t('up.downloading').replace('{v}', version)
   } else if (state === 'ready') {
     dot.style.display = 'block'; btn.classList.add('ready', 'active')
     text.textContent = t('ui.restartUpdate')
-    btn.dataset.tip = `v${version} 已就绪，点击安装并重启`
+    btn.dataset.tip = t('up.ready').replace('{v}', version)
   } else {
     dot.style.display = 'none'; btn.classList.remove('ready', 'active')
     text.textContent = ''
@@ -3279,7 +3335,7 @@ $('btn-upgrade').onclick = async () => {
   else if (after?.available) setUpgradeState('available', after.version)
   else {
     setUpgradeState('none', '')
-    $('upgrade-text').textContent = '最新'
+    $('upgrade-text').textContent = t('up.latest')
     setTimeout(() => { if (!$('btn-upgrade').classList.contains('active')) $('upgrade-text').textContent = '' }, 3000)
   }
 }
@@ -3298,9 +3354,9 @@ function applyRailAvatar(avatarUrl, email, loggedIn) {
       btn.textContent = (email[0] ?? '?').toUpperCase()
     }
     // #266：动态状态走 data-tip（单例浮层），不写原生 title——否则与 data-tip 浮层双重提示
-    btn.dataset.tip = `已登录：${email}`
+    btn.dataset.tip = t('ac.signedAs').replace('{e}', email)
   } else {
-    btn.textContent = '未'
+    btn.textContent = t('ac.notSigned')
     btn.dataset.tip = t('ui.notLogin')
   }
 }
@@ -3328,19 +3384,19 @@ async function showLoginDialog() {
   const dlg = document.createElement('dialog')
   dlg.style.cssText = 'border:1px solid var(--border);border-radius:12px;background:var(--bg2);color:var(--fg);padding:24px;min-width:460px'
   dlg.innerHTML = `
-    <strong style="font-size:15px">登录魔力宝盒</strong>
-    <p class="muted" style="font-size:12.5px;margin:10px 0">1. 点击下方按钮在浏览器打开授权页（手机也可以）<br/>2. 输入用户码确认 → 回到本窗口等待</p>
-    <div class="mono" style="background:var(--hover);border-radius:8px;padding:10px;font-size:18px;letter-spacing:2px;text-align:center;margin:10px 0" id="lg-code">获取中…</div>
+    <strong style="font-size:15px">${t('lg.title')}</strong>
+    <p class="muted" style="font-size:12.5px;margin:10px 0">${t('lg.steps')}</p>
+    <div class="mono" style="background:var(--hover);border-radius:8px;padding:10px;font-size:18px;letter-spacing:2px;text-align:center;margin:10px 0" id="lg-code">${t('lg.getCode')}</div>
     <div class="row" style="justify-content:center;gap:8px">
       <button class="btn" id="lg-open">打开授权页</button>
       <button class="btn ghost" id="lg-cancel">取消</button>
     </div>
-    <p class="muted mono" id="lg-status" style="margin-top:10px;font-size:12px">等待授权…</p>`
+    <p class="muted mono" id="lg-status" style="margin-top:10px;font-size:12px">${t('lg.waitAuth')}</p>`
   document.body.appendChild(dlg)
   dlg.showModal()
   const r = await window.moonlybox.rpc('auth', { op: 'start' }, 30_000)
   if (r.event !== 'done' || r.code !== 0) {
-    $('lg-status').textContent = '发起失败：' + (r.text || r.message)
+    $('lg-status').textContent = t('lg.startFail') + (r.text || r.message)
     return
   }
   const d = JSON.parse(r.text)
@@ -3348,7 +3404,7 @@ async function showLoginDialog() {
   // 授权页双通道：按钮打开+链接兜底（IPC openExternal 偶发无效时可右键复制/手动打开）
   const url = d.url || `https://moonlybox.cn/oauth/device?user_code=${d.userCode}`
   $('lg-open').onclick = async () => {
-    try { await window.moonlybox.openExternal(url) } catch (e) { $('lg-status').textContent = '打开失败，请手动访问：' + url }
+    try { await window.moonlybox.openExternal(url) } catch (e) { $('lg-status').textContent = t('lg.openFail') + url }
   }
   $('lg-cancel').onclick = () => { closed = true; dlg.close(); dlg.remove() }
   dlg.addEventListener('close', () => { closed = true })
@@ -3356,7 +3412,7 @@ async function showLoginDialog() {
   // 手动复制兜底（IPC 打开失败/浏览器未响应时）
   const det = document.createElement('details')
   det.style.cssText = 'margin-top:6px'
-  det.innerHTML = `<summary class="muted" style="font-size:11px;cursor:pointer">手动复制授权链接</summary><div class="mono" style="font-size:11px;user-select:all;word-break:break-all">${url}</div>`
+  det.innerHTML = `<summary class="muted" style="font-size:11px;cursor:pointer">${t('lg.copyLink')}</summary><div class="mono" style="font-size:11px;user-select:all;word-break:break-all">${url}</div>`
   dlg.appendChild(det)
   // 轮询授权结果（5s 间隔，快调用不阻塞 daemon worker）
   loginPolling = true
@@ -3370,14 +3426,14 @@ async function showLoginDialog() {
       if (pr.event !== 'done') continue
       const pd = JSON.parse(pr.text)
       if (pd.status === 'done') {
-        $('lg-status').textContent = `✓ 已登录：${pd.email}`
+        $('lg-status').textContent = t('lg.signedIn') + pd.email
         await refreshAvatar()
         setTimeout(() => { closed = true; dlg.close(); dlg.remove(); if (currentNav === 'cloud') renderList('cloud') }, 1200)
         return
       }
-      if (pd.status === 'pending' || pd.status === 'slow_down') $('lg-status').textContent = '等待你在浏览器/手机确认…'
-      if (pd.status === 'denied') { $('lg-status').textContent = '已在网页拒绝'; break }
-      if (pd.status === 'expired') { $('lg-status').textContent = '用户码过期，重新点击头像'; break }
+      if (pd.status === 'pending' || pd.status === 'slow_down') $('lg-status').textContent = t('lg.waitConfirm')
+      if (pd.status === 'denied') { $('lg-status').textContent = t('lg.denied'); break }
+      if (pd.status === 'expired') { $('lg-status').textContent = t('lg.expired'); break }
       // pending/slow_down → 继续等
     } catch {}
   }
