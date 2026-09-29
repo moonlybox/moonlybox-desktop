@@ -609,10 +609,24 @@ function resolveThemeDark() {
   if (mode === 'time') return (new Date().getHours() >= 18 || new Date().getHours() < 6) ? 'dark' : 'light'
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
-// #315：mermaid 主题跟随明暗（饼图/思维导图等配色由 theme 决定；deep dark 下 default 主题文字浅色不可读）
+// #315→#315.1：mermaid 主题跟随明暗——深色不用 theme:'dark'（其扇区/节点同为深色系，深底上不可见）；
+// 改 base+themeVariables（浅字/灰线/深节点底，数据系列沿用 base 亮色板深底醒目）
+const MM_DARK_VARS = {
+  background: 'transparent',
+  primaryTextColor: '#e2e8f0', secondaryTextColor: '#e2e8f0', textColor: '#e2e8f0', titleColor: '#e2e8f0',
+  lineColor: '#94a3b8', mainBkg: '#1e293b', nodeBorder: '#64748b',
+  clusterBkg: '#1e293b', clusterBorder: '#475569', edgeLabelBackground: '#1e293b',
+  labelBoxBkgColor: '#1e293b', noteBkgColor: '#312e81', noteTextColor: '#e2e8f0',
+  actorBkg: '#1e293b', actorBorder: '#64748b', actorTextColor: '#e2e8f0', signalTextColor: '#e2e8f0', sequenceNumberColor: '#0f172a',
+  sectionBkgColor: '#1e293b', altSectionBkgColor: '#0f172a', sectionBkgColor2: '#1e293b',
+  taskBkgColor: '#312e81', taskTextColor: '#e2e8f0', taskTextLightColor: '#e2e8f0', activeTaskBkgColor: '#4338ca',
+  doneTaskBkgColor: '#334155', doneTaskBorderColor: '#64748b', critBkgColor: '#b91c1c', gridColor: '#475569', todayLineColor: '#f59e0b',
+  attributeBackgroundColorOdd: '#0f172a', attributeBackgroundColorEven: '#1e293b',
+}
 function mmApplyTheme() {
   if (!window.mermaid) return
-  try { mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: resolveThemeDark() === 'dark' ? 'dark' : 'default' }) } catch {}
+  const dark = resolveThemeDark() === 'dark'
+  try { mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'base' : 'default', ...(dark ? { themeVariables: MM_DARK_VARS } : {}) }) } catch {}
 }
 // 跟随时间：每 10 分钟校一次主题（分号必须：下行 IIFE 以 ( 开头——ASI 陷阱 #253.20 同款）
 setInterval(() => { if (APP_SETTINGS?.appearance?.theme === 'time') applyThemeSettings() }, 10 * 60 * 1000);
