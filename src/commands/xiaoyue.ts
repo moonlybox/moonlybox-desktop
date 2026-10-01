@@ -208,6 +208,7 @@ import { docToolDefs, runDocTool } from '../lib/doc-tools'
 import { listAllCustomTools, callCustomTool, enabledCustomServers } from '../lib/mcp-custom'
 import { getWorkspace, loadChat, appendTurn as wsAppendTurn, isUnderDirs, chatTurnsForContext, primaryDir } from '../lib/workspaces'
 import { localTaskToolDefs, runLocalTaskTool } from '../lib/local-tasks-tool'
+import { readToolResult } from '../lib/tool-result-store'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { defaultVaultRoot } from '../lib/config'
@@ -321,6 +322,11 @@ export async function runAgentTools(
   for (const d of customDefs) localToolsW[d.name] = (args) => callCustomTool(d.name, args, customCat).then((r) => JSON.stringify({ ok: r.ok, content: r.text }))
   // #316.5：local_task 工具执行器（后台任务单源——创建后立即返回 jobId，不在对话内联执行）
   for (const d of ltDefs) localToolsW[d.name] = (args) => runLocalTaskTool(d.name, args)
+   // #317.1：工具结果全文读取（落盘引用注入配套——大结果存 .moonlybox/cache，LLM 按引用拉全文）
+   localToolsW['tool_result_read'] = async (args) => {
+     const r = readToolResult(defaultVaultRoot(), String(args.path ?? ''))
+     return JSON.stringify(r)
+   }
   // #282 工作空间 fs 工具（仅工作空间对话装配）：路径必须落在挂载目录内——越界返回 needs_approval 交 confirm 批准
   const fsTools: Array<{ name: string; title?: string; description?: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean }; inputSchema: unknown }> = []
   if (wsDirs.length) {
@@ -437,7 +443,15 @@ ${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}${skillBloc
       ...fsTools,
       ...skillDefs,
       ...ltDefs, // #316.5：local_task 工具组
+      { // #317.1：工具结果全文读取（只读）
+        name: 'tool_result_read',
+        title: '读取工具结果全文',
+        description: '读取此前工具调用被截断保存的完整结果文件（传入引用路径）。',
+        annotations: { readOnlyHint: true },
+        inputSchema: { type: 'object', properties: { path: { type: 'string', description: '工具结果引用路径' } }, required: ['path'] },
+      },
     ],
+    vaultRoot: defaultVaultRoot(),
     chat: async (messages, tools) => {
       // #283：对话走模型注册表（设置-对话默认模型；空/失效回落旧 byok）
       const { resolveActiveModel } = await import('../lib/model-registry')

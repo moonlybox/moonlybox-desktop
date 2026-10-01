@@ -1,3 +1,4 @@
+import { injectToolResult } from './tool-result-store'
 import { listTools, callTool, McpTool } from './moonlink'
 
 /**
@@ -38,6 +39,8 @@ export interface AgentLoopDeps {
   localTools?: Record<string, (args: Record<string, unknown>) => Promise<string>>
   /** #279 内置工具定义（web_search/fetch_url 等，与 MoonLink 远程工具并列装配；执行走 localTools 同名键） */
   builtinTools?: Array<{ name: string; title?: string; description?: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean }; inputSchema: unknown }>
+  /** #317.1 书房根（工具结果落盘引用注入；缺省=跳过落盘直接截断） */
+  vaultRoot?: string
 }
 
 export interface AgentLoopResult {
@@ -154,7 +157,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         say(`⚙ ${tc.function.name} ${argsJson.slice(0, 120)}`)
         let out: string
         try { out = await localFn(args) } catch (e: any) { out = `本地执行失败：${String(e?.message ?? e)}` }
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: out })
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: injectToolResult(deps.vaultRoot ?? '', tc.function.name, out) })
         used.push({ name: tc.function.name, ok: !out.startsWith('本地执行失败') })
         continue
       }
@@ -180,7 +183,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         const result = await callTool(meta.name, args)
         const text = toolResultText(result)
         say(`  → ${text.slice(0, 160)}`)
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: text })
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: injectToolResult(deps.vaultRoot ?? '', meta.name, text) })
         used.push({ name: meta.name, ok: true })
       } catch (e) {
         const err = String((e as Error).message ?? e)
