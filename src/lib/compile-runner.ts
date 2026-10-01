@@ -212,13 +212,15 @@ async function pushToMoon(jobId: string, itemPath: string, srcHash: string | und
       if (ent.path && path.join(root, ent.path) === path.resolve(itemPath)) { cloudId = docId; break }
     }
     if (!cloudId) { updateItem(jobId, itemPath, { error: '本地完成；源文档未同步到云端（纯本地文档），不回传' }); return } // 源未在云端书房（本地新建未上行）
+    // #310.60：source_version 对账——manifest 带版本（编译时点的源版本），补传/非骨架路径不再恒 0
+    const srcVersionAtCompile = manifest[cloudId]?.version ?? 0
     const { loadCredentials: lc } = await import('./auth')
     const res = await apiCall<{ ok: boolean; message?: string; code?: string; data?: { wikiId?: string } }>(
       'POST',
       '/api/library/compile-multipage/external',
       {
         sourceDocId: cloudId,
-        sourceVersionAtCompile: 0, // manifest 不带版本；云端以归属+硬闸校验为准（version 对账升级项挂账）
+        sourceVersionAtCompile: srcVersionAtCompile,
         title: path.basename(itemPath).replace(/\.[^.]+$/, ''),
         content: md,
         matrixVersion: sk?.matrixVersion ?? 1, // 骨架批=骨架版本；降级链=v1（版本升级云端 409 会带 currentMatrixVersion）
