@@ -226,7 +226,8 @@ const I18N_DICT = {
   'lib.compileModel': { zh: '整理所用模型', en: 'Compile model' },
   'lib.compileFollow': { zh: '跟随对话默认模型', en: 'Follow chat default model' },
   'lib.compileHint': { zh: '留空时按对话默认模型整理；本地模型推荐用于批量整理。', en: 'Leave empty to use the chat default model. Local models are recommended for bulk compiling.' },
-  'lib.compileSync': { zh: '回传云端（整理后进「待准入」，网页确认后入书房）', en: 'Sync to cloud (lands in Pending review; approve on web to enter the study)' },
+  'lib.compileSync': { zh: '整理后的知识沉淀到云端', en: 'Persist compiled knowledge to the cloud' },
+  'lib.compileSyncDesc': { zh: '整理完成后自动回传，先进「待准入」，在网页端确认后入书房。', en: 'Auto-push after compiling; lands in Pending review, then enters the study once approved on web.' },
   'lib.migrateTitle': { zh: '迁移书房目录', en: 'Migrate Study Directory' },
   'lib.migrateNew': { zh: '新目录（必须为空或不存在）', en: 'New directory (must be empty or not exist)' },
   'lib.migrateStart': { zh: '开始迁移', en: 'Start Migration' },
@@ -1515,7 +1516,8 @@ async function renderWork(nav, arg, label2) {
           </select>
           <div class="set-desc" style="margin-top:4px">${t('lib.compileHint')}</div>
         </div>
-        <div class="set-row" style="margin:6px 0 0;justify-content:space-between;max-width:420px"><span class="set-desc" style="align-self:center">${t('lib.compileSync')}</span><button type="button" class="toggle ${gset?.model?.syncToMoon !== false ? 'on' : ''}" id="sp-compile-sync"></button></div>
+        <div class="set-card" style="margin-top:10px;max-width:420px"><div class="sc-main"><div class="sc-title">${t('lib.compileSync')}</div><div class="sc-desc">${t('lib.compileSyncDesc')}</div></div>
+          <button type="button" class="toggle ${gset?.model?.syncToMoon !== false ? 'on' : ''}" id="sp-compile-sync"></button></div>
         <div class="set-status" id="sp-compile-status"></div>
       `)
       $('sp-vault').value = (await window.moonlybox.vaultGet()) ?? ''
