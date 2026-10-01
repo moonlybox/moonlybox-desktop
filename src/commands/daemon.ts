@@ -907,11 +907,31 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
   return { code, text }
 }
 
+/**
+ * #310.58：同步周期——上行补传（幂等，三闸）→增量下行对账→对账式打标。
+ * daemon 启动跑一次+每 5 分钟一轮；全部静默失败（登录态/网络不具备时下轮再试）。
+ * markSyncedByPoll 只查未打标项（有 syncedAt 的直接跳过），常驻开销≈0。
+ */
+async function syncCycle(): Promise<void> {
+  try {
+    const { backfillPushAll } = await import('../lib/compile-runner')
+    await backfillPushAll()
+  } catch {}
+  try {
+    const { syncDown, markSyncedByPoll } = await import('../lib/sync')
+    const report = { downloaded: [], updated: [], uploaded: [], inboxFiled: [], conflicts: [], skipped: [] } as any
+    await syncDown(defaultVaultRoot(), report)
+    await markSyncedByPoll()
+  } catch {}
+}
+
 export async function runDaemon(): Promise<void> {
   // #310.31c：启动即确保书房结构（幂等）——含根 README 升级判定（此前只在 CLI sync/inbox 调用，桌面端 daemon 从不触发→用户拉码后 README 不升级）
   try { initVault(defaultVaultRoot()) } catch {}
   // #310.39：启动补传存量产物（编译/同步解耦——登录态+开关开才实际动作；内部三闸留痕，幂等）
-  void import('../lib/compile-runner').then((m) => m.backfillPushAll()).catch(() => {})
+  // #310.58：启动即跑一轮同步周期（补传+下行对账+✓ 打标）+周期调度——用户不应手动开关触发闭环
+  void syncCycle()
+  setInterval(() => { void syncCycle() }, 5 * 60 * 1000)
   // #316.5：启动恢复——daemon 重启后 running/queued 任务 → queued（items 断点保留；执行由 tasks op 触发或任务页「继续」）
   const recovered = recoverOnBoot()
   if (recovered) console.log(`（任务恢复：${recovered} 个任务待续）`)
