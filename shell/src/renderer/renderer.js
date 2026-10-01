@@ -1213,19 +1213,20 @@ async function renderTree(container, rel, depth) {
           mi.onmouseleave = () => { mi.style.background = '' }
           mi.onclick = async () => {
             closeCtxMenu(menu)
-            if (!confirm(t('tk.delConfirm').replace('{n}', 1))) return
+            // #310.34：confirm() OS 模态会打断焦点（小月对话框无法聚焦）——用页面内置 mbConfirm（#309 范式）
+            if (!(await mbConfirm(t('tk.delConfirm').replace('{n}', 1)))) return
             // rel 形态（树 rel「知识页/xx.md」）——daemon delete_pages 侧归一 abs 后过白名单
             const rd = await window.moonlybox.rpc('tasks', { op: 'delete_pages', paths: [relPath] }, 30_000)
             try {
               const d = JSON.parse(rd.text)
               if (d.ok) {
-                alert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger))
+                mbAlert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger))
                 await renderTree(container, rel, depth)
                 // 工作区正显示被删文件→回落到该层目录详情（#310.32c）
                 const wEl = $('work')
                 if (wEl && wEl.querySelector('.md-view, #wf-view') && wEl.textContent.includes(item.name)) renderWork('vault', { rel, dir: true })
-              } else alert(t('lib.delFail') + (d.message ?? ''))
-            } catch { alert(t('lib.delFail')) }
+              } else mbAlert(t('lib.delFail') + (d.message ?? ''))
+            } catch { mbAlert(t('lib.delFail')) }
           }
           const close = (e3) => { if (!menu.contains(e3.target)) { closeCtxMenu(menu); document.removeEventListener('click', close); document.removeEventListener('contextmenu', close) } }
           setTimeout(() => { document.addEventListener('click', close); document.addEventListener('contextmenu', close) }, 0)
@@ -2480,15 +2481,15 @@ async function renderWork(nav, arg, label2) {
     if (delBtn) delBtn.onclick = async () => {
       const sel = [...pagesEl0.querySelectorAll('.tkp-chk:checked')].map((c) => c.dataset.abs)
       if (!sel.length) return
-      if (!confirm(t('tk.delConfirm').replace('{n}', sel.length))) return
+      if (!(await mbConfirm(t('tk.delConfirm').replace('{n}', sel.length)))) return
       const rd = await window.moonlybox.rpc('tasks', { op: 'delete_pages', paths: sel }, 30_000)
       try {
         const d = JSON.parse(rd.text)
         if (d.ok) {
-          alert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger))
+          mbAlert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger))
           renderWork('tasks', { id: j.id })
-        } else alert(t('lib.delFail') + (d.message ?? ''))
-      } catch { alert(t('lib.delFail')) }
+        } else mbAlert(t('lib.delFail') + (d.message ?? ''))
+      } catch { mbAlert(t('lib.delFail')) }
     }
     bindCancel(j.id)
     if (j.status === 'running' || j.status === 'queued') schedule(j.id)
@@ -3038,6 +3039,24 @@ function closeCtxMenu(menu) {
 // ---------- 确认弹窗（#307.2→#309：页面内置 <dialog>——UI 与新建工作空间统一；无 OS 模态往返，
 // 焦点全程由 showModal/close 在 renderer 内管理（用户实测 dialog 开合恰好能重置焦点环）→失焦源头消除）。
 // 确定后 forceFocus 归还焦点；桥 confirmBox 保留但不再默认使用。
+// #310.34：页面内置通知（替代 OS 级 alert()——焦点打断同源问题；fire-and-forget）
+function mbAlert(message) {
+  const dlg = document.createElement('dialog')
+  dlg.innerHTML = `
+    <div class="dlg-body" style="min-width:320px">
+      <div style="font-size:14px;line-height:1.6;white-space:normal;margin-bottom:18px">${message}</div>
+      <div class="set-row" style="justify-content:flex-end;gap:8px">
+        <button class="btn" id="mba-ok">${t('ui.ok')}</button>
+      </div>
+    </div>`
+  document.body.appendChild(dlg)
+  const finish = () => { dlg.close(); dlg.remove() }
+  dlg.addEventListener('cancel', finish)
+  dlg.addEventListener('close', finish)
+  dlg.querySelector('#mba-ok').onclick = finish
+  dlg.showModal()
+}
+
 function mbConfirm(message, okText = '删除') {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog')
