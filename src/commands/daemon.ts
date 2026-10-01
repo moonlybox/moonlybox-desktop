@@ -854,6 +854,20 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           // fire-and-forget：执行器异步跑（进度回写 jobs.json；本 RPC 立即返回 jobId）
           void runJob(job.id).catch(() => {})
           text = JSON.stringify({ ok: true, job })
+        } else if (op === 'pages') {
+          // #316 骨架批配套：知识页产物列表（任务页「知识页」tab 数据源）
+          const { defaultVaultRoot } = await import('../lib/config')
+          const { listPages } = await import('../lib/tasks')
+          text = JSON.stringify({ ok: true, pages: listPages(defaultVaultRoot()) })
+        } else if (op === 'delete_pages') {
+          // 批量删除产物+ledger 重置（白名单防误删；确认制在 renderer 层）
+          const paths = (args as Record<string, unknown>).paths as string[] | undefined
+          if (!Array.isArray(paths) || paths.length === 0) { code = 1; text = 'paths 为空' } else {
+            const { defaultVaultRoot } = await import('../lib/config')
+            const { deletePages } = await import('../lib/tasks')
+            const r = deletePages(defaultVaultRoot(), paths.map(String).slice(0, 500))
+            text = JSON.stringify({ ok: true, ...r })
+          }
         } else {
           code = 2
           text = `未知 tasks op：${op}`

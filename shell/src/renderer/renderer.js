@@ -356,6 +356,14 @@ const I18N_DICT = {
   'tk.empty': { zh: '暂无任务——在对话里让小月整理文档即创建', en: 'No tasks yet — ask Moonie in chat to compile docs' },
   'tk.pickHint': { zh: '左侧选择任务查看详情。', en: 'Select a task on the left for details.' },
   'tk.startedAt': { zh: '启动于', en: 'Started at' },
+  'tk.pagesTab': { zh: '知识页', en: 'Knowledge pages' },
+  'tk.pagesEmpty': { zh: '暂无本地知识页产物。', en: 'No local knowledge pages yet.' },
+  'tk.selectAll': { zh: '全选', en: 'Select all' },
+  'tk.delSelected': { zh: '删除所选', en: 'Delete selected' },
+  'tk.delConfirm': { zh: '确认删除所选 {n} 个知识页文件？对应源文档将重新视为「未整理」（可再次整理）。', en: 'Delete {n} local knowledge page files? Their sources become uncompiled again (can be recompiled).' },
+  'tk.delDone': { zh: '已删除 {d} 个文件，{r} 个源文档已重置为未整理。', en: 'Deleted {d} files; {r} sources reset to uncompiled.' },
+  'tk.pgPending': { zh: '已回传待准入', en: 'pending review' },
+  'tk.pgMissing': { zh: '文件已不在', en: 'file missing' },
   'tk.willUse': { zh: '将使用：', en: 'Will use: ' },
   'tk.changeModel': { zh: '更改', en: 'Change' },
   'tk.cancel': { zh: '取消任务', en: 'Cancel' },
@@ -951,11 +959,19 @@ async function renderList(nav) {
     try {
       const r = await window.moonlybox.rpc('tasks', { op: 'list' }, 10_000)
       const jobs = JSON.parse(r.text).jobs ?? []
-      if (!jobs.length) {
-        body.innerHTML = `<div class="muted" style="padding:10px">${t('tk.empty')}</div>`
-        return
-      }
+      // #316 骨架批配套：知识页产物管理入口（列表顶部固定项）
+      let pageCount = 0
+      try {
+        const rp = await window.moonlybox.rpc('tasks', { op: 'pages' }, 15_000)
+        pageCount = (JSON.parse(rp.text).pages ?? []).length
+      } catch {}
       body.innerHTML = ''
+      const pagesEl = document.createElement('div')
+      pagesEl.className = 'tree-item' + (currentTaskId === '__pages__' ? ' active' : '')
+      pagesEl.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">📄 ${t('tk.pagesTab')}</span><span class="muted" style="font-size:10.5px;flex:none">${pageCount}</span>`
+      pagesEl.onclick = () => { currentTaskId = '__pages__'; renderList('tasks'); renderWork('tasks', { pages: true }) }
+      body.appendChild(pagesEl)
+      if (!jobs.length) return
       const ICONS = { queued: '⏳', running: '⚙', completed: '✓', failed: '✗', cancelled: '⊘' }
       for (const j of jobs) {
         const el = document.createElement('div')
@@ -2261,6 +2277,50 @@ async function renderWork(nav, arg, label2) {
   }
   // ---------- 备份（#257）：新建向导 + 详情面板 ----------
   if (nav === 'tasks') {
+    // #316 骨架批配套：知识页产物管理（列表/批量删+ledger 重置）
+    if (arg?.pages) {
+      head.textContent = t('nav.tasks')
+      w.innerHTML = `<div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+        <strong style="font-size:14px">${t('tk.pagesTab')}</strong>
+        <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:4px;margin-left:auto"><input type="checkbox" id="tp-selall" /> ${t('tk.selectAll')}</label>
+        <button class="btn ghost" id="tp-del" style="font-size:12px;padding:2px 10px">${t('tk.delSelected')}</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:6px 18px 16px" id="tp-list"><div class="muted" style="padding:10px">${t('list.loading')}</div></div>`
+      const list = $('tp-list')
+      const rp = await window.moonlybox.rpc('tasks', { op: 'pages' }, 15_000)
+      const pages = JSON.parse(rp.text).pages ?? []
+      if (!pages.length) {
+        list.innerHTML = `<div class="muted" style="padding:14px 0">${t('tk.pagesEmpty')}</div>`
+        return
+      }
+      list.innerHTML = pages.map((p) => {
+        const cloud = p.cloudWikiId ? `<span class="muted" style="font-size:10.5px;margin-left:6px">☁ ${t('tk.pgPending')}</span>` : ''
+        const gone = p.exists ? '' : `<span style="font-size:10.5px;margin-left:6px;color:var(--danger,#e56969)">${t('tk.pgMissing')}</span>`
+        const name = String(p.path).split('/').pop()
+        return `<div class="tp-row" style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+          <input type="checkbox" class="tp-chk" data-abs="${esc(p.abs)}" ${p.exists ? '' : 'disabled'} />
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}${cloud}${gone}</div>
+            <div class="muted" style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.jobTitle)} · ${esc(p.finishedAt ? new Date(p.finishedAt).toLocaleString() : '')}</div>
+          </div>
+        </div>`
+      }).join('')
+      $('tp-selall').onchange = (e) => { list.querySelectorAll('.tp-chk:not(:disabled)').forEach((c) => { c.checked = e.target.checked }) }
+      $('tp-del').onclick = async () => {
+        const sel = [...list.querySelectorAll('.tp-chk:checked')].map((c) => c.dataset.abs)
+        if (!sel.length) return
+        if (!confirm(t('tk.delConfirm').replace('{n}', sel.length))) return
+        const rd = await window.moonlybox.rpc('tasks', { op: 'delete_pages', paths: sel }, 30_000)
+        try {
+          const d = JSON.parse(rd.text)
+          if (d.ok) {
+            alert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger))
+            renderList('tasks'); renderWork('tasks', { pages: true })
+          } else alert(t('lib.delFail') + (d.message ?? ''))
+        } catch { alert(t('lib.delFail')) }
+      }
+      return
+    }
     // #316.5 任务详情 + #310.23：骨架一次渲染+局部 patch（自动刷新不再整页 innerHTML——滚动位置保持/无闪烁）；
     // items 按状态着色（done 绿底/failed 红/running accent+spinner）
     if (!arg?.id) {

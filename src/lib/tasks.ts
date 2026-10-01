@@ -173,3 +173,92 @@ export function recoverOnBoot(): number {
 export function isCompiled(srcHash: string): boolean {
   return readStore().jobs.some((j) => j.items.some((it) => it.srcHash === srcHash && it.status === 'done'))
 }
+
+/** #316 骨架批配套：知识页产物聚合（任务页「知识页」tab 数据源——jobs items done 的 outPath，去重+存在性） */
+export interface PageEntry {
+  path: string
+  /** 产物绝对路径 */
+  abs: string
+  /** 产物是否还在盘上 */
+  exists: boolean
+  /** 来源任务 */
+  jobId: string
+  jobTitle: string
+  finishedAt?: string
+  /** 回传云端：pending 待准入（cloudWikiId 有值=已回传）/ 未回传 / 无回传机制 */
+  cloudWikiId?: string
+  srcPath: string
+}
+
+export function listPages(vaultRoot: string): PageEntry[] {
+  const byPath = new Map<string, PageEntry>()
+  for (const job of readStore().jobs) {
+    for (const it of job.items) {
+      if (it.status !== 'done' || !it.outPath) continue
+      const abs = path.join(vaultRoot, it.outPath)
+      const prev = byPath.get(abs)
+      // 同产物多任务（重编译）：保留最近任务
+      if (prev && prev.finishedAt && job.finishedAt && prev.finishedAt >= job.finishedAt) continue
+      byPath.set(abs, {
+        path: it.outPath,
+        abs,
+        exists: fs.existsSync(abs),
+        jobId: job.id,
+        jobTitle: job.title,
+        finishedAt: job.finishedAt,
+        cloudWikiId: it.cloudWikiId,
+        srcPath: it.path,
+      })
+    }
+  }
+
+  return [...byPath.values()].sort((a, b) => (b.finishedAt ?? '').localeCompare(a.finishedAt ?? ''))
+}
+
+/**
+ * 删除知识页产物+重置 ledger（#316：删除=该源重新视为未整理）。
+ * 只删 jobs.json 记录过的产物路径（白名单防误删）；返回实际删除数与 ledger 重置数。
+ */
+export function deletePages(vaultRoot: string, absPaths: string[]): { deleted: number; resetLedger: number; missing: string[] } {
+  const known = new Set(listPages(vaultRoot).map((e) => e.abs))
+  let deleted = 0
+  const missing: string[] = []
+  for (const abs of absPaths) {
+    if (!known.has(abs)) { missing.push(abs); continue }
+    try {
+      fs.unlinkSync(abs)
+      deleted++
+    } catch {
+      missing.push(abs)
+    }
+  }
+  // ledger 重置：产物被删的 item → status 'pending'（srcHash 保留——内容没变下次扫描即视为未整理）
+  let resetLedger = 0
+  if (deleted > 0) {
+    const delSet = new Set(absPaths)
+    const store = readStore()
+    for (const job of store.jobs) {
+      let changed = false
+      for (const it of job.items) {
+        if (it.status !== 'done' || !it.outPath || !delSet.has(path.join(vaultRoot, it.outPath))) continue
+        it.status = 'pending'
+        delete it.outPath
+        delete it.cloudWikiId
+        changed = true
+        resetLedger++
+      }
+      if (changed) {
+        // 完成态任务回退为可续跑语义（done 计数同步收缩）
+        job.progress.done = job.items.filter((x) => ['done', 'failed', 'skipped', 'cancelled'].includes(x.status)).length
+        if (job.status === 'completed' || job.status === 'failed') {
+          job.status = 'queued'
+          delete job.finishedAt
+        }
+        job.updatedAt = new Date().toISOString()
+      }
+    }
+    writeStore(store.jobs)
+  }
+
+  return { deleted, resetLedger, missing }
+}
