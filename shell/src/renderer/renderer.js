@@ -361,6 +361,7 @@ const I18N_DICT = {
   'tk.tabPages': { zh: '产物', en: 'Outputs' },
   'tk.pagesEmpty': { zh: '暂无本地知识页产物。', en: 'No local knowledge pages yet.' },
   'dir.noReadme': { zh: '此目录暂无 README.md 说明。', en: 'No README.md in this directory.' },
+  'ui.ok': { zh: '确定', en: 'OK' },
   'tk.delThis': { zh: '删除此文件', en: 'Delete this file' },
   'tk.selectAll': { zh: '全选', en: 'Select all' },
   'tk.delSelected': { zh: '删除所选', en: 'Delete selected' },
