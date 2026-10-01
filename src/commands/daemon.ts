@@ -875,7 +875,19 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           // #310.39：存量产物补传（编译/同步解耦）——幂等，返回统计
           const { backfillPushAll } = await import('../lib/compile-runner')
           const r = await backfillPushAll()
-          text = JSON.stringify({ ok: true, ...r })
+          // #310.55：补传后顺带一次下行对账（闭环同场跑完）——已准入产物 trackAndSkip 静默豁免+打 ✓ 标；
+          // 失败不阻断补传结果回显（下行有独立重试面：下次开关/CLI sync）
+          let down: any = null
+          try {
+            const { syncDown } = await import('../lib/sync')
+            const root = defaultVaultRoot()
+            const report = { downloaded: [], updated: [], uploaded: [], inboxFiled: [], conflicts: [], skipped: [] } as any
+            await syncDown(root, report)
+            down = { downloaded: report.downloaded.length, updated: report.updated.length, conflicts: report.conflicts.length }
+          } catch (e: any) {
+            down = { error: String(e?.message ?? e).slice(0, 120) }
+          }
+          text = JSON.stringify({ ok: true, ...r, down })
         } else {
           code = 2
           text = `未知 tasks op：${op}`
