@@ -47,7 +47,11 @@ function writeOut(srcPath: string, md: string): string {
   let out = path.join(dir, `${base}.md`)
   let n = 2
   while (fs.existsSync(out)) out = path.join(dir, `${base}-${n++}.md`)
-  const header = `> 知识页 · 本地整理 · 源：${path.basename(srcPath)} · ${new Date().toISOString().slice(0, 10)}\n\n`
+    // #310.22：头注日期用本地时区（UTC slice 在 0-8 点会差一天）
+  const nowD = new Date()
+  const p2 = (n: number) => String(n).padStart(2, '0')
+  const localDate = `${nowD.getFullYear()}-${p2(nowD.getMonth() + 1)}-${p2(nowD.getDate())}`
+  const header = `> 知识页 · 本地整理 · 源：${path.basename(srcPath)} · ${localDate}\n\n`
   fs.writeFileSync(out, header + md + '\n', 'utf8')
   return out
 }
