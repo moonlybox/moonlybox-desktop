@@ -287,6 +287,7 @@ const I18N_DICT = {
   'xy.historySep': { zh: '—— 以上为历史 ——', en: '—— history above ——' },
   'xy.thinking': { zh: '小月思考中…', en: 'Xiaoyue is thinking…' },
   'xy.phaseTools': { zh: '工具就绪，正在思考…', en: 'Tools ready — thinking…' },
+  'xy.phaseToolRun': { zh: '正在执行工具…', en: 'Running tool…' },
   'xy.phaseModel': { zh: '模型已响应，继续处理…', en: 'Model responded — continuing…' },
   'xy.phasePrep': { zh: '正在准备上下文…', en: 'Preparing context…' },
   'xy.stop': { zh: '■ 停止', en: '■ Stop' },
@@ -3400,9 +3401,11 @@ function bindChat(chatInfo) {
       return
     }
     if (line.startsWith('⚙ ')) {
+      // #310.18：⚙=动作开始非结束——thinking 持续换「正在执行工具…」（慢工具如 local_task 扫描 10s+ 有状态）；结果行到达才收
       flushCur()
       const body = addFold(line, '', 'tool')
       cur = { type: 'tool', el: body, text: '' }
+      showThinking(t('xy.phaseToolRun'))
       return
     }
     if (/^（LLM 响应：/.test(line) || /^（本地/.test(line) || /^（云端/.test(line) || /^（上下文/.test(line)) {
@@ -3414,7 +3417,8 @@ function bindChat(chatInfo) {
       return
     }
     if (/^  → |^  ✗ |^  （/.test(line) && (cur.type === 'tool' || cur.type === 'think')) {
-      // 工具结果/子行并入折叠体（#308.3：折叠体 pre-wrap 会显形空行——空行不并入）
+      // #310.18：结果行=动作完成（或确认请求=等待用户）——thinking 收；文本并入折叠体（#308.3：空行不并入）
+      hideThinking()
       if (line.trim()) {
         cur.text += (cur.text ? '\n' : '') + line
         cur.el.textContent = cur.text
