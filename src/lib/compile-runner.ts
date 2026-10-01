@@ -189,6 +189,15 @@ function readSource(p: string): string | null {
  * 源文档云端 ID 从 sync manifest 反查（path→docId）；未同步过的源（不在 manifest）跳过回传——
  * 云端归属校验（②步）要求 sourceDocId 是本用户书房文档。
  */
+/** #310.52：剥产物 md 头部（YAML frontmatter + 「> 知识页」头注）——上云正文本体纯净（本地资产文件不动） */
+function stripFrontmatter(md: string): string {
+  let out = md
+  const m = out.match(/^---\n[\s\S]*?\n---\n/)
+  if (m) out = out.slice(m[0].length)
+  out = out.replace(/^> 知识页[^\n]*\n+/, '')
+  return out
+}
+
 async function pushToMoon(jobId: string, itemPath: string, srcHash: string | undefined, md: string, sk?: Skeleton, titles?: string[], tags?: string[]): Promise<void> {
   try {
     const g = loadSettings()
@@ -264,6 +273,8 @@ export async function backfillPushAll(): Promise<{ scanned: number; pushed: numb
       let md = ''
       try { md = fs.readFileSync(abs, 'utf8') } catch { continue } // 产物被删=无资产可补传
       if (!md.trim()) continue
+      // #310.52：补传剥壳——产物文件含 YAML frontmatter+头注（本地资产形态），上云正文本体须纯净（与云端编译产物对齐）
+      md = stripFrontmatter(md)
       scanned++
       try {
         // #310.41：传**源文档路径**（it.path）——pushToMoon 的 manifest 反查按源路径匹配（编译时语义）；产物路径会全部误判「源未同步」
