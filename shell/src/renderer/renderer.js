@@ -1,5 +1,7 @@
 /** renderer：#253 壳层重构——3 列布局（图标栏/功能列表/工作台）+ 标题栏 MDI 页帧 + 设置弹窗。 */
 const $ = (id) => document.getElementById(id)
+// #310.12.3：HTML 插值转义（Ollama 版本/模型名等外部数据进 innerHTML；#310.11 从云端搬 esc 未带定义——客户端此前无此工具）
+const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 
 // renderer 全局错误可见化（UI 瘫痪时不再靠猜——错误横幅直接显示）
 window.addEventListener('error', (e) => {
