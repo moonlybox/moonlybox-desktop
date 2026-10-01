@@ -9,7 +9,11 @@ import { listTools, callTool, McpTool } from './moonlink'
  *  - 循环上限 6 轮（防失控）；每轮工具调用打活动流（⚙ 前缀）
  */
 
-const MAX_TOOL_ROUNDS = 6
+const MAX_TOOL_ROUNDS = 12 // #317.2：硬顶防失控（轮数不再是最小预算——判停主力=token 预算制）
+/** #317.2：上下文预算（与 chat-context BUDGET 同基准）：messages 近似 token 超 85%→引导收尾；超 100%→强制汇总 */
+const CTX_BUDGET_DEFAULT = 6000
+const ctxTokens = (messages: import('../lib/llm').ChatMessage[]): number =>
+  messages.reduce((a, m) => a + Math.ceil(String(m.content ?? '').length / 3) + (Array.isArray(m.tool_calls) ? 120 : 0), 0)
 const CONFIRM_Y = new Set(['y', 'Y', 'yes', 'Yes', '是', '好'])
 
 function needsConfirm(tool: McpTool): boolean {
@@ -41,6 +45,8 @@ export interface AgentLoopDeps {
   builtinTools?: Array<{ name: string; title?: string; description?: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean }; inputSchema: unknown }>
   /** #317.1 书房根（工具结果落盘引用注入；缺省=跳过落盘直接截断） */
   vaultRoot?: string
+  /** #317.2 上下文预算（token 近似；缺省 6000 与 chat-context 同基准；测试可调小验证判停） */
+  ctxBudget?: number
 }
 
 export interface AgentLoopResult {
@@ -133,7 +139,20 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   ]
   const used: Array<{ name: string; ok: boolean }> = []
 
+  let budgetWarned = false
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    // #317.2：token 预算制判停（轮数硬顶只是兜底）——85% 注入「收尾」指令；100% 强制出最终回答
+    const CTX_BUDGET = deps.ctxBudget ?? CTX_BUDGET_DEFAULT
+    const tk = ctxTokens(messages)
+    if (tk >= CTX_BUDGET) {
+      say(`（上下文预算将尽：${tk}/${CTX_BUDGET} token——汇总已有结果作答）`)
+      break
+    }
+    if (tk >= CTX_BUDGET * 0.85 && !budgetWarned) {
+      budgetWarned = true
+      say(`（上下文预算 85%：${tk}/${CTX_BUDGET}——请尽快收尾）`)
+      messages.push({ role: 'system', content: '上下文预算即将用尽：请在本轮决定后直接给出最终回答，不要再发起新的工具调用（除非绝对必要）。' })
+    }
     const res = await chat(messages, openaiTools)
     if (!res.ok) throw new Error(res.error ?? 'LLM 调用失败')
 
@@ -156,7 +175,18 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         // #280.3：本地工具执行同样打活动流（原来静默——deepwiki 类自定义 MCP 执行零痕迹，排查盲区）
         say(`⚙ ${tc.function.name} ${argsJson.slice(0, 120)}`)
         let out: string
-        try { out = await localFn(args) } catch (e: any) { out = `本地执行失败：${String(e?.message ?? e)}` }
+        out = await (async () => {
+          // #317.2：本地工具失败自动重试 1 次（与远程只读工具同语义；写确认类不重试）
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              if (attempt > 0) say(`  ↻ 重试一次…`)
+              return await localFn(args)
+            } catch (e: any) {
+              if (attempt === 1) return `本地执行失败：${String(e?.message ?? e)}`
+            }
+          }
+          return '本地执行失败'
+        })()
         messages.push({ role: 'tool', tool_call_id: tc.id, content: injectToolResult(deps.vaultRoot ?? '', tc.function.name, out) })
         used.push({ name: tc.function.name, ok: !out.startsWith('本地执行失败') })
         continue
@@ -180,7 +210,17 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       }
 
       try {
-        const result = await callTool(meta.name, args)
+        let lastErr: unknown = null
+        let result: Awaited<ReturnType<typeof callTool>> | null = null
+        // #317.2：只读工具失败自动重试 1 次（写操作不重试——失败时执行状态不确定，重试可能双写）
+        for (let attempt = 0; attempt < (needsConfirm(meta) ? 1 : 2); attempt++) {
+          try {
+            if (attempt > 0) say(`  ↻ 重试一次…`)
+            result = await callTool(meta.name, args)
+            break
+          } catch (e) { lastErr = e }
+        }
+        if (!result) throw lastErr ?? new Error('工具执行失败')
         const text = toolResultText(result)
         say(`  → ${text.slice(0, 160)}`)
         messages.push({ role: 'tool', tool_call_id: tc.id, content: injectToolResult(deps.vaultRoot ?? '', meta.name, text) })
@@ -193,5 +233,11 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       }
     }
   }
+  // #317.2：预算/轮数判停——不再丢一句占位话，改为一次无工具 LLM 调用汇总已有结果
+  try {
+    messages.push({ role: 'system', content: '工具调用阶段结束（上下文预算或轮次已到）。请基于以上已获得的工具结果，直接给出面向用户的最终回答；未完成的部分如实说明。' })
+    const fin = await chat(messages, undefined)
+    if (fin.ok && fin.text) return { answer: fin.text, toolCalls: used }
+  } catch { /* 汇总失败回落占位 */ }
   return { answer: '（工具调用轮次达到上限，以上是已执行的结果）', toolCalls: used }
 }
