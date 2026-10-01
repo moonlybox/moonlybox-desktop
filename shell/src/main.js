@@ -487,6 +487,37 @@ app.whenReady().then(() => {
       return { ok: false, error: '所选文件不是可用的 Ollama：' + String(e && e.message ? e.message.split('\n')[0] : e) }
     }
   })
+  // #310.13：唤起系统终端执行 ollama pull——过程用户完全可见，终端不自动关（win: cmd /k；mac: Terminal do script；linux: bash -c 尾 exec bash）
+  ipcMain.handle('ollama:pullTerm', async (_e, payload) => {
+    const cli = String(payload?.cli || findOllamaCli() || 'ollama')
+    const model = String(payload?.model || '').trim()
+    if (!/^[A-Za-z0-9._:\/-]+$/.test(model)) return { ok: false, error: '模型名不合法' }
+    const cp = require('child_process')
+    try {
+      if (process.platform === 'win32') {
+        // start 新窗口标题占位；/k 执行后保留窗口
+        cp.spawn('cmd.exe', ['/c', 'start', 'Ollama pull', 'cmd', '/k', cli, 'pull', model], { detached: true, stdio: 'ignore', windowsHide: false }).unref()
+      } else if (process.platform === 'darwin') {
+        const script = `tell application "Terminal"\n  do script ${JSON.stringify(`${JSON.stringify(cli)} pull ${JSON.stringify(model)}`)}\n  activate\nend tell`
+        cp.spawn('osascript', ['-e', script], { detached: true, stdio: 'ignore' }).unref()
+      } else {
+        const inner = `${JSON.stringify(cli)} pull ${JSON.stringify(model)}; exec bash`
+        const candidates = [
+          ['gnome-terminal', ['--', 'bash', '-c', inner]],
+          ['konsole', ['-e', 'bash', '-c', inner]],
+          ['xterm', ['-e', 'bash', '-c', inner]],
+        ]
+        const hit = candidates.find(([bin]) => {
+          try { cp.execFileSync('which', [bin], { timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }); return true } catch { return false }
+        })
+        if (!hit) return { ok: false, error: '未找到系统终端（gnome-terminal/konsole/xterm）' }
+        cp.spawn(hit[0], hit[1], { detached: true, stdio: 'ignore' }).unref()
+      }
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: String(e && e.message ? e.message : e) }
+    }
+  })
   // #310.11：启动系统级 Ollama 服务（spawn 分离，不随应用退出被杀）
   ipcMain.handle('ollama:serve', async (_e, cli) => {
     try {

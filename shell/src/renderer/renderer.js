@@ -509,6 +509,12 @@ const I18N_DICT = {
   'ol.pickBtn': { zh: '手工定位', en: 'Locate manually' },
   'ol.pickFail': { zh: '定位失败', en: 'Locate failed' },
   'ol.pickedOk': { zh: '已定位 Ollama {v}——重新检测中…', en: 'Located Ollama {v} — re-probing…' },
+  'ol.recoPull': { zh: '⬇ 拉取（终端可见）', en: '⬇ Pull (visible terminal)' },
+  'ol.recoCustomPh': { zh: '自定义模型名，如 qwen3:8b', en: 'Custom model, e.g. qwen3:8b' },
+  'ol.recoRam8': { zh: '8GB 内存可跑', en: 'runs on 8GB RAM' },
+  'ol.recoRam16': { zh: '建议 16GB 内存', en: '16GB RAM recommended' },
+  'ol.pullLaunched': { zh: '已在系统终端启动拉取 {m}——下载完成后回到此页点「重新检测」', en: 'Pulling {m} in a visible terminal — click Re-check here when done' },
+  'ol.pullFail': { zh: '拉取启动失败', en: 'Failed to launch pull' },
   'ol.dlBtn': { zh: '⬇ 打开 Ollama 下载页', en: '⬇ Open Ollama Download Page' },
   'ol.recheck': { zh: '↻ 重新检测', en: '↻ Re-check' },
   'ol.pullHint': { zh: '在终端执行 <code>ollama pull qwen3:4b</code> 拉取模型后，回到此页即可一键接入。', en: 'Run <code>ollama pull qwen3:4b</code> in a terminal, then come back here to connect with one click.' },
@@ -1540,8 +1546,45 @@ async function renderWork(nav, arg, label2) {
           } catch {}
           const models = (tags && Array.isArray(tags.models)) ? tags.models : []
           if (models.length === 0) {
+            // #310.13：推荐模型一键拉取（唤起系统终端可见执行；完整应用内下载器仍在挂账）
+            const RECO = [
+              { m: 'qwen3:4b', sz: '~2.6 GB', spec: '4B', ok: 'ol.recoRam8' },
+              { m: 'llama3.2:3b', sz: '~2.0 GB', spec: '3B', ok: 'ol.recoRam8' },
+              { m: 'qwen2.5:7b', sz: '~4.7 GB', spec: '7B', ok: 'ol.recoRam16' },
+              { m: 'gemma3:4b', sz: '~3.3 GB', spec: '4B', ok: 'ol.recoRam8' },
+            ]
             mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.noModelsTitle')}</div>
-              <div class="sc-desc">${t('ol.pullHint')}</div></div></div>`
+              <div class="sc-desc">${t('ol.pullHint')}</div></div>
+              <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+                ${RECO.map((x) => `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-weight:600;font-size:13px">${x.m}</span>
+                  <span style="font-size:11px;color:var(--muted)">${x.spec} · ${x.sz} · ${t(x.ok)}</span>
+                  <button type="button" class="btn ghost" data-olpull="${x.m}" style="margin-left:auto">${t('ol.recoPull')}</button>
+                </div>`).join('')}
+              </div>
+              <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
+                <input id="sp-ol-custom" placeholder="${t('ol.recoCustomPh')}" style="flex:1" />
+                <button type="button" class="btn ghost" id="sp-ol-custom-go">${t('ol.recoPull')}</button>
+              </div>
+              <div class="set-status" id="sp-ol-pull-status" style="margin-top:6px"></div></div>`
+            const pull = async (name) => {
+              const st = $('sp-ol-pull-status')
+              const g = await loadAppSettings()
+              const cli = ((g.general ?? {}).ollamaCli) || null
+              const r = await window.moonlybox.ollamaPullTerm({ cli, model: name })
+              if (r && r.ok) {
+                st.className = 'set-status ok'
+                st.textContent = t('ol.pullLaunched').replace('{m}', name)
+              } else {
+                st.className = 'set-status err'
+                st.textContent = (r && r.error) || t('ol.pullFail')
+              }
+            }
+            mbox.querySelectorAll('[data-olpull]').forEach((el) => { el.onclick = () => pull(el.dataset.olpull) })
+            $('sp-ol-custom-go').onclick = () => {
+              const v = $('sp-ol-custom').value.trim()
+              if (v) pull(v)
+            }
             return
           }
           mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.installedModelsTitle')}</div>
