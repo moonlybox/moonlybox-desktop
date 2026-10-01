@@ -6,7 +6,7 @@
  *   login        OAuth Device Flow 授权（任务 3）
  *   sync         vault 双向同步引擎（任务 5，M1 最大块）
  *   inbox watch  收集箱监听（任务 5 一部分）
- *   compile      本地 LLM 整理（M2，--local 预留）
+ *   compile      文档整理为知识页（M2 骨架；#316 规划本地编译管道）
  *   xiaoyue      对话（任务 6 最小版）
  *
  * 本文件只做命令路由；各命令实现在 src/commands/*，骨架阶段输出「未实现」。

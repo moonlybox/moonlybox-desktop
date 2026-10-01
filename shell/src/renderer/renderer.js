@@ -379,7 +379,7 @@ const I18N_DICT = {
   'chat.retryLabel': { zh: '模型重试次数（调用失败自动重试）', en: 'Model retries (auto-retry on failure)' },
   'mp.groupCloud': { zh: '平台 API', en: 'Platform APIs' },
   'mp.groupCustom': { zh: '自定义', en: 'Custom' },
-  'mp.groupLocal': { zh: '本地部署（预留）', en: 'Local (reserved)' },
+  'mp.groupLocal': { zh: '本地部署', en: 'Local' },
   'mp.wxHint': { zh: '（只存钥匙串）', en: ' (stored in keychain only)' },
   'mp.keyDocs': { zh: 'API Key 获取：', en: 'Get API key: ' },
   'mp.addPv': { zh: '＋ 添加平台', en: '＋ Add Platform' },
@@ -1286,7 +1286,7 @@ async function renderWork(nav, arg, label2) {
     } else if (cat.id === 'chat') {
       const g = await loadAppSettings()
       const cv = g.chat ?? {}
-      // #283：默认模型下拉=平台API/自定义/本地部署（预留）所有已启用实例分组列出
+      // #283：默认模型下拉=平台API/自定义/本地部署三组已启用实例列出（#316：本地部署已实装）
       const mm = g.model ?? {}
       const modelOpts =
         `<optgroup label="${t('mp.groupCloud')}">${(mm.providers ?? []).filter((x) => x.enabled).map((x) => {

@@ -1,5 +1,5 @@
 /**
- * 模型注册表（#283）：平台API 多实例+自定义多模型+本地部署（预留）统一解析。
+ * 模型注册表（#283）：平台API 多实例+自定义多模型+本地部署（#310.14 实装 Ollama）统一解析。
  * - settings.model.default = 'platform:<id>' | 'custom:<id>' | 'local:<id>' | ''
  * - key 纪律：所有 key 只存钥匙串（service=moonlybox, account=`llm:<实例id>`），settings 只存非敏感元数据；
  *   遗留明文 apiKey 字段读取时自动迁移（daemon settings save 剥离）。
