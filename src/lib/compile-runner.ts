@@ -250,11 +250,11 @@ async function pushToMoon(jobId: string, itemPath: string, srcHash: string | und
  * 无骨架摘要（账本不存 sk/titles/tags）——external 校验 skeleton 可空，服务端按无骨架分支落库。
  * 触发：daemon 启动 / 开关打开（tasks op backfill_push）；幂等可重复调。
  */
-export async function backfillPushAll(): Promise<{ scanned: number; pushed: number; skipped: number }> {
+export async function backfillPushAll(): Promise<{ scanned: number; pushed: number; skipped: number; reason?: string }> {
   const g = loadSettings()
-  if (g?.model?.syncToMoon === false) return { scanned: 0, pushed: 0, skipped: 0 }
+  if (g?.model?.syncToMoon === false) return { scanned: 0, pushed: 0, skipped: 0, reason: '开关未开' }
   const { loadCredentials } = await import('./auth')
-  if (!loadCredentials()?.accessToken) return { scanned: 0, pushed: 0, skipped: 0 }
+  if (!loadCredentials()?.accessToken) return { scanned: 0, pushed: 0, skipped: 0, reason: '未登录云端' }
   const jobs = allJobs()
   let scanned = 0, pushed = 0, skipped = 0
   for (const job of jobs) {

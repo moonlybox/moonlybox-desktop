@@ -363,6 +363,7 @@ const I18N_DICT = {
   'dir.noReadme': { zh: '此目录暂无 README.md 说明。', en: 'No README.md in this directory.' },
   'ui.ok': { zh: '确定', en: 'OK' },
   'lib.backfillDone': { zh: '补传完成：扫描 {s} 篇，成功 {p} 篇', en: 'Backfill done: {s} scanned, {p} pushed' },
+  'lib.backfillNone': { zh: '没有可补传的产物', en: 'Nothing to backfill' },
   'tk.delThis': { zh: '删除此文件', en: 'Delete this file' },
   'tk.selectAll': { zh: '全选', en: 'Select all' },
   'tk.delSelected': { zh: '删除所选', en: 'Delete selected' },
@@ -1531,7 +1532,12 @@ async function renderWork(nav, arg, label2) {
           try {
             const rb = await window.moonlybox.rpc('tasks', { op: 'backfill_push' }, 120_000)
             const db = JSON.parse(rb.text ?? '{}')
-            if (db.ok && db.scanned > 0) st.textContent = t('lib.backfillDone').replace('{s}', db.scanned).replace('{p}', db.pushed)
+            if (db.ok) {
+              // #310.40：三闸结果全部回显（0 篇也要让用户知道原因——未登录/开关/无云端归属不再静默）
+              st.textContent = db.reason ? `${t('lib.backfillNone')}（${db.reason}）` : t('lib.backfillDone').replace('{s}', db.scanned).replace('{p}', db.pushed)
+              st.className = 'set-status ' + (db.reason ? 'warn' : 'ok')
+              setTimeout(() => { st.textContent = '' }, 6000)
+            }
           } catch {}
         }
       }
