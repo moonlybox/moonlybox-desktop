@@ -172,9 +172,12 @@ export async function byokChatMessages(
         ...(tools && tools.length ? { tools } : {}),
         max_tokens: maxTokens, // #310.19：可变上限（默认 4000）
         temperature: 0.3,
-        // #310.36：Ollama 思考型模型关思考（编译/分析类任务无需 reasoning；思考吃满 max_tokens=空正文主因）
-        // 仅本地 Ollama 端点注入——OpenAI 等严格校验端点会对未知字段 400
+        // #310.36：思考型模型关思考（编译/分析类任务无需 reasoning；思考吃满 max_tokens=空正文主因）
+        // 按端点家族注入（严格校验端点对未知字段 400，不能全量注入）：
+        // - Ollama 本地：think:false
+        // - 智谱 GLM（glm-4.5+ 默认开思考）：thinking:{type:'disabled'}
         ...(isLocalEndpoint(meta.baseUrl) && /:11434|\/ollama/i.test(meta.baseUrl) ? { think: false } : {}),
+        ...(/bigmodel\.cn|\/glm/i.test(meta.baseUrl) ? { thinking: { type: 'disabled' } } : {}),
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
