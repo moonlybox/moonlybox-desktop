@@ -94,13 +94,13 @@ async function analyzeDoc(model: NonNullable<ReturnType<typeof resolveCompileMod
 
 /** 单页生成（骨架约束：structure 章节+页预算+关键词锚） */
 async function compileOnePage(model: NonNullable<ReturnType<typeof resolveCompileModel>>, srcPath: string, srcText: string, sk: Skeleton, page: Skeleton['pages'][number], topicTitle: string, topicSummary: string): Promise<string> {
-  const kwHint = sk.keywords.length ? `\n标题与小节命名必须自然融入这些关键词中的至少一个：${sk.keywords.join('、')}` : ''
+  // #310.53：关键词融合指示已删（用户定案）——云端编译从不约束标题关键词，页标题由 LLM 按主题自然起名
   const secHint = page.sections ? `\n本页只覆盖这些章节内容：${page.sections.join('、')}` : ''
   const sys =
     '你是知识编译助手。针对给定主题，从原文中提取相关内容，编译为一张结构化知识页（Markdown）。\n' +
     `必须包含且仅包含以下章节（Markdown 二级标题）：\n${sk.structure}\n` +
     '要求：只使用原文信息，不编造；关键结论可溯源；原文不足以支撑某章节时写「（原文未涉及）」；语言与原文一致；' +
-    `篇幅 ≤${page.maxChars} 字（压缩提炼，禁止逐段复述原文）。只输出 Markdown 正文。${kwHint}${secHint}`
+    `篇幅 ≤${page.maxChars} 字（压缩提炼，禁止逐段复述原文）。只输出 Markdown 正文。${secHint}`
   const r = await byokChatMessages(
     [
       { role: 'system', content: sys },
