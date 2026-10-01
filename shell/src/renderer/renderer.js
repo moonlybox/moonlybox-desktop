@@ -2418,13 +2418,17 @@ async function renderWork(nav, arg, label2) {
         <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div id="tk-bar" style="height:100%;width:${j.progress.total ? Math.round((j.progress.done / j.progress.total) * 100) : 0}%;background:var(--accent);transition:width .4s"></div></div>
         <div class="muted" style="font-size:11.5px;margin-top:6px" id="tk-cnt">${j.progress.done}/${j.progress.total}</div>
       </div>
-      <div style="padding:0 18px;display:flex;gap:8px;border-bottom:1px solid var(--border)" id="tk-tabs">
-        <button class="btn ghost" id="tk-tab-items" style="font-size:12px;padding:3px 10px;border-bottom:2px solid var(--accent)">${t('tk.tabItems')}</button>
-        <button class="btn ghost" id="tk-tab-pages" style="font-size:12px;padding:3px 10px">${t('tk.tabPages')} (${donePages.length})</button>
+      <div style="padding:6px 18px 0;display:flex;gap:6px" id="tk-tabs">
+        <button id="tk-tab-items" style="font-size:12px;padding:3px 12px;border:0;border-radius:8px;cursor:pointer;background:var(--active-bg);color:var(--active-fg);font-weight:600">${t('tk.tabItems')}</button>
+        <button id="tk-tab-pages" style="font-size:12px;padding:3px 12px;border:0;border-radius:8px;cursor:pointer;background:transparent;color:inherit">${t('tk.tabPages')} (${donePages.length})</button>
       </div>
       <div style="flex:1;overflow-y:auto;padding:0 18px 16px" id="tk-list">${j.items.map(itemRow).join('') || `<div class="muted tk-empty-hint" style="padding:10px 0">${t('tk.empty')}</div>`}</div>
       <div style="flex:1;overflow-y:auto;padding:6px 18px 16px;display:none" id="tk-pages">
-        ${donePages.length ? donePages.map((it) => {
+        ${donePages.length ? `<div style="display:flex;align-items:center;gap:10px;padding:4px 0 8px;position:sticky;top:0;background:var(--bg,#fff);z-index:1">
+          <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="tkp-selall" /> ${t('tk.selectAll')}</label>
+          <button class="btn ghost" id="tkp-del" style="font-size:12px;padding:2px 10px;margin-left:auto">${t('tk.delSelected')}</button>
+        </div>` : ''}
+        ${donePages.map((it) => {
           const name = String(it.outPath).split(/[\\/]/).pop()
           const cloud = it.cloudWikiId ? `<span class="muted" style="font-size:10.5px;margin-left:6px">☁ ${t('tk.pgPending')}</span>` : ''
           return `<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
@@ -2434,21 +2438,26 @@ async function renderWork(nav, arg, label2) {
               <div class="muted" style="font-size:10.5px">${esc(t('tk.iDone'))}</div>
             </div>
           </div>`
-        }).join('') : `<div class="muted" style="padding:10px 0">${t('tk.pagesEmpty')}</div>`}
-        ${donePages.length ? `<div style="padding:10px 0"><button class="btn ghost" id="tkp-del" style="font-size:12px;padding:2px 10px">${t('tk.delSelected')}</button></div>` : ''}
+        }).join('') || `<div class="muted" style="padding:10px 0">${t('tk.pagesEmpty')}</div>`}
       </div>`
     // tab 切换（DOM 显隐，不整页重渲）
     const listEl0 = $('tk-list'), pagesEl0 = $('tk-pages')
-    $('tk-tab-items').onclick = () => {
-      listEl0.style.display = ''; pagesEl0.style.display = 'none'
-      $('tk-tab-items').style.borderBottom = '2px solid var(--accent)'
-      $('tk-tab-pages').style.borderBottom = '2px solid transparent'
+    const setTab = (which) => {
+      const on = which === 'items'
+      listEl0.style.display = on ? '' : 'none'
+      pagesEl0.style.display = on ? 'none' : ''
+      const bi = $('tk-tab-items'), bp = $('tk-tab-pages')
+      bi.style.background = on ? 'var(--active-bg)' : 'transparent'
+      bi.style.color = on ? 'var(--active-fg)' : 'inherit'
+      bi.style.fontWeight = on ? '600' : '400'
+      bp.style.background = on ? 'transparent' : 'var(--active-bg)'
+      bp.style.color = on ? 'inherit' : 'var(--active-fg)'
+      bp.style.fontWeight = on ? '400' : '600'
     }
-    $('tk-tab-pages').onclick = () => {
-      listEl0.style.display = 'none'; pagesEl0.style.display = ''
-      $('tk-tab-pages').style.borderBottom = '2px solid var(--accent)'
-      $('tk-tab-items').style.borderBottom = '2px solid transparent'
-    }
+    $('tk-tab-items').onclick = () => setTab('items')
+    $('tk-tab-pages').onclick = () => setTab('pages')
+    const selall = $('tkp-selall')
+    if (selall) selall.onchange = (e) => { pagesEl0.querySelectorAll('.tkp-chk').forEach((c) => { c.checked = e.target.checked }) }
     const delBtn = $('tkp-del')
     if (delBtn) delBtn.onclick = async () => {
       const sel = [...pagesEl0.querySelectorAll('.tkp-chk:checked')].map((c) => c.dataset.abs)
