@@ -871,6 +871,11 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             const r = deletePages(root, paths.map(String).slice(0, 500).map(norm))
             text = JSON.stringify({ ok: true, ...r })
           }
+        } else if (op === 'backfill_push') {
+          // #310.39：存量产物补传（编译/同步解耦）——幂等，返回统计
+          const { backfillPushAll } = await import('../lib/compile-runner')
+          const r = await backfillPushAll()
+          text = JSON.stringify({ ok: true, ...r })
         } else {
           code = 2
           text = `未知 tasks op：${op}`
@@ -891,6 +896,8 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
 export async function runDaemon(): Promise<void> {
   // #310.31c：启动即确保书房结构（幂等）——含根 README 升级判定（此前只在 CLI sync/inbox 调用，桌面端 daemon 从不触发→用户拉码后 README 不升级）
   try { initVault(defaultVaultRoot()) } catch {}
+  // #310.39：启动补传存量产物（编译/同步解耦——登录态+开关开才实际动作；内部三闸留痕，幂等）
+  void import('../lib/compile-runner').then((m) => m.backfillPushAll()).catch(() => {})
   // #316.5：启动恢复——daemon 重启后 running/queued 任务 → queued（items 断点保留；执行由 tasks op 触发或任务页「继续」）
   const recovered = recoverOnBoot()
   if (recovered) console.log(`（任务恢复：${recovered} 个任务待续）`)

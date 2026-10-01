@@ -52,6 +52,11 @@ function jobsFile(): string {
   return path.join(configDir(), 'jobs.json')
 }
 
+/** #310.39：全账本读取（补传扫描用） */
+export function allJobs(): LocalJob[] {
+  return readStore().jobs
+}
+
 function readStore(): { jobs: LocalJob[] } {
   try {
     const d = JSON.parse(fs.readFileSync(jobsFile(), 'utf8'))

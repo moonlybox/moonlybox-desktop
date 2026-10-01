@@ -10,7 +10,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { defaultVaultRoot } from './config'
-import { getJob, updateJob, updateItem } from './tasks'
+import { allJobs, getJob, updateJob, updateItem } from './tasks'
 import { resolveCompileModel } from './compile-model'
 import { byokChatMessages } from './llm'
 import { loadSettings } from './settings'
@@ -242,6 +242,38 @@ async function pushToMoon(jobId: string, itemPath: string, srcHash: string | und
     // #284 语义：回传失败不影响本地产物
     try { updateItem(jobId, itemPath, { error: `本地完成；云端回传失败：${String(e?.message ?? e).slice(0, 120)}` }) } catch {}
   }
+}
+
+/**
+ * #310.39：存量产物补传（编译与同步解耦——用户定案「产物是资产，不能因编译时开关未开被永久抛弃」）。
+ * 扫全部 jobs：done+产物文件存在+无 cloudWikiId → 重读产物 md 走 pushToMoon（三闸+留痕+cloudWikiId 回写防重复）。
+ * 无骨架摘要（账本不存 sk/titles/tags）——external 校验 skeleton 可空，服务端按无骨架分支落库。
+ * 触发：daemon 启动 / 开关打开（tasks op backfill_push）；幂等可重复调。
+ */
+export async function backfillPushAll(): Promise<{ scanned: number; pushed: number; skipped: number }> {
+  const g = loadSettings()
+  if (g?.model?.syncToMoon === false) return { scanned: 0, pushed: 0, skipped: 0 }
+  const { loadCredentials } = await import('./auth')
+  if (!loadCredentials()?.accessToken) return { scanned: 0, pushed: 0, skipped: 0 }
+  const jobs = allJobs()
+  let scanned = 0, pushed = 0, skipped = 0
+  for (const job of jobs) {
+    for (const it of job.items) {
+      if (it.status !== 'done' || !it.outPath || it.cloudWikiId) continue
+      const abs = path.isAbsolute(it.outPath) ? it.outPath : path.join(defaultVaultRoot(), it.outPath)
+      let md = ''
+      try { md = fs.readFileSync(abs, 'utf8') } catch { continue } // 产物被删=无资产可补传
+      if (!md.trim()) continue
+      scanned++
+      try {
+        await pushToMoon(job.id, it.outPath, it.srcHash, md)
+        const cur2 = getJob(job.id)?.items.find((x) => x.path === it.path)
+        if (cur2?.cloudWikiId) pushed++
+        else skipped++
+      } catch { skipped++ }
+    }
+  }
+  return { scanned, pushed, skipped }
 }
 
 /**
