@@ -361,6 +361,8 @@ const I18N_DICT = {
   'tk.tabPages': { zh: '产物', en: 'Outputs' },
   'tk.pagesEmpty': { zh: '暂无本地知识页产物。', en: 'No local knowledge pages yet.' },
   'dir.noReadme': { zh: '此目录暂无 README.md 说明。', en: 'No README.md in this directory.' },
+  'tk.selNone': { zh: '全不选', en: 'Select none' },
+  'tk.delThis': { zh: '删除此文件', en: 'Delete this file' },
   'tk.selectAll': { zh: '全选', en: 'Select all' },
   'tk.delSelected': { zh: '删除所选', en: 'Delete selected' },
   'tk.delConfirm': { zh: '确认删除所选 {n} 个知识页文件？对应源文档将重新视为「未整理」（可再次整理）。', en: 'Delete {n} local knowledge page files? Their sources become uncompiled again (can be recompiled).' },
@@ -1138,6 +1140,8 @@ async function renderTree(container, rel, depth) {
   if (!r.ok) { container.innerHTML = `<div class="muted" style="padding:10px">${r.message}</div>`; return }
   for (const item of r.items) {
     const relPath = rel ? `${rel}/${item.name}` : item.name
+    // #310.32：书房根 README.md=客户端元数据位（目录说明单源）——树中不显示不可编辑
+    if (!rel && !item.dir && item.name.toLowerCase() === 'readme.md') continue
     const el = document.createElement('div')
     el.className = 'tree-item' + (item.dir ? ' dir' : '')
     el.style.paddingLeft = `${8 + depth * 14}px`
@@ -1284,13 +1288,22 @@ async function renderWork(nav, arg, label2) {
     // #310.27：「知识页」目录=产物管理视图（从任务页迁入——产物归书房；勾选批量删+ledger 重置）。
     // 其余目录保持占位（后续按产物类型同构扩展：download/backup 等任务产物目录）。
     if (arg.rel === '知识页') {
-      w.innerHTML = `<div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-        <strong style="font-size:14px">${t('tk.pagesTab')}</strong>
-        <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:4px;margin-left:auto"><input type="checkbox" id="tp-selall" /> ${t('tk.selectAll')}</label>
-        <button class="btn ghost" id="tp-del" style="font-size:12px;padding:2px 10px">${t('tk.delSelected')}</button>
-      </div>
+      // #310.32：操作入口从顶部条迁至右键菜单（顶部条与页帧不协；右键菜单可扩展）——菜单项=全选/全不选+删除所选+删除此文件
+      w.innerHTML = `<div style="padding:14px 18px;border-bottom:1px solid var(--border)"><strong style="font-size:14px">${t('tk.pagesTab')}</strong></div>
       <div style="flex:1;overflow-y:auto;padding:6px 18px 16px" id="tp-list"><div class="muted" style="padding:10px">${t('list.loading')}</div></div>`
       const list = $('tp-list')
+      const doDelete = async (paths) => {
+        if (!paths.length) return
+        if (!confirm(t('tk.delConfirm').replace('{n}', paths.length))) return
+        const rd = await window.moonlybox.rpc('tasks', { op: 'delete_pages', paths }, 30_000)
+        try {
+          const d = JSON.parse(rd.text)
+          if (d.ok) {
+            alert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger))
+            renderList('vault'); renderWork('vault', { rel: arg.rel, dir: true })
+          } else alert(t('lib.delFail') + (d.message ?? ''))
+        } catch { alert(t('lib.delFail')) }
+      }
       let pages = []
       try {
         const rp = await window.moonlybox.rpc('tasks', { op: 'pages' }, 15_000)
@@ -1304,7 +1317,7 @@ async function renderWork(nav, arg, label2) {
         const cloud = p.cloudWikiId ? `<span class="muted" style="font-size:10.5px;margin-left:6px">☁ ${t('tk.pgPending')}</span>` : ''
         const gone = p.exists ? '' : `<span style="font-size:10.5px;margin-left:6px;color:var(--danger,#e56969)">${t('tk.pgMissing')}</span>`
         const name = String(p.path).split(/[\\/]/).pop()
-        return `<div class="tp-row" style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+        return `<div class="tp-row" data-abs="${esc(p.abs)}" style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
           <input type="checkbox" class="tp-chk" data-abs="${esc(p.abs)}" ${p.exists ? '' : 'disabled'} />
           <div style="flex:1;min-width:0">
             <div style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}${cloud}${gone}</div>
@@ -1312,20 +1325,47 @@ async function renderWork(nav, arg, label2) {
           </div>
         </div>`
       }).join('')
-      $('tp-selall').onchange = (e) => { list.querySelectorAll('.tp-chk:not(:disabled)').forEach((c) => { c.checked = e.target.checked }) }
-      $('tp-del').onclick = async () => {
-        const sel = [...list.querySelectorAll('.tp-chk:checked')].map((c) => c.dataset.abs)
-        if (!sel.length) return
-        if (!confirm(t('tk.delConfirm').replace('{n}', sel.length))) return
-        const rd = await window.moonlybox.rpc('tasks', { op: 'delete_pages', paths: sel }, 30_000)
-        try {
-          const d = JSON.parse(rd.text)
-          if (d.ok) {
-            alert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger))
-            renderList('vault'); renderWork('vault', { rel: arg.rel, dir: true })
-          } else alert(t('lib.delFail') + (d.message ?? ''))
-        } catch { alert(t('lib.delFail')) }
+      // 右键菜单（#310.32；范式=#304 挂 body+fixed+closeCtxMenu）
+      const openMenu = (row, e) => {
+        e.preventDefault()
+        const existed = document.querySelector('.tp-menu')
+        if (existed) { closeCtxMenu(existed); return }
+        const menu = document.createElement('div')
+        menu.className = 'tp-menu'
+        menu._row = row
+        row.classList.add('menu-open')
+        const rect = row.getBoundingClientRect()
+        menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:132px;box-shadow:0 8px 24px rgba(0,0,0,.35)'
+        menu.style.visibility = 'hidden'
+        document.body.appendChild(menu)
+        const mh = menu.offsetHeight
+        const below = e.clientY + 2 + mh <= window.innerHeight - 8
+        menu.style.left = `${Math.min(e.clientX, window.innerWidth - 140)}px`
+        menu.style.top = `${below ? e.clientY + 2 : e.clientY - mh - 2}px`
+        menu.style.visibility = ''
+        const selCount = list.querySelectorAll('.tp-chk:checked').length
+        const mi = (label, cls, danger) => `<div class="${cls}" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;${danger ? 'color:var(--err,#f87171)' : ''}">${label}</div>`
+        menu.innerHTML =
+          mi(t('tk.selectAll'), 'tp-mi-all') +
+          mi(t('tk.selNone'), 'tp-mi-none') +
+          (selCount ? mi(`${t('tk.delSelected')} (${selCount})`, 'tp-mi-delsel', true) : '') +
+          mi(t('tk.delThis'), 'tp-mi-delone', true)
+        menu.querySelectorAll('div').forEach((d) => {
+          d.onmouseenter = () => { d.style.background = 'var(--hover)' }
+          d.onmouseleave = () => { d.style.background = '' }
+        })
+        menu.querySelector('.tp-mi-all').onclick = () => { list.querySelectorAll('.tp-chk:not(:disabled)').forEach((c) => { c.checked = true }); closeCtxMenu(menu) }
+        menu.querySelector('.tp-mi-none').onclick = () => { list.querySelectorAll('.tp-chk').forEach((c) => { c.checked = false }); closeCtxMenu(menu) }
+        const delSel = menu.querySelector('.tp-mi-delsel')
+        if (delSel) delSel.onclick = async () => { closeCtxMenu(menu); doDelete([...list.querySelectorAll('.tp-chk:checked')].map((c) => c.dataset.abs)) }
+        menu.querySelector('.tp-mi-delone').onclick = async () => { closeCtxMenu(menu); doDelete([row.dataset.abs]) }
+        const close = (e3) => { if (!menu.contains(e3.target)) { closeCtxMenu(menu); document.removeEventListener('click', close); document.removeEventListener('contextmenu', close) } }
+        setTimeout(() => { document.addEventListener('click', close); document.addEventListener('contextmenu', close) }, 0)
       }
+      list.querySelectorAll('.tp-row').forEach((row) => {
+        row.oncontextmenu = (e) => openMenu(row, e)
+        row.querySelector('.tp-chk').onclick = (e) => e.stopPropagation()
+      })
       return
     }
     // #310.31：目录详情=书房根 README.md 中本目录的说明段（单源拆分——目录无元数据位；子目录 README.md 会与用户同名文档混淆，不采用）。
