@@ -34,7 +34,7 @@ interface Skeleton {
   matrixVersion: number
   sourceChars: number
   sourceVersionAtCompile: number
-  analysisSpec: { genreEnum: string[]; topicsMax: number; topicTitleMax: number; topicSummaryMax: number; entitiesMax: number }
+  analysisSpec: { genreEnum: string[]; topicsMax: number; topicTitleMax: number; topicSummaryMax: number; entitiesMax: number; tagsMax?: number }
   keywords: string[]
   pages: Array<{ unitKey: string; pageIndex: number; pageOf: number; sections: string[] | null; maxChars: number }>
 }
@@ -60,13 +60,15 @@ async function fetchSkeletons(cloudIds: string[]): Promise<Map<string, Skeleton>
 }
 
 /** 本地分析轮（按 analysisSpec 产 genre/topics 纯 JSON——分析算力本地出，云端零 token） */
-async function analyzeDoc(model: NonNullable<ReturnType<typeof resolveCompileModel>>, srcPath: string, srcText: string, spec: Skeleton['analysisSpec']): Promise<{ topics: Array<{ title: string; summary: string }> } | null> {
+async function analyzeDoc(model: NonNullable<ReturnType<typeof resolveCompileModel>>, srcPath: string, srcText: string, spec: Skeleton['analysisSpec']): Promise<{ topics: Array<{ title: string; summary: string }>; tags: string[] } | null> {
+  const tagsMax = spec.tagsMax ?? 4
   const sys =
     '你是文档分析引擎。只输出一行紧凑 JSON（无缩进、无 markdown 代码块、无解释、无多余字段）。' +
     `对给定文档完成：\n` +
     `1. genre：从这些枚举里选一个（只能选其一）：${spec.genreEnum.join('、')}；\n` +
-    `2. topics：知识主题清单，按重要性降序，最多 ${spec.topicsMax} 个，每个 title ≤${spec.topicTitleMax} 字、summary ≤${spec.topicSummaryMax} 字；实际有几个写几个，不要凑数。\n` +
-    `严格输出该结构（字段名不得改动，不得增删字段）：{"genre":"","topics":[{"title":"","summary":""}]}`
+    `2. topics：知识主题清单，按重要性降序，最多 ${spec.topicsMax} 个，每个 title ≤${spec.topicTitleMax} 字、summary ≤${spec.topicSummaryMax} 字；实际有几个写几个，不要凑数；\n` +
+    `3. tags：3-${tagsMax} 个内容主题词（词组，≤12 字，反映文档核心领域，供书房标签筛选）。\n` +
+    `严格输出该结构（字段名不得改动，不得增删字段）：{"genre":"","topics":[{"title":"","summary":""}],"tags":[""]}`
   const r = await byokChatMessages(
     [
       { role: 'system', content: sys },
@@ -83,7 +85,8 @@ async function analyzeDoc(model: NonNullable<ReturnType<typeof resolveCompileMod
     if (!m) return null
     const j = JSON.parse(m[0])
     const topics = Array.isArray(j.topics) ? j.topics.filter((t: any) => t && typeof t.title === 'string' && t.title.trim()) : []
-    return topics.length ? { topics } : null
+    const tags = Array.isArray(j.tags) ? j.tags.filter((x: any) => typeof x === 'string' && x.trim()).map((x: string) => x.trim().slice(0, 12)) : []
+    return topics.length ? { topics, tags } : null
   } catch {
     return null
   }
@@ -140,8 +143,8 @@ async function compileOneDoc(srcPath: string, srcText: string): Promise<string> 
   return r.text
 }
 
-/** 知识页落盘：vault/知识页/<源名>.md（同名加序号） */
-function writeOut(srcPath: string, md: string): string {
+/** 知识页落盘：vault/知识页/<源名>.md（同名加序号）；meta=YAML frontmatter（#310.30 tags/topics 上云+本地可读） */
+function writeOut(srcPath: string, md: string, meta?: { tags?: string[]; genre?: string }): string {
   const dir = path.join(defaultVaultRoot(), '知识页')
   fs.mkdirSync(dir, { recursive: true })
   const base = path.basename(srcPath).replace(/\.[^.]+$/, '') || '未命名'
@@ -153,7 +156,15 @@ function writeOut(srcPath: string, md: string): string {
   const p2 = (n: number) => String(n).padStart(2, '0')
   const localDate = `${nowD.getFullYear()}-${p2(nowD.getMonth() + 1)}-${p2(nowD.getDate())}`
   const header = `> 知识页 · 本地整理 · 源：${path.basename(srcPath)} · ${localDate}\n\n`
-  fs.writeFileSync(out, header + md + '\n', 'utf8')
+  let fm = ''
+  if (meta && (meta.tags?.length || meta.genre)) {
+    const lines = ['---']
+    if (meta.tags?.length) lines.push(`tags: [${meta.tags.map((t) => t.replace(/"/g, '')).join(', ')}]`)
+    if (meta.genre) lines.push(`genre: ${meta.genre}`)
+    lines.push('---', '')
+    fm = lines.join('\n')
+  }
+  fs.writeFileSync(out, fm + header + md + '\n', 'utf8')
   return out
 }
 
@@ -177,7 +188,7 @@ function readSource(p: string): string | null {
  * 源文档云端 ID 从 sync manifest 反查（path→docId）；未同步过的源（不在 manifest）跳过回传——
  * 云端归属校验（②步）要求 sourceDocId 是本用户书房文档。
  */
-async function pushToMoon(jobId: string, itemPath: string, srcHash: string | undefined, md: string, sk?: Skeleton, titles?: string[]): Promise<void> {
+async function pushToMoon(jobId: string, itemPath: string, srcHash: string | undefined, md: string, sk?: Skeleton, titles?: string[], tags?: string[]): Promise<void> {
   try {
     const g = loadSettings()
     if (g?.model?.syncToMoon === false) return // 默认开（显式 false 才关）
@@ -212,6 +223,9 @@ async function pushToMoon(jobId: string, itemPath: string, srcHash: string | und
             titles: titles ?? [],
           },
         } : {}),
+        // #310.30：分析轮顺产 tags/topics 上云（云端 frontmatter.tags 同构落库→书房标签筛选可读）
+        ...(tags?.length ? { tags } : {}),
+        ...(sk && titles?.length ? { topics: titles } : {}),
       },
       { token: lc()?.accessToken, timeoutMs: 20_000 },
     )
@@ -263,9 +277,11 @@ export async function runJob(jobId: string): Promise<void> {
       const sk = skeletons?.get(cloudId ?? '') ?? null
       let md = ''
       let titles: string[] | undefined
+      let tags: string[] | undefined
       if (sk) {
         // #316 第四批骨架链：分析轮（本地算力）→逐页生成（structure+预算+关键词锚）
         const an = await analyzeDoc(model, item.path, text, sk.analysisSpec)
+        tags = an?.tags
         const topics = an?.topics ?? []
         if (topics.length === 0) throw new Error('分析轮失败：主题清单为空（模型返回不可解析）')
         const pageCount = Math.max(1, Math.min(sk.knowledgePages, topics.length))
@@ -286,9 +302,9 @@ export async function runJob(jobId: string): Promise<void> {
         // 降级链：旧单页（#316 第一批行为）
         md = await compileOneDoc(item.path, text)
       }
-      const outPath = writeOut(item.path, md)
+      const outPath = writeOut(item.path, md, sk ? { tags, genre: sk.genre } : undefined)
       updateItem(jobId, item.path, { status: 'done', outPath })
-      await pushToMoon(jobId, item.path, item.srcHash, md, sk ?? undefined, titles)
+      await pushToMoon(jobId, item.path, item.srcHash, md, sk ?? undefined, titles, tags)
     } catch (e: any) {
       updateItem(jobId, item.path, { status: 'failed', error: String(e?.message ?? e).slice(0, 300) })
     }
