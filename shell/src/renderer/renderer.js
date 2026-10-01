@@ -1516,7 +1516,7 @@ async function renderWork(nav, arg, label2) {
           </select>
           <div class="set-desc" style="margin-top:4px">${t('lib.compileHint')}</div>
         </div>
-        <div class="set-card" style="margin-top:10px;max-width:420px"><div class="sc-main"><div class="sc-title">${t('lib.compileSync')}</div><div class="sc-desc">${t('lib.compileSyncDesc')}</div></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('lib.compileSync')}</div><div class="sc-desc">${t('lib.compileSyncDesc')}</div></div>
           <button type="button" class="toggle ${gset?.model?.syncToMoon !== false ? 'on' : ''}" id="sp-compile-sync"></button></div>
         <div class="set-status" id="sp-compile-status"></div>
       `)
