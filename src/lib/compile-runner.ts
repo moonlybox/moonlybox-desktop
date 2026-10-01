@@ -192,16 +192,17 @@ function readSource(p: string): string | null {
 async function pushToMoon(jobId: string, itemPath: string, srcHash: string | undefined, md: string, sk?: Skeleton, titles?: string[], tags?: string[]): Promise<void> {
   try {
     const g = loadSettings()
-    if (g?.model?.syncToMoon === false) return // 默认开（显式 false 才关）
+    // #310.38：静默跳过留痕（用户问「云端为何没有待准入」无从排查——三处 return 全部写 item 尾注）
+    if (g?.model?.syncToMoon === false) { updateItem(jobId, itemPath, { error: '本地完成；云端回传已关闭（设置→模型→同步到云端）' }); return }
     const { loadCredentials } = await import('./auth')
-    if (!loadCredentials()?.accessToken) return // 未登录=纯本地模式，不回传
+    if (!loadCredentials()?.accessToken) { updateItem(jobId, itemPath, { error: '本地完成；未登录云端，未回传' }); return }
     const root = defaultVaultRoot()
     const manifest = loadManifest(root)
     let cloudId = ''
     for (const [docId, ent] of Object.entries(manifest)) {
       if (ent.path && path.join(root, ent.path) === path.resolve(itemPath)) { cloudId = docId; break }
     }
-    if (!cloudId) return // 源未在云端书房（本地新建未上行）——跳过回传，不报错
+    if (!cloudId) { updateItem(jobId, itemPath, { error: '本地完成；源文档未同步到云端（纯本地文档），不回传' }); return } // 源未在云端书房（本地新建未上行）
     const { loadCredentials: lc } = await import('./auth')
     const res = await apiCall<{ ok: boolean; message?: string; code?: string; data?: { wikiId?: string } }>(
       'POST',
