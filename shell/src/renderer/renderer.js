@@ -2281,7 +2281,6 @@ async function renderWork(nav, arg, label2) {
   if (nav === 'tasks') {
     // #316 骨架批配套：知识页产物管理（列表/批量删+ledger 重置）
     if (arg?.pages) {
-      head.textContent = t('nav.tasks')
       w.innerHTML = `<div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
         <strong style="font-size:14px">${t('tk.pagesTab')}</strong>
         <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:4px;margin-left:auto"><input type="checkbox" id="tp-selall" /> ${t('tk.selectAll')}</label>
@@ -2289,8 +2288,11 @@ async function renderWork(nav, arg, label2) {
       </div>
       <div style="flex:1;overflow-y:auto;padding:6px 18px 16px" id="tp-list"><div class="muted" style="padding:10px">${t('list.loading')}</div></div>`
       const list = $('tp-list')
-      const rp = await window.moonlybox.rpc('tasks', { op: 'pages' }, 15_000)
-      const pages = JSON.parse(rp.text).pages ?? []
+      let pages = []
+      try {
+        const rp = await window.moonlybox.rpc('tasks', { op: 'pages' }, 15_000)
+        pages = JSON.parse(rp.text).pages ?? []
+      } catch {} // 老内核（无 pages op）/解析失败→空态，不整体崩
       if (!pages.length) {
         list.innerHTML = `<div class="muted" style="padding:14px 0">${t('tk.pagesEmpty')}</div>`
         return
