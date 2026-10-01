@@ -296,6 +296,20 @@ function applyDownDoc(root: string, doc: any, directories: any[], manifest: Vaul
 }
 
 /** 下行（自动选模式）：有 cursor 走增量 /library/changes，否则全量 /library；失败回落全量 */
+/** #310.46：账本反查打「已同步」标（cloudWikiId 对上的 done item——云端准入回执；幂等） */
+function markSyncedIfTracked(wikiId: string): void {
+  try {
+    const tasks = require('./tasks') as typeof import('./tasks')
+    for (const job of tasks.allJobs()) {
+      for (const it of job.items) {
+        if (it.cloudWikiId === wikiId && it.status === 'done' && !it.syncedAt) {
+          tasks.updateItem(job.id, it.path, { syncedAt: new Date().toISOString() })
+        }
+      }
+    }
+  } catch {}
+}
+
 export async function syncDown(root: string, report: SyncReport): Promise<void> {
   const creds = loadCredentials()
   if (!creds?.accessToken) throw new Error('未登录：先运行 `moonlybox login`')
@@ -314,6 +328,8 @@ export async function syncDown(root: string, report: SyncReport): Promise<void> 
         const deleted: any[] = res.data?.deleted ?? []
         for (const doc of documents) {
           if (doc.status !== 'active' || doc.isArchived) continue
+          // #310.46：external 产物云端准入回执——cloudWikiId 对上的账本 item 打「已同步」标（下行对本地资产只标识不动文件）
+          markSyncedIfTracked(doc.id)
           applyDownDoc(root, doc, directories, manifest, report, d)
         }
         // 增量删除：云端回收站 → 本地移除（镜像区=云端权威）

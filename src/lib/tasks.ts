@@ -27,6 +27,8 @@ export interface JobItem {
   outPath?: string
   /** #316 第二批：回传云端落库的待准入知识页 ID（回传成功时写——重启恢复不重复回传的判定键） */
   cloudWikiId?: string
+  /** #310.46：云端准入回执（syncDown 见到 active 对应 wiki 时打标）——清单显示「✓ 已同步」 */
+  syncedAt?: string
   error?: string
 }
 
@@ -192,6 +194,8 @@ export interface PageEntry {
   finishedAt?: string
   /** 回传云端：pending 待准入（cloudWikiId 有值=已回传）/ 未回传 / 无回传机制 */
   cloudWikiId?: string
+  /** #310.46：云端准入回执（下行打标）——「✓ 已同步」态 */
+  syncedAt?: string
   srcPath: string
 }
 

@@ -370,6 +370,7 @@ const I18N_DICT = {
   'tk.delConfirm': { zh: '确认删除所选 {n} 个知识页文件？对应源文档将重新视为「未整理」（可再次整理）。', en: 'Delete {n} local knowledge page files? Their sources become uncompiled again (can be recompiled).' },
   'tk.delDone': { zh: '已删除 {d} 个文件，{r} 个源文档已重置为未整理。', en: 'Deleted {d} files; {r} sources reset to uncompiled.' },
   'tk.pgPending': { zh: '已回传待准入', en: 'pending review' },
+  'tk.pgSynced': { zh: '已同步云端', en: 'Synced' },
   'tk.pgMissing': { zh: '文件已不在', en: 'file missing' },
   'tk.willUse': { zh: '将使用：', en: 'Will use: ' },
   'tk.changeModel': { zh: '更改', en: 'Change' },
@@ -2465,7 +2466,8 @@ async function renderWork(nav, arg, label2) {
         </div>` : ''}
         ${donePages.map((it) => {
           const name = String(it.outPath).split(/[\\/]/).pop()
-          const cloud = it.cloudWikiId ? `<span class="muted" style="font-size:10.5px;margin-left:6px">☁ ${t('tk.pgPending')}</span>` : ''
+          // #310.46：三态——✓ 已同步（syncedAt）/ ☁ 待准入（cloudWikiId）/ 无标
+          const cloud = it.syncedAt ? `<span style="font-size:10.5px;margin-left:6px;color:var(--ok,#34c777)">✓ ${t('tk.pgSynced')}</span>` : (it.cloudWikiId ? `<span class="muted" style="font-size:10.5px;margin-left:6px">☁ ${t('tk.pgPending')}</span>` : '')
           return `<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
             <input type="checkbox" class="tkp-chk" data-abs="${esc(it.outPath)}" />
             <div style="flex:1;min-width:0">
