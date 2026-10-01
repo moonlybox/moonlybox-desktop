@@ -368,6 +368,8 @@ const I18N_DICT = {
   'lib.syncDownDone': { zh: '下行更新 {n} 篇', en: '{n} doc(s) pulled' },
   'lib.syncDownFail': { zh: '下行对账失败', en: 'Down-sync failed' },
   'lib.syncMarked': { zh: '{n} 篇已确认同步', en: '{n} doc(s) confirmed synced' },
+  'lib.recompile': { zh: '重新整理', en: 'Recompile' },
+  'lib.recompileQueued': { zh: '已创建重新整理任务：{t}', en: 'Recompile task queued: {t}' },
   'tk.delThis': { zh: '删除此文件', en: 'Delete this file' },
   'tk.selectAll': { zh: '全选', en: 'Select all' },
   'tk.delSelected': { zh: '删除所选', en: 'Delete selected' },
@@ -1234,6 +1236,41 @@ async function renderTree(container, rel, depth) {
                 const wEl = $('work')
                 if (wEl && wEl.querySelector('.md-view, #wf-view') && wEl.textContent.includes(item.name)) renderWork('vault', { rel, dir: true })
               } else mbAlert(t('lib.delFail') + (d.message ?? ''))
+            } catch { mbAlert(t('lib.delFail')) }
+          }
+          const close = (e3) => { if (!menu.contains(e3.target)) { closeCtxMenu(menu); document.removeEventListener('click', close); document.removeEventListener('contextmenu', close) } }
+          setTimeout(() => { document.addEventListener('click', close); document.addEventListener('contextmenu', close) }, 0)
+        }
+      } else {
+        // #310.61：源文档右键「重新整理」——本地重编译（用户定案：LLM 用户自持，重编不需云端；产物并存旧版保留，云端按 localItemId 幂等更新同篇）
+        el.oncontextmenu = async (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          const existed = document.querySelector('.tp-menu')
+          if (existed) { closeCtxMenu(existed); return }
+          const menu = document.createElement('div')
+          menu.className = 'tp-menu'
+          menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:132px;box-shadow:0 8px 24px rgba(0,0,0,.35)'
+          menu.style.visibility = 'hidden'
+          document.body.appendChild(menu)
+          const mh = menu.offsetHeight
+          const below = e.clientY + 2 + mh <= window.innerHeight - 8
+          menu.style.left = `${Math.min(e.clientX, window.innerWidth - 140)}px`
+          menu.style.top = `${below ? e.clientY + 2 : e.clientY - mh - 2}px`
+          menu.style.visibility = ''
+          menu.innerHTML = `<div class="tp-mi-recomp" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px">${t('lib.recompile')}</div>`
+          const mi = menu.querySelector('.tp-mi-recomp')
+          mi.onmouseenter = () => { mi.style.background = 'var(--hover)' }
+          mi.onmouseleave = () => { mi.style.background = '' }
+          mi.onclick = async () => {
+            closeCtxMenu(menu)
+            const rd = await window.moonlybox.rpc('tasks', { op: 'create_compile', paths: [relPath], force: true }, 30_000)
+            try {
+              const d = JSON.parse(rd.text)
+              if (d.ok) {
+                mbAlert(t('lib.recompileQueued').replace('{t}', d.job?.title ?? ''))
+                renderWork('tasks', { id: d.job?.id })
+              } else mbAlert(t('lib.delFail') + (d.message ?? rd.text ?? ''))
             } catch { mbAlert(t('lib.delFail')) }
           }
           const close = (e3) => { if (!menu.contains(e3.target)) { closeCtxMenu(menu); document.removeEventListener('click', close); document.removeEventListener('contextmenu', close) } }
