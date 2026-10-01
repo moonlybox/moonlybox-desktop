@@ -172,6 +172,9 @@ export async function byokChatMessages(
         ...(tools && tools.length ? { tools } : {}),
         max_tokens: maxTokens, // #310.19：可变上限（默认 4000）
         temperature: 0.3,
+        // #310.36：Ollama 思考型模型关思考（编译/分析类任务无需 reasoning；思考吃满 max_tokens=空正文主因）
+        // 仅本地 Ollama 端点注入——OpenAI 等严格校验端点会对未知字段 400
+        ...(isLocalEndpoint(meta.baseUrl) && /:11434|\/ollama/i.test(meta.baseUrl) ? { think: false } : {}),
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
@@ -197,6 +200,12 @@ export async function byokChatMessages(
     // #280.3：空内容+无工具调用=端点异常静默源（思考型模型 reasoning 吃掉 max_tokens/端点 tools 协议不兼容）
     // ——必须当失败走重试与最终报错，绝不能静默 ok 让小月零输出零报错
     if (!text && (!msg.tool_calls || msg.tool_calls.length === 0)) {
+      // #310.36：思考型模型把 max_tokens 吃满（finish=length）→ 自动加倍重试一次（上限 32k）——
+      // 编译链路无上层重试，一次自愈避免整篇失败；非 length（协议异常）不重试直接报错
+      if (choice?.finish_reason === 'length' && maxTokens < 32_000) {
+        console.log(`（LLM 空正文 finish=length：max_tokens ${maxTokens}→${maxTokens * 2} 重试一次）`)
+        return byokChatMessages(messages, tools, timeoutMs, modelOverride, Math.min(maxTokens * 2, 32_000))
+      }
       const hint = (msg as Record<string, unknown>).reasoning_content
         ? '模型只输出思考未输出正文（思考型模型在 tools 协议下可能吃掉全部 max_tokens）'
         : '端点可能不兼容 tools 协议或返回格式异常'
