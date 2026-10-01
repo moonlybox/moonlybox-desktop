@@ -68,6 +68,8 @@ export function listUncompiled(): { total: number; uncompiled: string[]; truncat
       if (e.isDirectory()) {
         if (!SKIP.has(e.name)) walk(p, depth + 1)
       } else if (DOC_EXTS.has(path.extname(e.name).toLowerCase())) {
+        // #310.31：书房根 README.md=目录使用说明（initVault 自建/用户维护），非知识源——排除编译范围
+        if (dir === root && e.name.toLowerCase() === 'readme.md') continue
         all.push(p)
       }
     }

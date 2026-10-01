@@ -360,6 +360,7 @@ const I18N_DICT = {
   'tk.tabItems': { zh: '任务清单', en: 'Items' },
   'tk.tabPages': { zh: '产物', en: 'Outputs' },
   'tk.pagesEmpty': { zh: '暂无本地知识页产物。', en: 'No local knowledge pages yet.' },
+  'dir.noReadme': { zh: '此目录暂无 README.md 说明。', en: 'No README.md in this directory.' },
   'tk.selectAll': { zh: '全选', en: 'Select all' },
   'tk.delSelected': { zh: '删除所选', en: 'Delete selected' },
   'tk.delConfirm': { zh: '确认删除所选 {n} 个知识页文件？对应源文档将重新视为「未整理」（可再次整理）。', en: 'Delete {n} local knowledge page files? Their sources become uncompiled again (can be recompiled).' },
@@ -1327,7 +1328,13 @@ async function renderWork(nav, arg, label2) {
       }
       return
     }
-    w.innerHTML = `<div style="padding:20px" class="muted">📁 ${esc(arg.rel)}</div>`
+    // #310.31：目录详情=该目录 README.md 说明（有则 md 渲染，无则占位）——README 是「目录使用说明」惯例位
+    const readmeRel = (arg.rel === '.' || arg.rel === '' ) ? 'README.md' : arg.rel + '/README.md'
+    let rm = null
+    try { const rr = await window.moonlybox.fsRead(readmeRel); if (rr && rr.ok && rr.content) rm = rr.content; } catch {}
+    const rmHtml = rm ? mdToHtml(rm) : ''
+    w.innerHTML = `<div style="padding:16px 20px;border-bottom:1px solid var(--border)"><strong style="font-size:13px">📁 ${esc(arg.rel)}</strong></div>
+      <div style="flex:1;overflow-y:auto;padding:6px 20px 20px" class="md-view">${rm ? rmHtml : `<div class="muted" style="padding:8px 0">${t('dir.noReadme')}</div>`}</div>`
     return
   }
   // ---------- 设置中心：第三列面板（#253.48） ----------
