@@ -865,7 +865,10 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           if (!Array.isArray(paths) || paths.length === 0) { code = 1; text = 'paths 为空' } else {
             const { defaultVaultRoot } = await import('../lib/config')
             const { deletePages } = await import('../lib/tasks')
-            const r = deletePages(defaultVaultRoot(), paths.map(String).slice(0, 500))
+            const root = defaultVaultRoot()
+            // #310.32b：rel 形态（树节点「知识页/xx.md」）归一为 abs——白名单匹配以 abs 为键
+            const norm = (p: string) => (path.isAbsolute(p) ? p : path.join(root, p))
+            const r = deletePages(root, paths.map(String).slice(0, 500).map(norm))
             text = JSON.stringify({ ok: true, ...r })
           }
         } else {
