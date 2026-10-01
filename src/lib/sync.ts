@@ -47,21 +47,56 @@ export function vaultDirs(root: string) {
   }
 }
 
+/** 书房根 README 默认模板（#310.31：目录说明单源——每目录一个 ## 段，目录详情页按标题拆分取段） */
+export function vaultReadmeTemplate(): string {
+  return [
+    '# MyMoonVault',
+    '',
+    '书房（本地）目录说明。各目录详情见下；本文件可自行编辑，目录详情页会显示对应段落。',
+    '',
+    '## 文档',
+    '',
+    '云端文档的本地镜像区（`文档/`）。由客户端同步管理：云端有什么这里就有什么；在外部直接修改会在下次同步时被检测并提示。',
+    '',
+    '## 知识页',
+    '',
+    '知识整理的产物区（`知识页/`）。本地整理的知识页落在这里；回传云端准入后与云端编译产物同列。可在此批量删除不需要的产物（删除会同时重置对应文档的「已整理」状态，可重新整理）。',
+    '',
+    '## 图示',
+    '',
+    '图示产物的本地镜像区（`图示/`）。云端图示草稿准入后下行至此；Mermaid 画布与代码面板产物同归此目录。',
+    '',
+    '## 收集箱',
+    '',
+    '上传入口（`收集箱/`）。把新文件扔进这里 = 上传到云端（唯一上行口），处理完自动归位到「文档」。',
+    '',
+    '## .moonlybox',
+    '',
+    '同步元数据目录（请勿编辑）。存放清单、账本等客户端内部状态。',
+    '',
+  ].join('\n')
+}
+
 export function initVault(root: string): void {
   const d = vaultDirs(root)
   for (const dir of [d.docs, d.kb, d.diagrams, d.inbox, d.meta]) {
     fs.mkdirSync(dir, { recursive: true })
   }
   const readme = path.join(root, 'README.md')
-  if (!fs.existsSync(readme)) {
-    fs.writeFileSync(readme, [
-      '# MyMoonVault',
-      '',
-      '- `文档/`、`知识页/`、`图示/`：云端镜像区（客户端管理；外部修改会在下次同步时被检测并提示）',
-      '- `收集箱/`：把新文件扔进这里 = 上传到云端（唯一上行口，处理完自动归位）',
-      '- `.moonlybox/`：同步元数据（请勿编辑）',
-      '',
-    ].join('\n'))
+  // #310.31：书房根 README=目录说明单源（每目录一个 ## 段，书房目录详情页按段拆分显示）。
+  // 升级策略：文件不存在→写入默认模板；文件内容与旧默认模板完全一致（未被用户改过）→覆盖升级为新模板；其余（用户已定制）→不动。
+  const oldDefault = [
+    '# MyMoonVault',
+    '',
+    '- `文档/`、`知识页/`、`图示/`：云端镜像区（客户端管理；外部修改会在下次同步时被检测并提示）',
+    '- `收集箱/`：把新文件扔进这里 = 上传到云端（唯一上行口，处理完自动归位）',
+    '- `.moonlybox/`：同步元数据（请勿编辑）',
+    '',
+  ].join('\n')
+  let current: string | null = null
+  try { current = fs.readFileSync(readme, 'utf8') } catch {}
+  if (current === null || current === oldDefault) {
+    fs.writeFileSync(readme, vaultReadmeTemplate())
   }
 }
 

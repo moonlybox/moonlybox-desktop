@@ -1328,13 +1328,21 @@ async function renderWork(nav, arg, label2) {
       }
       return
     }
-    // #310.31：目录详情=该目录 README.md 说明（有则 md 渲染，无则占位）——README 是「目录使用说明」惯例位
-    const readmeRel = (arg.rel === '.' || arg.rel === '' ) ? 'README.md' : arg.rel + '/README.md'
-    let rm = null
-    try { const rr = await window.moonlybox.fsRead(readmeRel); if (rr && rr.ok && rr.content) rm = rr.content; } catch {}
-    const rmHtml = rm ? mdToHtml(rm) : ''
+    // #310.31：目录详情=书房根 README.md 中本目录的说明段（单源拆分——目录无元数据位；子目录 README.md 会与用户同名文档混淆，不采用）。
+    // 拆分规则：README 按 `## 目录名` 切段；子目录取顶层段（rel='文档/xx'→'文档'段）；无匹配段=占位提示。
+    let readmeText = ''
+    try { const rr = await window.moonlybox.fsRead('README.md'); if (rr && rr.ok && rr.content) readmeText = rr.content } catch {}
+    const dirName = String(arg.rel).split(/[\\/]/)[0]
+    let section = ''
+    if (readmeText) {
+      const secs = readmeText.split(/^## (.+)$/m)
+      // split 形态：[前文, 标题1, 段1, 标题2, 段2, ...]
+      for (let si = 1; si < secs.length - 1; si += 2) {
+        if (secs[si].trim() === dirName) { section = secs[si + 1].trim(); break }
+      }
+    }
     w.innerHTML = `<div style="padding:16px 20px;border-bottom:1px solid var(--border)"><strong style="font-size:13px">📁 ${esc(arg.rel)}</strong></div>
-      <div style="flex:1;overflow-y:auto;padding:6px 20px 20px" class="md-view">${rm ? rmHtml : `<div class="muted" style="padding:8px 0">${t('dir.noReadme')}</div>`}</div>`
+      <div style="flex:1;overflow-y:auto;padding:6px 20px 20px" class="md-view">${section ? mdToHtml(section) : `<div class="muted" style="padding:8px 0">${t('dir.noReadme')}</div>`}</div>`
     return
   }
   // ---------- 设置中心：第三列面板（#253.48） ----------
