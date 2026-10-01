@@ -318,6 +318,31 @@ function trackAndSkip(wikiId: string): boolean {
   }
 }
 
+/**
+ * #310.57：对账式打标（增量 changes 时间窗的兜底）——
+ * 若客户端游标已越过准入时刻（或 changes 分页遗漏），增量下行看不到该篇变更→✓ 标永不落。
+ * 此处直接按账本里所有「已回传未打标」的 cloudWikiId 逐个查云端状态：active→trackAndSkip 打标。
+ * 幂等；只查不打标失败静默（下次开关/CLI 重试）。
+ */
+export async function markSyncedByPoll(): Promise<number> {
+  const tasks = require('./tasks') as typeof import('./tasks')
+  const targets = new Set<string>()
+  for (const job of tasks.allJobs()) {
+    for (const it of job.items) {
+      if (it.status === 'done' && it.cloudWikiId && !it.syncedAt) targets.add(it.cloudWikiId)
+    }
+  }
+  let marked = 0
+  for (const wikiId of targets) {
+    try {
+      const res = await apiGet<any>(`/library/${encodeURIComponent(wikiId)}`)
+      const doc = res.data?.document ?? res.data
+      if (res.ok && doc?.status === 'active' && trackAndSkip(wikiId)) marked++
+    } catch { /* 单篇失败不阻断 */ }
+  }
+  return marked
+}
+
 export async function syncDown(root: string, report: SyncReport): Promise<void> {
   const creds = loadCredentials()
   if (!creds?.accessToken) throw new Error('未登录：先运行 `moonlybox login`')

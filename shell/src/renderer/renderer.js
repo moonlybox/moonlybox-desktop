@@ -367,6 +367,7 @@ const I18N_DICT = {
   'lib.backfillNone': { zh: '没有可补传的产物', en: 'Nothing to backfill' },
   'lib.syncDownDone': { zh: '下行更新 {n} 篇', en: '{n} doc(s) pulled' },
   'lib.syncDownFail': { zh: '下行对账失败', en: 'Down-sync failed' },
+  'lib.syncMarked': { zh: '{n} 篇已确认同步', en: '{n} doc(s) confirmed synced' },
   'tk.delThis': { zh: '删除此文件', en: 'Delete this file' },
   'tk.selectAll': { zh: '全选', en: 'Select all' },
   'tk.delSelected': { zh: '删除所选', en: 'Delete selected' },
@@ -1544,6 +1545,7 @@ async function renderWork(nav, arg, label2) {
               // #310.55：补传后顺带下行对账——结果回显（下行 N 更新/豁免静默；error 警示但不阻断）
               if (db.down) {
                 if (db.down.error) { st.textContent += `；${t('lib.syncDownFail')}（${db.down.error}）`; st.className = 'set-status warn' }
+                else if (db.down.marked) st.textContent += `；${t('lib.syncMarked').replace('{n}', db.down.marked)}`
                 else if (db.down.downloaded || db.down.updated) st.textContent += `；${t('lib.syncDownDone').replace('{n}', (db.down.downloaded + db.down.updated))}`
               }
               setTimeout(() => { st.textContent = '' }, 15_000) // #310.41：15s（6s 用户反馈「一闪而过」看不清）

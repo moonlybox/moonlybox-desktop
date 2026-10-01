@@ -879,11 +879,13 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           // 失败不阻断补传结果回显（下行有独立重试面：下次开关/CLI sync）
           let down: any = null
           try {
-            const { syncDown } = await import('../lib/sync')
+            const { syncDown, markSyncedByPoll } = await import('../lib/sync')
             const root = defaultVaultRoot()
             const report = { downloaded: [], updated: [], uploaded: [], inboxFiled: [], conflicts: [], skipped: [] } as any
             await syncDown(root, report)
-            down = { downloaded: report.downloaded.length, updated: report.updated.length, conflicts: report.conflicts.length }
+            // #310.57：对账式打标兜底（增量游标越过准入时刻时 changes 看不到该篇——按账本 cloudWikiId 直接查状态补打 ✓）
+            const marked = await markSyncedByPoll()
+            down = { downloaded: report.downloaded.length, updated: report.updated.length, conflicts: report.conflicts.length, marked }
           } catch (e: any) {
             down = { error: String(e?.message ?? e).slice(0, 120) }
           }
