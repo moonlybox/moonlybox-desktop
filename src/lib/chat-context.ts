@@ -38,7 +38,7 @@ export function buildMessages(
   sessionId: string,
   system: string,
   question: string,
-): { messages: ChatMessage[]; compressed: boolean } {
+): { messages: ChatMessage[]; compressed: boolean; dropped: SessionTurn[] } {
   const st = loadSettings().chat
   const history = getSession(sessionId)
   const turns: SessionTurn[] = st.contextEnabled ? history.slice() : []
@@ -66,10 +66,11 @@ export function buildMessages(
       const summary: ChatMessage = { role: 'system', content: `[CONTEXT_SUMMARY]${dropped.length} 轮更早对话已压缩，摘要待生成` }
       turns.splice(0, turns.length, ...dropped.slice(0, 0), ...kept) // turns=kept（dropped 供摘要生成用）
       history.splice(0, history.length, ...kept) // 内存态同步收缩
-      return { messages: [summary, ...toMessages(system, question, kept)], compressed: true }
+      // #317.3：dropped 随返回值交给调用方——调用方真调 LLM 生成摘要后回填占位（此前占位从未回填=失忆根因）
+      return { messages: [summary, ...toMessages(system, question, kept)], compressed: true, dropped }
     }
   }
-  return { messages: toMessages(system, question, turns), compressed: false }
+  return { messages: toMessages(system, question, turns), compressed: false, dropped: [] }
 }
 
 function toMessages(system: string, question: string, turns: SessionTurn[]): ChatMessage[] {

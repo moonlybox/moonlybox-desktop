@@ -288,12 +288,20 @@ export async function runAgentTools(
   // #256.3：上下文管理（设置可关）——buildMessages 组装历史/压缩，appendTurn 落账
   const sessionId = opts.sessionId ?? 'default'
   const built = buildMessages(sessionId, system, question)
-  // 压缩发生时：先把摘要占位换成本次生成的真摘要（一次性，落本轮 messages）
-  if (built.compressed) {
+  // 压缩发生时：真调 LLM 生成摘要回填占位（#317.3——此前硬编码一句空话=失忆根因）
+  if (built.compressed && built.dropped.length > 0) {
     const summaryMsg = built.messages.find((m) => m.role === 'system' && String(m.content).startsWith('[CONTEXT_SUMMARY]'))
     if (summaryMsg) {
-        summaryMsg.content = '[对话摘要] 更早对话已压缩为要点'
-      console.log('（上下文已压缩）')
+      try {
+        const real = await summarizeDropped((msgs) => chatWithRetry(() => byokChatMessages(msgs, undefined)), built.dropped)
+        summaryMsg.content = `[对话摘要] ${real}`
+        console.log(`（上下文已压缩：${built.dropped.length} 轮 → 摘要 ${real.length} 字）`)
+      } catch (e: any) {
+        // 摘要生成失败：保底把被压缩轮次的「用户侧要点」逐条带上（不丢主干事实）
+        const fallback = built.dropped.filter((t) => t.role === 'user').map((t) => '- ' + t.content.slice(0, 80)).join('\n')
+        summaryMsg.content = `[对话摘要] 摘要生成失败，以下是更早对话中用户提出过的要求：\n${fallback}`
+        console.log(`（上下文已压缩：摘要生成失败，回落要点 ${fallback.length} 字）`)
+      }
     }
   }
   // agentLoop.chat 签名=byokChatMessages——注入重试包装（#256.3 模型重试次数设置生效点）
