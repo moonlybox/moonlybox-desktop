@@ -1580,6 +1580,9 @@ async function renderWork(nav, arg, label2) {
                   </tr>`).join('')}
                 </tbody>
               </table>
+              <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
+                <button type="button" class="btn ghost" id="sp-ol-recheck2">${t('ol.recheck')}</button>
+              </div>
               <div class="set-status" id="sp-ol-pull-status" style="margin-top:6px"></div>
             </div>`
             const pull = async (name) => {
@@ -1590,12 +1593,24 @@ async function renderWork(nav, arg, label2) {
               if (r && r.ok) {
                 st.className = 'set-status ok'
                 st.textContent = t('ol.pullLaunched').replace('{m}', name)
+                // #310.13.4：拉取轮询——模型出现在 /api/tags 即自动整卡刷新（免手动重新检测）
+                const poll = async (left) => {
+                  if (left <= 0) return
+                  try {
+                    const res = await fetch('http://127.0.0.1:11434/api/tags')
+                    const j = res.ok ? await res.json() : null
+                    if (j && Array.isArray(j.models) && j.models.some((x) => x.name === name || String(x.name).startsWith(name + ':'))) { renderState(); return }
+                  } catch {}
+                  setTimeout(() => poll(left - 1), 5000)
+                }
+                setTimeout(() => poll(120), 5000)
               } else {
                 st.className = 'set-status err'
                 st.textContent = (r && r.error) || t('ol.pullFail')
               }
             }
             mbox.querySelectorAll('[data-olpull]').forEach((el) => { el.onclick = () => pull(el.dataset.olpull) })
+            $('sp-ol-recheck2').onclick = () => renderState()
             return
           }
           mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.installedModelsTitle')}</div>
