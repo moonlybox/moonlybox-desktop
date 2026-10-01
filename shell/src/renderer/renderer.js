@@ -844,6 +844,7 @@ const CLOUD_HIDDEN = new Set(['moments', 'square'])
 let currentCloudId = null // 云端列当前浏览项（active 高亮恢复用，#253.45）
 let currentBkId = null // 备份列当前选中项（#257）
 let currentTaskId = null // #316.5 任务页选中态
+let tkTimer = null // #310.23 任务详情自动刷新句柄（切页/重入防叠）
 
 async function renderList(nav) {
   const head = $('list-head')
@@ -2229,52 +2230,107 @@ async function renderWork(nav, arg, label2) {
   }
   // ---------- 备份（#257）：新建向导 + 详情面板 ----------
   if (nav === 'tasks') {
-    // #316.5：任务详情（进度条/模型/逐项状态/取消/运行中 2s 自动刷新——切页即停，任务在 daemon 不受影响）
+    // #316.5 任务详情 + #310.23：骨架一次渲染+局部 patch（自动刷新不再整页 innerHTML——滚动位置保持/无闪烁）；
+    // items 按状态着色（done 绿底/failed 红/running accent+spinner）
     if (!arg?.id) {
       w.innerHTML = `<div class="muted" style="padding:20px">${t('tk.pickHint')}</div>`
       return
     }
+    const ST = { queued: t('tk.stQueued'), running: t('tk.stRunning'), completed: t('tk.stDone'), failed: t('tk.stFail'), cancelled: t('tk.stCancel') }
+    const IST = { pending: t('tk.iPending'), running: t('tk.iRunning'), done: t('tk.iDone'), failed: t('tk.iFail'), skipped: t('tk.iSkip'), cancelled: t('tk.iCancel') }
+    // 行渲染（状态→样式语义色）
+    const itemRow = (it) => {
+      const name = String(it.path).split(/[\\/]/).pop()
+      const color = { done: 'var(--ok,#34d399)', failed: 'var(--danger,#e56969)', running: 'var(--accent,#818cf8)', skipped: 'inherit', cancelled: 'inherit', pending: 'inherit' }[it.status] ?? 'inherit'
+      const badgeBg = { done: 'rgba(52,211,153,.12)', failed: 'rgba(229,105,105,.14)', running: 'rgba(129,140,248,.14)' }[it.status] ?? 'transparent'
+      const spin = it.status === 'running' ? '<span style="display:inline-block;animation:tkspin 1s linear infinite">◐</span> ' : ''
+      const err = it.error ? `<div class="muted" style="font-size:11px;color:var(--danger,#e56969);margin-top:2px">${esc(it.error)}</div>` : ''
+      const out = it.outPath ? `<div class="muted" style="font-size:11px;margin-top:2px">→ ${esc(it.outPath)}</div>` : ''
+      return `<div data-tkitem="${esc(it.path)}" data-st="${it.status}" data-err="${esc(it.error ?? '')}" style="padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;gap:8px;align-items:center"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${spin}${esc(name)}</span><span style="font-size:11px;flex:none;color:${color};background:${badgeBg};padding:1px 8px;border-radius:8px">${IST[it.status] ?? it.status}</span></div>${err}${out}
+      </div>`
+    }
+    const fill = (j) => {
+      const pct = j.progress.total ? Math.round((j.progress.done / j.progress.total) * 100) : 0
+      const st = $('tk-st'); if (st) st.textContent = ST[j.status] ?? j.status
+      const bar = $('tk-bar'); if (bar) bar.style.width = pct + '%'
+      const cnt = $('tk-cnt'); if (cnt) cnt.textContent = `${j.progress.done}/${j.progress.total} · ${pct}%`
+      const list = $('tk-list')
+      if (list) {
+        // 局部 diff：已存在的行按状态更新 badge/spinner/err/out，新行 append（保滚动位置）
+        list.querySelectorAll('.tk-empty-hint').forEach((el) => el.remove())
+        const exist = new Map(Array.from(list.querySelectorAll('[data-tkitem]')).map((el) => [el.dataset.tkitem, el]))
+        for (const it of j.items) {
+          const key = it.path
+          seen.add(key)
+          const html = itemRow(it)
+          const prev = exist.get(key)
+          if (prev) {
+            if (prev.dataset.st !== it.status || prev.dataset.err !== String(it.error ?? '')) {
+              const tpl = document.createElement('template'); tpl.innerHTML = html
+              prev.replaceWith(tpl.content.firstElementChild)
+            }
+          } else {
+            const tpl = document.createElement('template'); tpl.innerHTML = html
+            list.appendChild(tpl.content.firstElementChild)
+          }
+        }
+      }
+      const head = $('tk-head'); if (head) head.textContent = j.title
+      const model = $('tk-model'); if (model) model.textContent = j.modelLabel ?? ''
+      const started = $('tk-started')
+      if (started) {
+        const d = j.startedAt ? new Date(j.startedAt) : null
+        started.textContent = d && !isNaN(d) ? `${t('tk.startedAt')} ${d.toLocaleString()}` : ''
+      }
+    }
+    const bindCancel = (jid) => {
+      const cbtn = $('tk-cancel')
+      if (cbtn) cbtn.onclick = async () => {
+        cbtn.disabled = true
+        await window.moonlybox.rpc('tasks', { op: 'cancel', id: jid }, 10_000)
+        renderList('tasks')
+        renderWork('tasks', { id: jid })
+      }
+    }
+    const schedule = (jid) => {
+      if (tkTimer) clearTimeout(tkTimer)
+      tkTimer = setTimeout(async () => {
+        tkTimer = null
+        if (currentNav !== 'tasks' || currentTaskId !== jid) return
+        const rr = await window.moonlybox.rpc('tasks', { op: 'get', id: jid }, 10_000)
+        if (rr.event === 'done' && rr.code === 0) {
+          const jj = JSON.parse(rr.text).job
+          fill(jj)
+          bindCancel(jj.id)
+          if (jj.status === 'running' || jj.status === 'queued') schedule(jid)
+          else renderList('tasks')
+        }
+      }, 2000)
+    }
+    // 首次整页骨架
     const r = await window.moonlybox.rpc('tasks', { op: 'get', id: arg.id }, 10_000)
     if (r.event !== 'done' || r.code !== 0) {
       w.innerHTML = `<div class="muted" style="padding:20px">${t('list.loadFail')}</div>`
       return
     }
     const j = JSON.parse(r.text).job
-    const ST = { queued: t('tk.stQueued'), running: t('tk.stRunning'), completed: t('tk.stDone'), failed: t('tk.stFail'), cancelled: t('tk.stCancel') }
-    const IST = { pending: t('tk.iPending'), running: t('tk.iRunning'), done: t('tk.iDone'), failed: t('tk.iFail'), skipped: t('tk.iSkip'), cancelled: t('tk.iCancel') }
-    const pct = j.progress.total ? Math.round((j.progress.done / j.progress.total) * 100) : 0
-    const rows = j.items.map((it) => {
-      const name = it.path.split(/[\\/]/).pop()
-      const err = it.error ? `<div class="muted" style="font-size:11px;color:var(--danger,#e56969)">${esc(it.error)}</div>` : ''
-      const out = it.outPath ? `<div class="muted" style="font-size:11px">→ ${esc(it.outPath)}</div>` : ''
-      return `<div style="padding:7px 0;border-bottom:1px solid var(--border)">
-        <div style="display:flex;gap:8px;align-items:baseline"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(name)}</span><span class="muted" style="font-size:11px;flex:none">${IST[it.status] ?? it.status}</span></div>${err}${out}
-      </div>`
-    }).join('')
+    const startedHtml = (() => { const d = j.startedAt ? new Date(j.startedAt) : null; return d && !isNaN(d) ? `<div class="muted" style="font-size:11px;width:100%" id="tk-started">${t('tk.startedAt')} ${d.toLocaleString()}</div>` : '<div id="tk-started" style="display:none"></div>' })()
     w.innerHTML = `
-      <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:10px">
-        <strong style="font-size:14px">${esc(j.title)}</strong>
-        <span class="muted" style="font-size:12px">${ST[j.status] ?? j.status}</span>
-        <span style="margin-left:auto;font-size:11px" class="muted">${esc(j.modelLabel ?? '')}</span>
-        ${(() => { const d = j.startedAt ? new Date(j.startedAt) : null; return d && !isNaN(d) ? `<div class="muted" style="font-size:11px;width:100%">${t('tk.startedAt')} ${d.toLocaleString()}</div>` : '' })()}
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+        <strong style="font-size:14px" id="tk-head">${esc(j.title)}</strong>
+        <span class="muted" style="font-size:12px" id="tk-st">${ST[j.status] ?? j.status}</span>
+        <span style="margin-left:auto;font-size:11px" class="muted" id="tk-model">${esc(j.modelLabel ?? '')}</span>
+        ${startedHtml}
         ${['queued', 'running'].includes(j.status) ? `<button class="btn ghost" id="tk-cancel" style="font-size:12px;padding:2px 10px">${t('tk.cancel')}</button>` : ''}
       </div>
       <div style="padding:12px 18px">
-        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent);transition:width .4s"></div></div>
-        <div class="muted" style="font-size:11.5px;margin-top:6px">${j.progress.done}/${j.progress.total} · ${pct}%</div>
+        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div id="tk-bar" style="height:100%;width:${j.progress.total ? Math.round((j.progress.done / j.progress.total) * 100) : 0}%;background:var(--accent);transition:width .4s"></div></div>
+        <div class="muted" style="font-size:11.5px;margin-top:6px" id="tk-cnt">${j.progress.done}/${j.progress.total}</div>
       </div>
-      <div style="flex:1;overflow-y:auto;padding:0 18px 16px">${rows || `<div class="muted" style="padding:10px 0">${t('tk.empty')}</div>`}</div>`
-    const cbtn = $('tk-cancel')
-    if (cbtn) cbtn.onclick = async () => {
-      cbtn.disabled = true
-      await window.moonlybox.rpc('tasks', { op: 'cancel', id: j.id }, 10_000)
-      renderList('tasks')
-      renderWork('tasks', { id: j.id })
-    }
-    if (j.status === 'running' || j.status === 'queued') {
-      // 运行中自动刷新（2s）——用户切页即失效（无泄漏；任务在 daemon 不受影响）
-      setTimeout(() => { if (currentNav === 'tasks' && currentTaskId === j.id) renderWork('tasks', { id: j.id }) }, 2000)
-    }
+      <div style="flex:1;overflow-y:auto;padding:0 18px 16px" id="tk-list">${j.items.map(itemRow).join('') || `<div class="muted tk-empty-hint" style="padding:10px 0">${t('tk.empty')}</div>`}</div>`
+    bindCancel(j.id)
+    if (j.status === 'running' || j.status === 'queued') schedule(j.id)
     return
   }
   if (nav === 'backup') {
