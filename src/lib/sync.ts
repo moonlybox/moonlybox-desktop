@@ -296,18 +296,26 @@ function applyDownDoc(root: string, doc: any, directories: any[], manifest: Vaul
 }
 
 /** 下行（自动选模式）：有 cursor 走增量 /library/changes，否则全量 /library；失败回落全量 */
-/** #310.46：账本反查打「已同步」标（cloudWikiId 对上的 done item——云端准入回执；幂等） */
-function markSyncedIfTracked(wikiId: string): void {
+/**
+ * #310.47：账本反查——cloudWikiId 对上的 done item 是否存在（=该云端知识页的本地形态已由回传建立）。
+ * 存在→打 syncedAt（首次）并返回 true：下行**静默跳过**（当作已同步，不进报告——闭环终态，非每次重复判断）。
+ */
+function trackAndSkip(wikiId: string): boolean {
   try {
     const tasks = require('./tasks') as typeof import('./tasks')
+    let found = false
     for (const job of tasks.allJobs()) {
       for (const it of job.items) {
-        if (it.cloudWikiId === wikiId && it.status === 'done' && !it.syncedAt) {
-          tasks.updateItem(job.id, it.path, { syncedAt: new Date().toISOString() })
+        if (it.cloudWikiId === wikiId && it.status === 'done') {
+          found = true
+          if (!it.syncedAt) tasks.updateItem(job.id, it.path, { syncedAt: new Date().toISOString() })
         }
       }
     }
-  } catch {}
+    return found
+  } catch {
+    return false
+  }
 }
 
 export async function syncDown(root: string, report: SyncReport): Promise<void> {
@@ -328,8 +336,8 @@ export async function syncDown(root: string, report: SyncReport): Promise<void> 
         const deleted: any[] = res.data?.deleted ?? []
         for (const doc of documents) {
           if (doc.status !== 'active' || doc.isArchived) continue
-          // #310.46：external 产物云端准入回执——cloudWikiId 对上的账本 item 打「已同步」标（下行对本地资产只标识不动文件）
-          markSyncedIfTracked(doc.id)
+          // #310.47：cloudWikiId 对上=本地形态已建立（回传产物）→静默跳过下行（打标一次，此后零噪音——闭环终态）
+          if (trackAndSkip(doc.id)) continue
           applyDownDoc(root, doc, directories, manifest, report, d)
         }
         // 增量删除：云端回收站 → 本地移除（镜像区=云端权威）
