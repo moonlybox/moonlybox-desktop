@@ -226,6 +226,7 @@ const I18N_DICT = {
   'lib.compileModel': { zh: '整理所用模型', en: 'Compile model' },
   'lib.compileFollow': { zh: '跟随对话默认模型', en: 'Follow chat default model' },
   'lib.compileHint': { zh: '留空时按对话默认模型整理；本地模型推荐用于批量整理。', en: 'Leave empty to use the chat default model. Local models are recommended for bulk compiling.' },
+  'lib.compileSync': { zh: '回传云端（整理后进「待准入」，网页确认后入书房）', en: 'Sync to cloud (lands in Pending review; approve on web to enter the study)' },
   'lib.migrateTitle': { zh: '迁移书房目录', en: 'Migrate Study Directory' },
   'lib.migrateNew': { zh: '新目录（必须为空或不存在）', en: 'New directory (must be empty or not exist)' },
   'lib.migrateStart': { zh: '开始迁移', en: 'Start Migration' },
@@ -355,6 +356,8 @@ const I18N_DICT = {
   'tk.empty': { zh: '暂无任务——在对话里让小月整理文档即创建', en: 'No tasks yet — ask Moonie in chat to compile docs' },
   'tk.pickHint': { zh: '左侧选择任务查看详情。', en: 'Select a task on the left for details.' },
   'tk.startedAt': { zh: '启动于', en: 'Started at' },
+  'tk.willUse': { zh: '将使用：', en: 'Will use: ' },
+  'tk.changeModel': { zh: '更改', en: 'Change' },
   'tk.cancel': { zh: '取消任务', en: 'Cancel' },
   'tk.stQueued': { zh: '排队中', en: 'Queued' },
   'tk.stRunning': { zh: '执行中', en: 'Running' },
@@ -632,6 +635,23 @@ function modelPickerOpts(selectedValue) {
   }).join('')}</optgroup>` +
     `<optgroup label="${t('mp.groupCustom')}">${(mm.custom ?? []).filter((x) => x.enabled).map((x) => `<option value="custom:${x.id}" ${selectedValue === `custom:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>` +
     `<optgroup label="${t('mp.groupLocal')}">${(mm.local ?? []).filter((x) => x.enabled).map((x) => `<option value="local:${x.id}" ${selectedValue === `local:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>`
+}
+// #316 第三批：确认卡「将使用」——编译任务确认卡展示将用的模型（与主进程 resolveCompileModel 同链：compileDefault→default→''）
+function compileModelLabel() {
+  const mm = APP_SETTINGS?.model ?? {}
+  const ref = mm.compileDefault || mm.default || ''
+  const [kind, id] = String(ref).split(':')
+  if (kind === 'platform') {
+    const x = (mm.providers ?? []).find((p) => p.id === id)
+    if (x) { const pv = (APP_PROVIDERS?.platform ?? []).find((p) => p.id === x.providerId); return `${pv?.label ?? x.providerId} · ${x.model}` }
+  } else if (kind === 'custom') {
+    const x = (mm.custom ?? []).find((p) => p.id === id)
+    if (x) return `${x.name} · ${x.model}`
+  } else if (kind === 'local') {
+    const x = (mm.local ?? []).find((p) => p.id === id)
+    if (x) return `${x.name} · ${x.model}`
+  }
+  return ''
 }
 async function loadAppSettings() {
   if (APP_SETTINGS) return APP_SETTINGS
@@ -1417,11 +1437,22 @@ async function renderWork(nav, arg, label2) {
           </select>
           <div class="set-desc" style="margin-top:4px">${t('lib.compileHint')}</div>
         </div>
+        <div class="set-row" style="margin:6px 0 0;justify-content:space-between;max-width:420px"><span class="set-desc" style="align-self:center">${t('lib.compileSync')}</span><button type="button" class="toggle ${gset?.model?.syncToMoon !== false ? 'on' : ''}" id="sp-compile-sync"></button></div>
         <div class="set-status" id="sp-compile-status"></div>
       `)
       $('sp-vault').value = (await window.moonlybox.vaultGet()) ?? ''
       // #316.7：知识整理默认模型（存 model.compileDefault——解析回落链见 compile-model.ts）
       $('sp-compile-model').value = gset.model?.compileDefault ?? ''
+      // #316 第三批：回传云端开关（默认开；false 才关——compile-runner 同语义）
+      $('sp-compile-sync').onclick = async (e) => {
+        const btn = e.currentTarget
+        const next = !btn.classList.contains('on')
+        btn.classList.toggle('on', next)
+        await saveAppSettings({ model: { syncToMoon: next } })
+        const st = $('sp-compile-status')
+        st.className = 'set-status ok'; st.textContent = t('ui.saved')
+        setTimeout(() => { st.textContent = '' }, 2000)
+      }
       $('sp-compile-model').onchange = async (e) => {
         await saveAppSettings({ model: { compileDefault: e.target.value } })
         const st = $('sp-compile-status')
@@ -3629,6 +3660,21 @@ function renderConfirmBar(rpcId, payload) {
   bar.style.cssText = 'background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.55);border-radius:8px;padding:8px;margin:6px 0'
   // #310.20：daemon 发的字段名是 args（非 argsJson）——修 undefined 直出；参数截 200 防长参撑爆确认条
   bar.textContent = `⚙ ${payload.tool} ${String(payload.args ?? '').slice(0, 200)}（写操作，确认执行？）`
+  // #316 第三批：编译任务确认卡「将使用：X（更改）」——模型透明+跳设置
+  if (payload.tool === 'local_task_create_compile') {
+    const lbl = compileModelLabel()
+    if (lbl) {
+      const ml = document.createElement('div')
+      ml.style.cssText = 'margin:4px 0 6px;font-size:12px'
+      ml.innerHTML = `${t('tk.willUse')} <b></b>`
+      ml.querySelector('b').textContent = lbl
+      const chg = document.createElement('a')
+      chg.href = '#'; chg.style.marginLeft = '6px'; chg.textContent = t('tk.changeModel')
+      chg.onclick = (e) => { e.preventDefault(); bar.remove(); nav('settings'); setTimeout(() => { const el = document.querySelector('[data-settab="library"]'); if (el) el.click() }, 60) }
+      ml.appendChild(chg)
+      bar.appendChild(ml)
+    }
+  }
   const yes = document.createElement('button')
   yes.className = 'btn'; yes.textContent = t('ui.confirm'); yes.style.marginRight = '6px'
   const no = document.createElement('button')

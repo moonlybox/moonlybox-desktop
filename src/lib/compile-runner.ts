@@ -80,7 +80,7 @@ function readSource(p: string): string | null {
  * 源文档云端 ID 从 sync manifest 反查（path→docId）；未同步过的源（不在 manifest）跳过回传——
  * 云端归属校验（②步）要求 sourceDocId 是本用户书房文档。
  */
-async function pushToMoon(jobId: string, itemPath: string, srcText: string, md: string): Promise<void> {
+async function pushToMoon(jobId: string, itemPath: string, srcHash: string | undefined, md: string): Promise<void> {
   try {
     const g = loadSettings()
     if (g?.model?.syncToMoon === false) return // 默认开（显式 false 才关）
@@ -105,6 +105,7 @@ async function pushToMoon(jobId: string, itemPath: string, srcText: string, md: 
         matrixVersion: 1, // CompileMatrixService.MATRIX_VERSION（v1）——版本升级时云端 409 会带 currentMatrixVersion
         model: resolveCompileModel()?.model ?? '',
         localItemId: path.basename(itemPath),
+        srcHash: srcHash ?? undefined, // #316 第三批：ledger 双向（云端 KbWikiSource.src_hash）
       },
       { token: lc()?.accessToken, timeoutMs: 20_000 },
     )
@@ -144,7 +145,7 @@ export async function runJob(jobId: string): Promise<void> {
       const md = await compileOneDoc(item.path, text)
       const outPath = writeOut(item.path, md)
       updateItem(jobId, item.path, { status: 'done', outPath })
-      await pushToMoon(jobId, item.path, text, md) // #316 第二批：默认开；失败/未登录/源未同步=静默跳过
+      await pushToMoon(jobId, item.path, item.srcHash, md) // #316 第二批：默认开；失败/未登录/源未同步=静默跳过
     } catch (e: any) {
       updateItem(jobId, item.path, { status: 'failed', error: String(e?.message ?? e).slice(0, 300) })
     }
