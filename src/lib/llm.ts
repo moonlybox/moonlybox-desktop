@@ -160,6 +160,7 @@ export async function byokChatMessages(
   // #310.14：本地端点无需 key（Ollama 等）；远端缺 key 仍报 BYOK
   if (!apiKey && !isLocalEndpoint(meta.baseUrl)) return { ok: false, error: 'BYOK 未配置（API Key 缺失）' }
   try {
+    const t0 = Date.now() // #310.15：耗时/token 速度诊断
     const res = await fetch(`${meta.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
@@ -173,7 +174,7 @@ export async function byokChatMessages(
       signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
-    const body = (await res.json()) as { choices?: Array<{ message?: { content?: string; tool_calls?: ToolCallRequest[] }; finish_reason?: string }> }
+    const body = (await res.json()) as { choices?: Array<{ message?: { content?: string; tool_calls?: ToolCallRequest[] }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number } }
     const choice = body.choices?.[0]
     const msg = choice?.message
     if (!msg) return { ok: false, error: '空回复' }
@@ -184,6 +185,11 @@ export async function byokChatMessages(
       `tool_calls=${msg.tool_calls?.length ?? 0}`,
       `finish=${choice?.finish_reason ?? '?'}`,
     ]
+    // #310.15：耗时/token 速度（usage 为端点可选返回——Ollama/主流平台都有；缺失则只报耗时）
+    const ms = Date.now() - t0
+    const ct = body.usage?.completion_tokens
+    if (ct) dbgParts.push(`耗时=${(ms / 1000).toFixed(1)}s`, `tokens=${ct}`, `速度=${(ct / (ms / 1000)).toFixed(1)} tok/s`)
+    else dbgParts.push(`耗时=${(ms / 1000).toFixed(1)}s`)
     console.log(`（LLM 响应：${dbgParts.join(' ')}）`)
     const text = msg.content?.trim() || undefined
     // #280.3：空内容+无工具调用=端点异常静默源（思考型模型 reasoning 吃掉 max_tokens/端点 tools 协议不兼容）

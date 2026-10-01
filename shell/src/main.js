@@ -81,7 +81,7 @@ function findOllamaCli() {
   }
   if (process.env.MOONLYBOX_OLLAMA && fs.existsSync(process.env.MOONLYBOX_OLLAMA)) return process.env.MOONLYBOX_OLLAMA
   try {
-    const hit = require('child_process').execFileSync(process.platform === 'win32' ? 'where' : 'which', [exe], { timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().split(/\r?\n/)[0].trim()
+    const hit = require('child_process').execFileSync(process.platform === 'win32' ? 'where' : 'which', [exe], { timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).toString().split(/\r?\n/)[0].trim()
     return hit || null
   } catch {
     return null
@@ -466,7 +466,7 @@ app.whenReady().then(() => {
     if (!cli) return { state: 'not_found' }
     let version = null
     try {
-      version = require('child_process').execFileSync(cli, ['--version'], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+      version = require('child_process').execFileSync(cli, ['--version'], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).toString().trim()
     } catch {}
     return { state: 'installed_stopped', cli, version }
   })
@@ -480,7 +480,7 @@ app.whenReady().then(() => {
     if (r.canceled || !r.filePaths?.[0]) return { ok: false, canceled: true }
     const cli = r.filePaths[0]
     try {
-      const version = require('child_process').execFileSync(cli, ['--version'], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+      const version = require('child_process').execFileSync(cli, ['--version'], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).toString().trim()
       if (!version) return { ok: false, error: '校验失败（无版本输出）' }
       return { ok: true, cli, version }
     } catch (e) {
