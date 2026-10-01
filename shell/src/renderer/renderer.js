@@ -354,6 +354,7 @@ const I18N_DICT = {
 
   'tk.empty': { zh: '暂无任务——在对话里让小月整理文档即创建', en: 'No tasks yet — ask Moonie in chat to compile docs' },
   'tk.pickHint': { zh: '左侧选择任务查看详情。', en: 'Select a task on the left for details.' },
+  'tk.startedAt': { zh: '启动于', en: 'Started at' },
   'tk.cancel': { zh: '取消任务', en: 'Cancel' },
   'tk.stQueued': { zh: '排队中', en: 'Queued' },
   'tk.stRunning': { zh: '执行中', en: 'Running' },
@@ -2255,6 +2256,7 @@ async function renderWork(nav, arg, label2) {
         <strong style="font-size:14px">${esc(j.title)}</strong>
         <span class="muted" style="font-size:12px">${ST[j.status] ?? j.status}</span>
         <span style="margin-left:auto;font-size:11px" class="muted">${esc(j.modelLabel ?? '')}</span>
+        ${(() => { const d = j.startedAt ? new Date(j.startedAt) : null; return d && !isNaN(d) ? `<div class="muted" style="font-size:11px;width:100%">${t('tk.startedAt')} ${d.toLocaleString()}</div>` : '' })()}
         ${['queued', 'running'].includes(j.status) ? `<button class="btn ghost" id="tk-cancel" style="font-size:12px;padding:2px 10px">${t('tk.cancel')}</button>` : ''}
       </div>
       <div style="padding:12px 18px">

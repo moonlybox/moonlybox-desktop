@@ -70,6 +70,15 @@ function genId(): string {
   return `task_${t}${r}`
 }
 
+/** #310.22：UTC ISO → 本地显示串（'YYYY-MM-DD HH:mm'）——账本恒存 UTC（排序一致），展示层转本地 */
+export function fmtLocal(iso?: string): string | undefined {
+  if (!iso) return undefined
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return undefined
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 /** 内容 hash（ledger 判定键） */
 export function contentHash(text: string): string {
   return crypto.createHash('sha256').update(text).digest('hex').slice(0, 24)

@@ -120,14 +120,21 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
     }
   }
   if (name === 'local_task_status') {
-    const { listJobs, getJob } = await import('./tasks')
+    // #310.22：时间戳附带本地显示串（账本存 UTC ISO——LLM 直接念 UTC 会差时区；*Local 才是给人看的）
+    const { listJobs, getJob, fmtLocal } = await import('./tasks')
+    const withLocal = (j: any) => ({
+      ...j,
+      createdAtLocal: fmtLocal(j.createdAt),
+      startedAtLocal: fmtLocal(j.startedAt),
+      finishedAtLocal: fmtLocal(j.finishedAt),
+    })
     const id = String(args.id ?? '')
     if (id) {
       const j = getJob(id)
       if (!j) return JSON.stringify({ ok: false, error: '任务不存在' })
-      return JSON.stringify({ ok: true, job: j })
+      return JSON.stringify({ ok: true, job: withLocal(j), hint: '向用户报告时间一律用 *Local 字段（用户本地时区），不要念 createdAt/startedAt 原始 UTC 值' })
     }
-    return JSON.stringify({ ok: true, jobs: listJobs().slice(0, 10) })
+    return JSON.stringify({ ok: true, jobs: listJobs().slice(0, 10).map(withLocal), hint: '向用户报告时间一律用 *Local 字段（用户本地时区）' })
   }
   if (name === 'local_task_cancel') {
     const { cancelJob } = await import('./tasks')
