@@ -1153,7 +1153,8 @@ async function renderTree(container, rel, depth) {
       const collapsed = treeCollapsed.has(relPath)
       el.innerHTML = `<span class="tw" style="display:inline-block;width:14px;cursor:pointer;text-align:center;color:var(--muted)">${collapsed ? '▸' : '▾'}</span><span style="margin-left:2px">📁</span><span style="margin-left:4px">${item.name}</span>`
       el.onclick = async () => {
-        container.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
+        // #310.24：高亮清除必须全树范围（container 只覆盖当前子层——跨目录选择时旧目录 active 残留）
+        document.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
         el.classList.add('active')
         await renderWork('vault', { rel: relPath, dir: true })
       }
@@ -1187,7 +1188,8 @@ async function renderTree(container, rel, depth) {
     } else {
       el.textContent = `📄 ${item.name}`
       el.onclick = async () => {
-        container.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
+        // #310.24：同上——全树范围清除
+        document.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
         el.classList.add('active')
         await renderWork('vault', { rel: relPath, dir: false })
       }
