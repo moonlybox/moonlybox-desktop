@@ -1,9 +1,10 @@
 /**
- * 本地编译执行器（#316.5/#316.6 第一批：本地编译→产物落书房，不回传）：
+ * 本地编译执行器（#316.5/.6 第一批落书房 + 第二批回传云端待准入）：
  * - 流水线：取源文档→（文档粒度）resolveCompileModel→单轮长文本生成知识页→落 vault/知识页/<名>.md→item done
  * - 模型解析：执行期按文档粒度实时读（#316.7 定案——设置即生效，单文档内一致）
  * - 断点：items 逐份状态（done 不重做）；取消=cancelJob 置 items cancelled+执行器自查中止
- * - 回传云端：第二批（§5.16.4 对接），本版产物只落本地
+ * - 回传云端（#316 第二批 §5.16.4 C 方案）：item done 后若 model.syncToMoon 开→POST external 单产物回传
+ *   →云端落「待准入」；失败不阻断本地（#284 syncToMoon 同构语义）；cloudWikiId 写 item（重启恢复不重复回传）
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -11,6 +12,9 @@ import { defaultVaultRoot } from './config'
 import { getJob, updateJob, updateItem } from './tasks'
 import { resolveCompileModel } from './compile-model'
 import { byokChatMessages } from './llm'
+import { loadSettings } from './settings'
+import { loadManifest } from './sync'
+import { apiCall } from './api'
 
 /** 单文档知识页生成：源文本 → markdown 知识页（单轮，无工具——小模型胜任线之上的体力活） */
 async function compileOneDoc(srcPath: string, srcText: string): Promise<string> {
@@ -72,6 +76,52 @@ function readSource(p: string): string | null {
 }
 
 /**
+ * 回传单产物云端（#316 第二批）。失败静默记 item.error 尾注（不阻断本地、不重试阻塞流水线）。
+ * 源文档云端 ID 从 sync manifest 反查（path→docId）；未同步过的源（不在 manifest）跳过回传——
+ * 云端归属校验（②步）要求 sourceDocId 是本用户书房文档。
+ */
+async function pushToMoon(jobId: string, itemPath: string, srcText: string, md: string): Promise<void> {
+  try {
+    const g = loadSettings()
+    if (g?.model?.syncToMoon === false) return // 默认开（显式 false 才关）
+    const { loadCredentials } = await import('./auth')
+    if (!loadCredentials()?.accessToken) return // 未登录=纯本地模式，不回传
+    const root = defaultVaultRoot()
+    const manifest = loadManifest(root)
+    let cloudId = ''
+    for (const [docId, ent] of Object.entries(manifest)) {
+      if (ent.path && path.join(root, ent.path) === path.resolve(itemPath)) { cloudId = docId; break }
+    }
+    if (!cloudId) return // 源未在云端书房（本地新建未上行）——跳过回传，不报错
+    const { loadCredentials: lc } = await import('./auth')
+    const res = await apiCall<{ ok: boolean; message?: string; code?: string; data?: { wikiId?: string } }>(
+      'POST',
+      '/api/library/compile-multipage/external',
+      {
+        sourceDocId: cloudId,
+        sourceVersionAtCompile: 0, // manifest 不带版本；云端以归属+硬闸校验为准（version 对账升级项挂账）
+        title: path.basename(itemPath).replace(/\.[^.]+$/, ''),
+        content: md,
+        matrixVersion: 1, // CompileMatrixService.MATRIX_VERSION（v1）——版本升级时云端 409 会带 currentMatrixVersion
+        model: resolveCompileModel()?.model ?? '',
+        localItemId: path.basename(itemPath),
+      },
+      { token: lc()?.accessToken, timeoutMs: 20_000 },
+    )
+    const body = res.data
+    if (res.ok && body?.ok && body.data?.wikiId) {
+      updateItem(jobId, itemPath, { cloudWikiId: body.data.wikiId })
+    } else {
+      const reason = body?.message || body?.code || `HTTP ${res.status}`
+      updateItem(jobId, itemPath, { error: `本地完成；云端回传：${String(reason).slice(0, 120)}` })
+    }
+  } catch (e: any) {
+    // #284 语义：回传失败不影响本地产物
+    try { updateItem(jobId, itemPath, { error: `本地完成；云端回传失败：${String(e?.message ?? e).slice(0, 120)}` }) } catch {}
+  }
+}
+
+/**
  * 执行 job（fire-and-forget：daemon tasks op 触发后异步跑，进度经 jobs.json 回写、任务页轮询读）。
  * 取消语义：每份 item 开始前查一次 job.status——cancelled 即止。
  */
@@ -94,6 +144,7 @@ export async function runJob(jobId: string): Promise<void> {
       const md = await compileOneDoc(item.path, text)
       const outPath = writeOut(item.path, md)
       updateItem(jobId, item.path, { status: 'done', outPath })
+      await pushToMoon(jobId, item.path, text, md) // #316 第二批：默认开；失败/未登录/源未同步=静默跳过
     } catch (e: any) {
       updateItem(jobId, item.path, { status: 'failed', error: String(e?.message ?? e).slice(0, 300) })
     }

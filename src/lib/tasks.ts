@@ -25,6 +25,8 @@ export interface JobItem {
   srcHash?: string
   /** 产物相对 vault 路径（done 时有） */
   outPath?: string
+  /** #316 第二批：回传云端落库的待准入知识页 ID（回传成功时写——重启恢复不重复回传的判定键） */
+  cloudWikiId?: string
   error?: string
 }
 

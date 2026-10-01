@@ -34,6 +34,8 @@ export interface SettingsSchema {
     default: string
     /** #316.7 编译默认模型（知识整理）：同 default 引用形态；空/失效→回落 default→legacy（compile-model.resolveCompileModel） */
     compileDefault?: string
+    /** #316 第二批：编译产物回传云端（§5.16.4 C 方案）——本地先行落书房，回传落云端待准入；失败不阻断本地（#284 syncToMoon 同构）。默认开 */
+    syncToMoon?: boolean
     /** 平台 API 多服务商实例（每个可单独配置 key/启停；key 走钥匙串 account=llm:<id>） */
     providers: Array<{ id: string; providerId: string; enabled: boolean; model: string; baseUrl?: string }>
     /** 自定义多模型（OpenAI 兼容端点；本地推理 key 可空） */
@@ -85,7 +87,7 @@ export const DEFAULT_SETTINGS: SettingsSchema = {
   general: { launchAtLogin: false, launchMinimized: false, closeToTray: true, keepAwake: false, clipboardWatch: false },
   appearance: { theme: 'system', lang: 'zh-CN', zoom: 100 },
   chat: { contextEnabled: true, autoCompress: true, compressThreshold: 80, compressTarget: 20, maxRetries: 10 },
-  model: { default: '', providers: [], custom: [], local: [] },
+  model: { default: '', compileDefault: '', syncToMoon: true, providers: [], custom: [], local: [] },
   messaging: { providers: {} },
   mcp: { builtinEnabled: true, custom: [] },
   websearch: { provider: '', config: {} },
