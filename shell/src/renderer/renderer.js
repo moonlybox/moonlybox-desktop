@@ -1137,6 +1137,7 @@ const treeCollapsed = new Set() // 折叠目录 rel 集合（会话内记忆）
 async function renderTree(container, rel, depth) {
   const r = await window.moonlybox.fsList(rel)
   if (!r.ok) { container.innerHTML = `<div class="muted" style="padding:10px">${r.message}</div>`; return }
+  container.innerHTML = '' // #310.32c：原地重入安全（删除产物后单层刷新不清旧节点=幽灵节点残留）
   for (const item of r.items) {
     const relPath = rel ? `${rel}/${item.name}` : item.name
     // #310.32：书房根 README.md=客户端元数据位（目录说明单源）——树中不显示不可编辑
@@ -1220,6 +1221,9 @@ async function renderTree(container, rel, depth) {
               if (d.ok) {
                 alert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger))
                 await renderTree(container, rel, depth)
+                // 工作区正显示被删文件→回落到该层目录详情（#310.32c）
+                const wEl = $('work')
+                if (wEl && wEl.querySelector('.md-view, #wf-view') && wEl.textContent.includes(item.name)) renderWork('vault', { rel, dir: true })
               } else alert(t('lib.delFail') + (d.message ?? ''))
             } catch { alert(t('lib.delFail')) }
           }
