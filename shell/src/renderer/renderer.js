@@ -2348,6 +2348,7 @@ async function renderWork(nav, arg, label2) {
         // 局部 diff：已存在的行按状态更新 badge/spinner/err/out，新行 append（保滚动位置）
         list.querySelectorAll('.tk-empty-hint').forEach((el) => el.remove())
         const exist = new Map(Array.from(list.querySelectorAll('[data-tkitem]')).map((el) => [el.dataset.tkitem, el]))
+        const seen = new Set() // #310.29：补定义（#310.23 落地即缺失——调度协程无 try 时表现为 [promise] unhandled）
         for (const it of j.items) {
           const key = it.path
           seen.add(key)
@@ -2363,6 +2364,7 @@ async function renderWork(nav, arg, label2) {
             list.appendChild(tpl.content.firstElementChild)
           }
         }
+        // 清单中已消失的行（如 ledger 重置后 item 转 pending 但 path 不变——不消失；保守不移除任何行）
       }
       const head = $('tk-head'); if (head) head.textContent = j.title
       const model = $('tk-model'); if (model) model.textContent = j.modelLabel ?? ''
@@ -2386,14 +2388,16 @@ async function renderWork(nav, arg, label2) {
       tkTimer = setTimeout(async () => {
         tkTimer = null
         if (currentNav !== 'tasks' || currentTaskId !== jid) return
-        const rr = await window.moonlybox.rpc('tasks', { op: 'get', id: jid }, 10_000)
-        if (rr.event === 'done' && rr.code === 0) {
-          const jj = JSON.parse(rr.text).job
-          fill(jj)
-          bindCancel(jj.id)
-          if (jj.status === 'running' || jj.status === 'queued') schedule(jid)
-          else renderList('tasks')
-        }
+        try {
+          const rr = await window.moonlybox.rpc('tasks', { op: 'get', id: jid }, 10_000)
+          if (rr.event === 'done' && rr.code === 0) {
+            const jj = JSON.parse(rr.text).job
+            fill(jj)
+            bindCancel(jj.id)
+            if (jj.status === 'running' || jj.status === 'queued') schedule(jid)
+            else renderList('tasks')
+          }
+        } catch {} // #310.29：刷新失败静默（下轮重试）——不让 unhandled rejection 冒泡
       }, 2000)
     }
     // 首次整页骨架
