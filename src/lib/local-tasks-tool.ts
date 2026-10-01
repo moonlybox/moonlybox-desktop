@@ -25,12 +25,11 @@ export function localTaskToolDefs(): Array<{ name: string; title?: string; descr
     {
       name: 'local_task_create_compile',
       title: '创建知识整理任务',
-      description: '创建一个本地后台任务：把这批文档逐篇用本地模型整理成知识页（产物存到书房「知识页」目录）。参数 paths=文档绝对路径数组（先用 local_task_list_uncompiled 获取）。任务在后台执行，创建后立即可继续对话，进度可在「任务」页查看。',
+      description: '创建一个本地后台任务：把文档逐篇用模型整理成知识页（产物存到书房「知识页」目录）。用户要整理全部未整理文档时不传 paths（自动全量）；只整理部分时传 paths 数组。任务后台执行，创建后立即可继续对话，进度在「任务」页查看。',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         type: 'object',
-        properties: { paths: { type: 'array', items: { type: 'string' }, description: '要整理的文档绝对路径数组（来自 local_task_list_uncompiled）' } },
-        required: ['paths'],
+        properties: { paths: { type: 'array', items: { type: 'string' }, description: '要整理的文档绝对路径数组；不传=自动整理全部未整理文档' } },
       },
     },
     {
@@ -101,15 +100,24 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
     })
   }
   if (name === 'local_task_create_compile') {
-    const paths = args.paths
-    if (!Array.isArray(paths) || paths.length === 0) return JSON.stringify({ ok: false, error: 'paths 不能为空——先调 local_task_list_uncompiled 获取清单' })
-    // 直调 lib 单源（与 daemon tasks op 同一份 createJob）——不经 stdin RPC（小月在 daemon 进程内）
-    const { createJob } = await import('./tasks')
-    const { runJob } = await import('./compile-runner')
-    const label = compileModelLabel() ?? undefined
-    const job = createJob('compile', `知识整理 · ${paths.length} 篇`, (paths as string[]).map((p) => ({ path: String(p) })), label)
-    void runJob(job.id).catch(() => {})
-    return JSON.stringify({ ok: true, jobId: job.id, total: paths.length, model: label ?? null, message: `任务已创建（${paths.length} 篇），后台执行中——进度可在「任务」页查看` })
+    // #310.21：全链 try/catch——失败必须如实返回（agent-loop 会把失败结果给 LLM；LLM 不得编造成功）
+    try {
+      // #310.21：支持不传 paths=自动取全部未整理（「整理全部」场景 LLM 无需抄大清单——根治参数截断+省 token）
+      let paths = args.paths as string[] | undefined
+      if (!Array.isArray(paths) || paths.length === 0) {
+        const scan = listUncompiled()
+        if (!scan.uncompiled.length) return JSON.stringify({ ok: false, error: '没有未整理的文档（或书房为空）' })
+        paths = scan.uncompiled
+      }
+      const { createJob } = await import('./tasks')
+      const { runJob } = await import('./compile-runner')
+      const label = compileModelLabel() ?? undefined
+      const job = createJob('compile', `知识整理 · ${paths.length} 篇`, (paths as string[]).slice(0, 500).map((p) => ({ path: String(p) })), label)
+      void runJob(job.id).catch(() => {})
+      return JSON.stringify({ ok: true, jobId: job.id, total: Math.min(paths.length, 500), model: label ?? null, message: `任务已创建（${Math.min(paths.length, 500)} 篇），后台执行中——进度可在「任务」页查看` })
+    } catch (e: any) {
+      return JSON.stringify({ ok: false, error: `任务创建失败：${String(e?.message ?? e)}` })
+    }
   }
   if (name === 'local_task_status') {
     const { listJobs, getJob } = await import('./tasks')

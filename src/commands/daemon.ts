@@ -836,18 +836,18 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           const job = cancelJob(String((args as Record<string, unknown>).id ?? ''))
           if (!job) { code = 1; text = '任务不存在' } else { text = JSON.stringify({ ok: true, job }) }
         } else if (op === 'create_compile') {
-          // 入口约定（#316.6）：paths=要编译的文档绝对路径数组（小月经 fs_list 圈定+ledger 过滤后传入）
-          const paths = (args as Record<string, unknown>).paths
+          // #310.21：paths 可选——不传=自动全量未整理（listUncompiled−ledger）；传=指定清单。上限 500
+          let paths = (args as Record<string, unknown>).paths as string[] | undefined
           if (!Array.isArray(paths) || paths.length === 0) {
+            const { listUncompiled } = await import('../lib/local-tasks-tool')
+            paths = listUncompiled().uncompiled
+          }
+          if (!paths.length) {
             code = 1
-            text = 'create_compile 需要非空 paths 数组'
+            text = '没有未整理的文档（或书房为空）'
             break
           }
-          if (paths.length > 500) {
-            code = 1
-            text = '单批任务上限 500 篇（拆分后再试）'
-            break
-          }
+          if (paths.length > 500) paths = paths.slice(0, 500)
           const items = (paths as string[]).map((p) => ({ path: String(p) }))
           const label = compileModelLabel()
           const job = createJob('compile', `知识整理 · ${items.length} 篇`, items, label ?? undefined)
