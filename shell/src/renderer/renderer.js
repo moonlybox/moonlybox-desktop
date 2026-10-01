@@ -514,7 +514,6 @@ const I18N_DICT = {
   'ol.tblSpec': { zh: '参数', en: 'Params' },
   'ol.tblSize': { zh: '体积', en: 'Size' },
   'ol.tblRam': { zh: '内存要求', en: 'RAM' },
-  'ol.recoCustomPh': { zh: '自定义模型名，如 qwen3:8b', en: 'Custom model, e.g. qwen3:8b' },
   'ol.recoRam8': { zh: '8GB 内存可跑', en: 'runs on 8GB RAM' },
   'ol.recoRam16': { zh: '建议 16GB 内存', en: '16GB RAM recommended' },
   'ol.pullLaunched': { zh: '已在系统终端启动拉取 {m}——下载完成后回到此页点「重新检测」', en: 'Pulling {m} in a visible terminal — click Re-check here when done' },
@@ -1579,10 +1578,6 @@ async function renderWork(nav, arg, label2) {
                   </tr>`).join('')}
                 </tbody>
               </table>
-              <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
-                <input id="sp-ol-custom" placeholder="${t('ol.recoCustomPh')}" style="flex:1" />
-                <button type="button" class="btn ghost" id="sp-ol-custom-go">${t('ol.recoPull')}</button>
-              </div>
               <div class="set-status" id="sp-ol-pull-status" style="margin-top:6px"></div></div>`
             const pull = async (name) => {
               const st = $('sp-ol-pull-status')
@@ -1598,10 +1593,6 @@ async function renderWork(nav, arg, label2) {
               }
             }
             mbox.querySelectorAll('[data-olpull]').forEach((el) => { el.onclick = () => pull(el.dataset.olpull) })
-            $('sp-ol-custom-go').onclick = () => {
-              const v = $('sp-ol-custom').value.trim()
-              if (v) pull(v)
-            }
             return
           }
           mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.installedModelsTitle')}</div>
