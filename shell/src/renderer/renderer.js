@@ -1556,8 +1556,10 @@ async function renderWork(nav, arg, label2) {
               { m: 'qwen2.5:7b', sz: '~4.7 GB', spec: '7B', ok: 'ol.recoRam16' },
               { m: 'gemma3:4b', sz: '~3.3 GB', spec: '4B', ok: 'ol.recoRam8' },
             ]
-            mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.noModelsTitle')}</div>
-              <div class="sc-desc">${t('ol.pullHint')}</div></div>
+            // #310.13.3：不用 .set-card（flex 横排会挤压 sc-main）——标题/描述/表格独立行排版
+            mbox.innerHTML = `<div style="border:1px solid var(--border);border-radius:10px;padding:13px 16px;background:var(--bg2)">
+              <div style="font-size:13px;font-weight:500">${t('ol.noModelsTitle')}</div>
+              <div style="font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5">${t('ol.pullHint')}</div>
               <table style="margin-top:10px;width:100%;border-collapse:collapse;font-size:12.5px">
                 <thead><tr style="text-align:left;color:var(--muted);font-size:11px">
                   <th style="padding:4px 6px;border-bottom:1px solid var(--border);font-weight:600">${t('ol.tblModel')}</th>
@@ -1578,7 +1580,8 @@ async function renderWork(nav, arg, label2) {
                   </tr>`).join('')}
                 </tbody>
               </table>
-              <div class="set-status" id="sp-ol-pull-status" style="margin-top:6px"></div></div>`
+              <div class="set-status" id="sp-ol-pull-status" style="margin-top:6px"></div>
+            </div>`
             const pull = async (name) => {
               const st = $('sp-ol-pull-status')
               const g = await loadAppSettings()
