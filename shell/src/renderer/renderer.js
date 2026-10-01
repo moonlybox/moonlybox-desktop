@@ -2405,6 +2405,44 @@ async function renderWork(nav, arg, label2) {
         const d = j.startedAt ? new Date(j.startedAt) : null
         started.textContent = d && !isNaN(d) ? `${t('tk.startedAt')} ${d.toLocaleString()}` : ''
       }
+      // #310.54：产物 tab 局部刷新——fill 原本只刷清单/进度，「产物 (N)」徽标与列表是初次渲染静态值，
+      // 停留详情页观察编译时恒为 (0)/空。此处按最新 job 重算 donePages 并原地更新（保 tab 显隐与勾选态无关，重建行）。
+      const pagesEl = $('tk-pages')
+      const tabBtn = $('tk-tab-pages')
+      if (pagesEl && tabBtn) {
+        const donePages = j.items.filter((it) => it.status === 'done' && it.outPath)
+        tabBtn.textContent = `${t('tk.tabPages')} (${donePages.length})`
+        const keepSel = new Set(Array.from(pagesEl.querySelectorAll('.tkp-chk:checked')).map((c) => c.dataset.abs))
+        pagesEl.innerHTML = donePages.length ? `<div style="display:flex;align-items:center;gap:10px;padding:4px 0 8px;position:sticky;top:0;background:var(--bg,#fff);z-index:1">
+          <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="tkp-selall" /> ${t('tk.selectAll')}</label>
+          <button class="btn ghost" id="tkp-del" style="font-size:12px;padding:2px 10px;margin-left:auto">${t('tk.delSelected')}</button>
+        </div>` + donePages.map((it) => {
+          const name = String(it.outPath).split(/[\\/]/).pop()
+          const cloud = it.syncedAt ? `<span style="font-size:10.5px;margin-left:6px;color:var(--ok,#34c777)">✓ ${t('tk.pgSynced')}</span>` : (it.cloudWikiId ? `<span class="muted" style="font-size:10.5px;margin-left:6px">☁ ${t('tk.pgPending')}</span>` : '')
+          return `<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+            <input type="checkbox" class="tkp-chk" data-abs="${esc(it.outPath)}" ${keepSel.has(it.outPath) ? 'checked' : ''} />
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}${cloud}</div>
+              <div class="muted" style="font-size:10.5px">${esc(t('tk.iDone'))}</div>
+            </div>
+          </div>`
+        }).join('') : `<div class="muted" style="padding:10px 0">${t('tk.pagesEmpty')}</div>`
+        // 重绑工具条事件（innerHTML 重建后节点换新）
+        const selall2 = $('tkp-selall')
+        if (selall2) selall2.onchange = (e) => { pagesEl.querySelectorAll('.tkp-chk').forEach((c) => { c.checked = e.target.checked }) }
+        const delBtn2 = $('tkp-del')
+        if (delBtn2) delBtn2.onclick = async () => {
+          const sel = [...pagesEl.querySelectorAll('.tkp-chk:checked')].map((c) => c.dataset.abs)
+          if (!sel.length) return
+          if (!(await mbConfirm(t('tk.delConfirm').replace('{n}', sel.length)))) return
+          const rd = await window.moonlybox.rpc('tasks', { op: 'delete_pages', paths: sel }, 30_000)
+          try {
+            const d = JSON.parse(rd.text)
+            if (d.ok) { mbAlert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger)); renderTree(); renderWork('tasks', { id: j.id }) }
+            else mbAlert(t('lib.delFail') + (d.message ?? ''))
+          } catch { mbAlert(t('lib.delFail')) }
+        }
+      }
     }
     const bindCancel = (jid) => {
       const cbtn = $('tk-cancel')
