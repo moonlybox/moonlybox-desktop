@@ -510,6 +510,10 @@ const I18N_DICT = {
   'ol.pickFail': { zh: '定位失败', en: 'Locate failed' },
   'ol.pickedOk': { zh: '已定位 Ollama {v}——重新检测中…', en: 'Located Ollama {v} — re-probing…' },
   'ol.recoPull': { zh: '⬇ 拉取（终端可见）', en: '⬇ Pull (visible terminal)' },
+  'ol.tblModel': { zh: '模型', en: 'Model' },
+  'ol.tblSpec': { zh: '参数', en: 'Params' },
+  'ol.tblSize': { zh: '体积', en: 'Size' },
+  'ol.tblRam': { zh: '内存要求', en: 'RAM' },
   'ol.recoCustomPh': { zh: '自定义模型名，如 qwen3:8b', en: 'Custom model, e.g. qwen3:8b' },
   'ol.recoRam8': { zh: '8GB 内存可跑', en: 'runs on 8GB RAM' },
   'ol.recoRam16': { zh: '建议 16GB 内存', en: '16GB RAM recommended' },
@@ -1555,13 +1559,26 @@ async function renderWork(nav, arg, label2) {
             ]
             mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.noModelsTitle')}</div>
               <div class="sc-desc">${t('ol.pullHint')}</div></div>
-              <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
-                ${RECO.map((x) => `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                  <span style="font-weight:600;font-size:13px">${x.m}</span>
-                  <span style="font-size:11px;color:var(--muted)">${x.spec} · ${x.sz} · ${t(x.ok)}</span>
-                  <button type="button" class="btn ghost" data-olpull="${x.m}" style="margin-left:auto">${t('ol.recoPull')}</button>
-                </div>`).join('')}
-              </div>
+              <table style="margin-top:10px;width:100%;border-collapse:collapse;font-size:12.5px">
+                <thead><tr style="text-align:left;color:var(--muted);font-size:11px">
+                  <th style="padding:4px 6px;border-bottom:1px solid var(--border);font-weight:600">${t('ol.tblModel')}</th>
+                  <th style="padding:4px 6px;border-bottom:1px solid var(--border);font-weight:600">${t('ol.tblSpec')}</th>
+                  <th style="padding:4px 6px;border-bottom:1px solid var(--border);font-weight:600">${t('ol.tblSize')}</th>
+                  <th style="padding:4px 6px;border-bottom:1px solid var(--border);font-weight:600">${t('ol.tblRam')}</th>
+                  <th style="padding:4px 6px;border-bottom:1px solid var(--border)"></th>
+                </tr></thead>
+                <tbody>
+                  ${RECO.map((x) => `<tr>
+                    <td style="padding:6px;border-bottom:1px solid var(--border);font-weight:600;white-space:nowrap">${x.m}</td>
+                    <td style="padding:6px;border-bottom:1px solid var(--border)">${x.spec}</td>
+                    <td style="padding:6px;border-bottom:1px solid var(--border);white-space:nowrap">${x.sz}</td>
+                    <td style="padding:6px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--muted)">${t(x.ok)}</td>
+                    <td style="padding:6px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap">
+                      <button type="button" class="btn ghost" data-olpull="${x.m}">${t('ol.recoPull')}</button>
+                    </td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>
               <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
                 <input id="sp-ol-custom" placeholder="${t('ol.recoCustomPh')}" style="flex:1" />
                 <button type="button" class="btn ghost" id="sp-ol-custom-go">${t('ol.recoPull')}</button>
