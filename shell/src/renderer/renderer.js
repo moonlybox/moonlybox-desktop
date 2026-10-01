@@ -2344,10 +2344,10 @@ async function renderWork(nav, arg, label2) {
     // #294：空态页=快捷新建页——模板网格+名称就地填，砍掉弹窗（#290/#293 两轮形态定稿）
     const grid = $('dg-quick-grid')
     let picked = DG_TEMPLATES[0].key // 默认选「流程图」
-    const tplCard = (t) => `
-      <div data-tpl="${t.key}" style="border:1px solid ${t.key === picked ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:10px 6px;cursor:pointer;text-align:center">
-        <div style="font-size:20px">${t.icon}</div>
-        <div style="font-size:12.5px;margin-top:4px">${t.name}</div>
+    const tplCard = (tpl) => `
+      <div data-tpl="${tpl.key}" style="border:1px solid ${tpl.key === picked ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:10px 6px;cursor:pointer;text-align:center">
+        <div style="font-size:20px">${tpl.icon}</div>
+        <div style="font-size:12.5px;margin-top:4px">${t(tpl.name)}</div>
       </div>`
     const renderGrid = () => { grid.innerHTML = DG_TEMPLATES.map(tplCard).join('') }
     renderGrid()
