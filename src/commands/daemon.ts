@@ -922,6 +922,9 @@ async function syncCycle(): Promise<void> {
     const report = { downloaded: [], updated: [], uploaded: [], inboxFiled: [], conflicts: [], skipped: [] } as any
     await syncDown(defaultVaultRoot(), report)
     await markSyncedByPoll()
+    // #310.59：下行后增量重建索引（知识页产物段纳入——本地编译的知识立即可被小月问答检索）
+    const { reindex } = await import('../lib/indexer')
+    await reindex(defaultVaultRoot())
   } catch {}
 }
 

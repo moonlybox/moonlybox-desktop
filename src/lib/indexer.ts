@@ -9,6 +9,7 @@
  * 删除文档 → 镜像区移除时同步清索引（对账全量扫描兜底）。
  */
 import * as fs from 'node:fs'
+import * as crypto from 'node:crypto'
 import * as path from 'node:path'
 import { Database } from 'bun:sqlite'
 import * as sqliteVec from 'sqlite-vec'
@@ -51,6 +52,46 @@ export function openIndex(root: string): Database {
 }
 
 /** 镜像区当前应有内容（读盘 frontmatter 解析出 docId） */
+/** #310.59：本地知识页产物段——纯本地产物（含已回传未镜像的）入索引，消除「本地编译的知识小月问答搜不到」盲区。
+ * docId=kbp:<contentHash 前 24>（内容变=新 id，旧条目由 reindex removed 自动清理）；title=文件名；version=hash 数值化。 */
+function kbPages(root: string): IndexedDoc[] {
+  const docs: IndexedDoc[] = []
+  const dir = path.join(root, '知识页')
+  let files: string[] = []
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.md'))
+  } catch {
+    return docs
+  }
+  for (const f of files) {
+    const abs = path.join(dir, f)
+    try {
+      const raw = fs.readFileSync(abs, 'utf8')
+      if (!raw.trim()) continue
+      // frontmatter/头注剥离——正文供 FTS/向量
+      let body = raw
+      const m = raw.match(/^---\n[\s\S]*?\n---\n?/)
+      if (m) body = raw.slice(m[0].length)
+      body = body.replace(/^> 知识页[^\n]*\n+/, '')
+      const hash = contentHashOf(body)
+      docs.push({
+        docId: 'kbp:' + hash,
+        title: path.basename(f, '.md'),
+        content: body,
+        updatedAt: fs.statSync(abs).mtime.toISOString(),
+        version: parseInt(hash.slice(0, 8), 16) || 0,
+      })
+    } catch {
+      /* 单文件失败跳过 */
+    }
+  }
+  return docs
+}
+
+function contentHashOf(text: string): string {
+  return crypto.createHash('sha256').update(text).digest('hex').slice(0, 24)
+}
+
 function mirrorDocs(root: string, manifest: VaultManifest): IndexedDoc[] {
   const docs: IndexedDoc[] = []
   for (const [docId, entry] of Object.entries(manifest)) {
@@ -83,7 +124,7 @@ export interface ReindexReport {
 /** 增量重建索引：云端 manifest 对账（内容变化才重新 embed） */
 export async function reindex(root: string): Promise<ReindexReport> {
   const manifest = loadManifest(root)
-  const docs = mirrorDocs(root, manifest)
+  const docs = [...mirrorDocs(root, manifest), ...kbPages(root)]
   const db = openIndex(root)
   const report: ReindexReport = { indexed: 0, skipped: 0, removed: 0 }
 
