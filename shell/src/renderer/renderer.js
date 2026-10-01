@@ -1397,6 +1397,8 @@ async function renderWork(nav, arg, label2) {
       }
       for (const id of ['sp-ctx', 'sp-compress', 'sp-ct', 'sp-cg', 'sp-retry']) $(id).onchange = saveChat
     } else if (cat.id === 'library') {
+      // #316.7：gset 先取（模板内 modelPickerOpts 求值需要）
+      const gset = await loadAppSettings()
       panel(t('panel.library'), t('panel.sub.library'), `
         <div class="set-field">
           <label>${t('lib.vault')}</label>
@@ -1408,7 +1410,7 @@ async function renderWork(nav, arg, label2) {
         <div class="set-field" style="margin-top:6px"><label>${t('lib.compileModel')}</label>
           <select id="sp-compile-model" class="set-select set-select-sm" style="max-width:420px">
             <option value="">${t('lib.compileFollow')}</option>
-            ${modelOpts}
+            ${modelPickerOpts(gset?.model?.default ?? '')}
           </select>
           <div class="set-desc" style="margin-top:4px">${t('lib.compileHint')}</div>
         </div>
@@ -1416,7 +1418,6 @@ async function renderWork(nav, arg, label2) {
       `)
       $('sp-vault').value = (await window.moonlybox.vaultGet()) ?? ''
       // #316.7：知识整理默认模型（存 model.compileDefault——解析回落链见 compile-model.ts）
-      const gset = await loadAppSettings()
       $('sp-compile-model').value = gset.model?.compileDefault ?? ''
       $('sp-compile-model').onchange = async (e) => {
         await saveAppSettings({ model: { compileDefault: e.target.value } })
