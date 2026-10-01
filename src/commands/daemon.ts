@@ -837,7 +837,9 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           if (!job) { code = 1; text = '任务不存在' } else { text = JSON.stringify({ ok: true, job }) }
         } else if (op === 'create_compile') {
           // #310.21：paths 可选——不传=自动全量未整理（listUncompiled−ledger）；传=指定清单。上限 500
-          let paths = (args as Record<string, unknown>).paths as string[] | undefined
+          // #310.61b：rel 形态（树右键「文档/xx.md」）归一 abs——执行器 readSource/pathToCloud 全按 abs（listUncompiled 产出即 abs）
+          const normP = (p: string) => path.isAbsolute(p) ? p : path.join(defaultVaultRoot(), p)
+          let paths = ((args as Record<string, unknown>).paths as string[] | undefined)?.map(normP)
           if (!Array.isArray(paths) || paths.length === 0) {
             const { listUncompiled } = await import('../lib/local-tasks-tool')
             paths = listUncompiled().uncompiled
