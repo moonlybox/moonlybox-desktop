@@ -1,10 +1,11 @@
 /**
- * 本地编译执行器（#316.5/.6 第一批落书房 + 第二批回传云端待准入）：
- * - 流水线：取源文档→（文档粒度）resolveCompileModel→单轮长文本生成知识页→落 vault/知识页/<名>.md→item done
- * - 模型解析：执行期按文档粒度实时读（#316.7 定案——设置即生效，单文档内一致）
- * - 断点：items 逐份状态（done 不重做）；取消=cancelJob 置 items cancelled+执行器自查中止
- * - 回传云端（#316 第二批 §5.16.4 C 方案）：item done 后若 model.syncToMoon 开→POST external 单产物回传
- *   →云端落「待准入」；失败不阻断本地（#284 syncToMoon 同构语义）；cloudWikiId 写 item（重启恢复不重复回传）
+ * 本地编译执行器（#316 第四批骨架下发版）：
+ * - 流水线：runJob 开始时批量拉云端骨架（规则引擎零 token；失败/未登录/开关关=回退旧单页链路，零风险降级）
+ *   →每篇：本地分析轮（按 analysisSpec 纯 JSON 产 genre/topics）→逐页生成（structure+预算硬数字+关键词锚）
+ *   →落 vault/知识页/<名>.md→item done→回传 external 带 skeleton 摘要（服务端骨架符合性复算）
+ * - **聪明层纪律（用户定案）**：骨架/analysisSpec 仅内存消费，禁止落盘（含 .moonlybox 缓存）；产物 md 照常落
+ * - 模型解析：执行期按文档粒度实时读（#316.7）；断点/取消/恢复语义不变（#316.5）
+ * - 回传失败不阻断本地（#284 语义）；cloudWikiId 写 item 防重复回传
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -16,6 +17,102 @@ import { loadSettings } from './settings'
 import { loadManifest } from './sync'
 import { apiCall } from './api'
 
+/** 骨架类型（云端 SkeletonService 下发；仅内存，禁落盘——#316 第四批聪明层纪律） */
+interface Skeleton {
+  docId: string
+  genre: string
+  genreGuess?: string | null
+  template: string
+  structure: string
+  tier: string
+  topics: number
+  knowledgePages: number
+  tags: number
+  budgetChars: number
+  per_page_chars: number
+  aggregate: boolean
+  matrixVersion: number
+  sourceChars: number
+  sourceVersionAtCompile: number
+  analysisSpec: { genreEnum: string[]; topicsMax: number; topicTitleMax: number; topicSummaryMax: number; entitiesMax: number }
+  keywords: string[]
+  pages: Array<{ unitKey: string; pageIndex: number; pageOf: number; sections: string[] | null; maxChars: number }>
+}
+
+/** 批量拉骨架（规则引擎，云端零 token）。失败→null=整任务降级旧单页链路 */
+async function fetchSkeletons(cloudIds: string[]): Promise<Map<string, Skeleton> | null> {
+  try {
+    const { loadCredentials } = await import('./auth')
+    if (!loadCredentials()?.accessToken) return null
+    if (cloudIds.length === 0) return null
+    const res = await apiCall<{ ok: boolean; data?: { skeletons?: Skeleton[] }; message?: string }>(
+      'GET',
+      `/api/library/compile-multipage/skeleton?ids=${encodeURIComponent(cloudIds.join(','))}`,
+      undefined,
+      { token: loadCredentials()?.accessToken, timeoutMs: 30_000 },
+    )
+    const list = res.data?.data?.skeletons
+    if (!res.ok || !Array.isArray(list)) return null
+    return new Map(list.map((sk) => [sk.docId, sk]))
+  } catch {
+    return null
+  }
+}
+
+/** 本地分析轮（按 analysisSpec 产 genre/topics 纯 JSON——分析算力本地出，云端零 token） */
+async function analyzeDoc(model: NonNullable<ReturnType<typeof resolveCompileModel>>, srcPath: string, srcText: string, spec: Skeleton['analysisSpec']): Promise<{ topics: Array<{ title: string; summary: string }> } | null> {
+  const sys =
+    '你是文档分析引擎。只输出一行紧凑 JSON（无缩进、无 markdown 代码块、无解释、无多余字段）。' +
+    `对给定文档完成：\n` +
+    `1. genre：从这些枚举里选一个（只能选其一）：${spec.genreEnum.join('、')}；\n` +
+    `2. topics：知识主题清单，按重要性降序，最多 ${spec.topicsMax} 个，每个 title ≤${spec.topicTitleMax} 字、summary ≤${spec.topicSummaryMax} 字；实际有几个写几个，不要凑数。\n` +
+    `严格输出该结构（字段名不得改动，不得增删字段）：{"genre":"","topics":[{"title":"","summary":""}]}`
+  const r = await byokChatMessages(
+    [
+      { role: 'system', content: sys },
+      { role: 'user', content: `文档名：${path.basename(srcPath)}\n\n文档内容：\n${srcText.slice(0, 24_000)}` },
+    ],
+    undefined,
+    240_000,
+    { baseUrl: model.baseUrl, model: model.model, apiKey: model.apiKey },
+    4_000,
+  )
+  if (!r.ok || !r.text) return null
+  try {
+    const m = r.text.match(/\{[\s\S]*\}/)
+    if (!m) return null
+    const j = JSON.parse(m[0])
+    const topics = Array.isArray(j.topics) ? j.topics.filter((t: any) => t && typeof t.title === 'string' && t.title.trim()) : []
+    return topics.length ? { topics } : null
+  } catch {
+    return null
+  }
+}
+
+/** 单页生成（骨架约束：structure 章节+页预算+关键词锚） */
+async function compileOnePage(model: NonNullable<ReturnType<typeof resolveCompileModel>>, srcPath: string, srcText: string, sk: Skeleton, page: Skeleton['pages'][number], topicTitle: string, topicSummary: string): Promise<string> {
+  const kwHint = sk.keywords.length ? `\n标题与小节命名必须自然融入这些关键词中的至少一个：${sk.keywords.join('、')}` : ''
+  const secHint = page.sections ? `\n本页只覆盖这些章节内容：${page.sections.join('、')}` : ''
+  const sys =
+    '你是知识编译助手。针对给定主题，从原文中提取相关内容，编译为一张结构化知识页（Markdown）。\n' +
+    `必须包含且仅包含以下章节（Markdown 二级标题）：\n${sk.structure}\n` +
+    '要求：只使用原文信息，不编造；关键结论可溯源；原文不足以支撑某章节时写「（原文未涉及）」；语言与原文一致；' +
+    `篇幅 ≤${page.maxChars} 字（压缩提炼，禁止逐段复述原文）。只输出 Markdown 正文。${kwHint}${secHint}`
+  const r = await byokChatMessages(
+    [
+      { role: 'system', content: sys },
+      { role: 'user', content: `本页主题：${topicTitle}\n主题简介：${topicSummary}\n\n原文全文：\n${srcText.slice(0, 24_000)}` },
+    ],
+    undefined,
+    480_000,
+    { baseUrl: model.baseUrl, model: model.model, apiKey: model.apiKey },
+    16_000,
+  )
+  if (!r.ok || !r.text) throw new Error(r.error ?? '模型返回空内容')
+  return r.text
+}
+
+/** 旧单页链路（降级：未登录/开关关/拉骨架失败）——#316 第一批行为不变 */
 /** 单文档知识页生成：源文本 → markdown 知识页（单轮，无工具——小模型胜任线之上的体力活） */
 async function compileOneDoc(srcPath: string, srcText: string): Promise<string> {
   // #316.7：文档粒度解析——每篇新文档开始时读一次设置
@@ -80,7 +177,7 @@ function readSource(p: string): string | null {
  * 源文档云端 ID 从 sync manifest 反查（path→docId）；未同步过的源（不在 manifest）跳过回传——
  * 云端归属校验（②步）要求 sourceDocId 是本用户书房文档。
  */
-async function pushToMoon(jobId: string, itemPath: string, srcHash: string | undefined, md: string): Promise<void> {
+async function pushToMoon(jobId: string, itemPath: string, srcHash: string | undefined, md: string, sk?: Skeleton, titles?: string[]): Promise<void> {
   try {
     const g = loadSettings()
     if (g?.model?.syncToMoon === false) return // 默认开（显式 false 才关）
@@ -102,10 +199,19 @@ async function pushToMoon(jobId: string, itemPath: string, srcHash: string | und
         sourceVersionAtCompile: 0, // manifest 不带版本；云端以归属+硬闸校验为准（version 对账升级项挂账）
         title: path.basename(itemPath).replace(/\.[^.]+$/, ''),
         content: md,
-        matrixVersion: 1, // CompileMatrixService.MATRIX_VERSION（v1）——版本升级时云端 409 会带 currentMatrixVersion
+        matrixVersion: sk?.matrixVersion ?? 1, // 骨架批=骨架版本；降级链=v1（版本升级云端 409 会带 currentMatrixVersion）
         model: resolveCompileModel()?.model ?? '',
         localItemId: path.basename(itemPath),
         srcHash: srcHash ?? undefined, // #316 第三批：ledger 双向（云端 KbWikiSource.src_hash）
+        // #316 第四批：骨架符合性对账摘要（服务端按同源重算骨架对表——规则引擎确定性）
+        ...(sk ? {
+          sourceVersionAtCompile: sk.sourceVersionAtCompile,
+          matrixVersion: sk.matrixVersion,
+          skeleton: {
+            unitKeys: sk.pages.map((pg) => pg.unitKey),
+            titles: titles ?? [],
+          },
+        } : {}),
       },
       { token: lc()?.accessToken, timeoutMs: 20_000 },
     )
@@ -130,6 +236,15 @@ export async function runJob(jobId: string): Promise<void> {
   const job = getJob(jobId)
   if (!job) return
   updateJob(jobId, { status: 'running', startedAt: new Date().toISOString() })
+  // #316 第四批：批量拉骨架（一次下发）。未登录/未同步源/失败→null=降级旧单页链路（零风险回退）
+  const root0 = defaultVaultRoot()
+  const manifest0 = loadManifest(root0)
+  const pathToCloud = new Map<string, string>()
+  for (const [docId, ent] of Object.entries(manifest0)) {
+    if (ent.path) pathToCloud.set(path.join(root0, ent.path), docId)
+  }
+  const cloudIds = [...new Set(job.items.map((it) => pathToCloud.get(it.path)).filter(Boolean))] as string[]
+  const skeletons = await fetchSkeletons(cloudIds)
   for (const item of job.items) {
     // 取消自查（#316.5：cancelJob 已把 pending 置 cancelled——running 检查兜底）
     const cur = getJob(jobId)
@@ -142,10 +257,38 @@ export async function runJob(jobId: string): Promise<void> {
         updateItem(jobId, item.path, { status: 'skipped', error: '无法读取（二进制或空文件）' })
         continue
       }
-      const md = await compileOneDoc(item.path, text)
+      const model = resolveCompileModel()
+      if (!model) throw new Error('无可用模型——先在 设置→模型→本地部署 接入本地模型，或在 设置→平台API 配置云端模型')
+      const cloudId = pathToCloud.get(item.path)
+      const sk = skeletons?.get(cloudId ?? '') ?? null
+      let md = ''
+      let titles: string[] | undefined
+      if (sk) {
+        // #316 第四批骨架链：分析轮（本地算力）→逐页生成（structure+预算+关键词锚）
+        const an = await analyzeDoc(model, item.path, text, sk.analysisSpec)
+        const topics = an?.topics ?? []
+        if (topics.length === 0) throw new Error('分析轮失败：主题清单为空（模型返回不可解析）')
+        const pageCount = Math.max(1, Math.min(sk.knowledgePages, topics.length))
+        const pages = sk.pages.slice(0, pageCount).map((pg, i) => ({ ...pg, pageOf: pageCount }))
+        const parts: string[] = []
+        titles = []
+        for (let i = 0; i < pages.length; i++) {
+          // 取消自查（页粒度）
+          const cur2 = getJob(jobId)
+          if (!cur2 || cur2.status === 'cancelled') return
+          const tp = topics[Math.min(i * Math.ceil(topics.length / pageCount), topics.length - 1)]
+          const body = await compileOnePage(model, item.path, text, sk, pages[i], tp.title, tp.summary ?? '')
+          titles.push(tp.title)
+          parts.push(body.trim())
+        }
+        md = parts.length === 1 ? parts[0] : parts.map((b, i) => `<!-- page ${i + 1}/${pages.length}: ${pages[i].unitKey} -->\n\n${b}`).join('\n\n')
+      } else {
+        // 降级链：旧单页（#316 第一批行为）
+        md = await compileOneDoc(item.path, text)
+      }
       const outPath = writeOut(item.path, md)
       updateItem(jobId, item.path, { status: 'done', outPath })
-      await pushToMoon(jobId, item.path, item.srcHash, md) // #316 第二批：默认开；失败/未登录/源未同步=静默跳过
+      await pushToMoon(jobId, item.path, item.srcHash, md, sk ?? undefined, titles)
     } catch (e: any) {
       updateItem(jobId, item.path, { status: 'failed', error: String(e?.message ?? e).slice(0, 300) })
     }
