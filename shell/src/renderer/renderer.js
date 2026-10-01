@@ -506,6 +506,7 @@ const I18N_DICT = {
   'ol.noModelsTitle': { zh: '尚未拉取模型', en: 'No models pulled yet' },
   'ol.installedModelsTitle': { zh: '已装模型（勾选接入）', en: 'Installed models (check to connect)' },
   'ol.addedCount': { zh: '已接入 {n} 个模型', en: 'Connected {n} model(s)' },
+  'ol.addedTag': { zh: '已接入', en: 'Connected' },
   'ol.pickBtn': { zh: '手工定位', en: 'Locate manually' },
   'ol.pickFail': { zh: '定位失败', en: 'Locate failed' },
   'ol.pickedOk': { zh: '已定位 Ollama {v}——重新检测中…', en: 'Located Ollama {v} — re-probing…' },
@@ -1614,10 +1615,19 @@ async function renderWork(nav, arg, label2) {
             $('sp-ol-recheck2').onclick = () => renderState()
             return
           }
+          // #310.13.6：已接入的模型在列表中标记（disabled+绿字）——接入成功后重绘不再无反馈
+          let addedNames = []
+          try {
+            const g0 = await loadAppSettings()
+            addedNames = ((g0.model ?? {}).local ?? []).map((x) => x.model)
+          } catch {}
           mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.installedModelsTitle')}</div>
             <div class="sc-desc">${t('ol.installedDesc')}</div></div>
             <div id="sp-ol-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
-              ${models.map((mm2) => `<label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" data-olmodel="${esc(mm2.name)}"> <span>${esc(mm2.name)} · ${(mm2.size / 1073741824).toFixed(1)} GB</span></label>`).join('')}
+              ${models.map((mm2) => {
+                const added = addedNames.includes(mm2.name)
+                return `<label style="display:flex;align-items:center;gap:8px;font-size:13px${added ? ';opacity:.65' : ''}"><input type="checkbox" data-olmodel="${esc(mm2.name)}" ${added ? 'disabled checked' : ''}> <span>${esc(mm2.name)} · ${(mm2.size / 1073741824).toFixed(1)} GB${added ? ` · <span style="color:var(--ok,#16a34a)">${t('ol.addedTag')}</span>` : ''}</span></label>`
+              }).join('')}
             </div>
             <button type="button" class="btn ghost" id="sp-ol-add" style="margin-top:10px">${t('ol.addPicked')}</button>
             <div class="set-status" id="sp-ol-status" style="margin-top:6px"></div></div>`
@@ -1635,7 +1645,7 @@ async function renderWork(nav, arg, label2) {
             const r = await saveAppSettings({ model: { local: arr, ...(arr.length && !mcfg.default ? { default: `local:${arr[0].id}` } : {}) } })
             st.className = r.ok ? 'set-status ok' : 'set-status err'
             st.textContent = r.ok ? t('ol.addedCount').replace('{n}', picked.length) : (r.error ?? t('ui.saveFail'))
-            if (r.ok) setTimeout(() => renderWork('settings'), 600)
+            if (r.ok) setTimeout(() => renderWork('settings'), 1500)
           }
         }
         renderState()
