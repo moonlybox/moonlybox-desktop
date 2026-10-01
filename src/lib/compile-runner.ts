@@ -144,7 +144,7 @@ async function compileOneDoc(srcPath: string, srcText: string): Promise<string> 
 }
 
 /** 知识页落盘：vault/知识页/<源名>.md（同名加序号）；meta=YAML frontmatter（#310.30 tags/topics 上云+本地可读） */
-function writeOut(srcPath: string, md: string, meta?: { tags?: string[]; genre?: string }): string {
+function writeOut(srcPath: string, md: string, meta?: { tags?: string[]; genre?: string; topics?: string[] }): string {
   const dir = path.join(defaultVaultRoot(), '知识页')
   fs.mkdirSync(dir, { recursive: true })
   const base = path.basename(srcPath).replace(/\.[^.]+$/, '') || '未命名'
@@ -157,10 +157,11 @@ function writeOut(srcPath: string, md: string, meta?: { tags?: string[]; genre?:
   const localDate = `${nowD.getFullYear()}-${p2(nowD.getMonth() + 1)}-${p2(nowD.getDate())}`
   const header = `> 知识页 · 本地整理 · 源：${path.basename(srcPath)} · ${localDate}\n\n`
   let fm = ''
-  if (meta && (meta.tags?.length || meta.genre)) {
+  if (meta && (meta.tags?.length || meta.genre || meta.topics?.length)) {
     const lines = ['---']
     if (meta.tags?.length) lines.push(`tags: [${meta.tags.map((t) => t.replace(/"/g, '')).join(', ')}]`)
     if (meta.genre) lines.push(`genre: ${meta.genre}`)
+    if (meta.topics?.length) lines.push(`topics: [${meta.topics.map((t) => t.replace(/"/g, '')).join(', ')}]`)
     lines.push('---', '')
     fm = lines.join('\n')
   }
@@ -297,12 +298,13 @@ export async function runJob(jobId: string): Promise<void> {
           titles.push(tp.title)
           parts.push(body.trim())
         }
-        md = parts.length === 1 ? parts[0] : parts.map((b, i) => `<!-- page ${i + 1}/${pages.length}: ${pages[i].unitKey} -->\n\n${b}`).join('\n\n')
+        // #310.33：每页开头显式主题名（## 主题）——产物可见主题层（Obsidian 大纲可用），替代渲染不可见的 HTML 注释
+        md = parts.length === 1 ? parts[0] : parts.map((b, i) => `## ${titles![i]}\n\n${b}`).join('\n\n')
       } else {
         // 降级链：旧单页（#316 第一批行为）
         md = await compileOneDoc(item.path, text)
       }
-      const outPath = writeOut(item.path, md, sk ? { tags, genre: sk.genre } : undefined)
+      const outPath = writeOut(item.path, md, sk ? { tags, genre: sk.genre, topics: titles ?? [] } : undefined)
       updateItem(jobId, item.path, { status: 'done', outPath })
       await pushToMoon(jobId, item.path, item.srcHash, md, sk ?? undefined, titles, tags)
     } catch (e: any) {
