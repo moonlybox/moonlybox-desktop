@@ -1542,10 +1542,11 @@ async function renderWork(nav, arg, label2) {
         // #310.11：从 /api/tags 列已装模型，勾选即建实例（写入 settings.model.local + baseUrl 默认）
         const renderOllamaModels = async () => {
           const mbox = $('sp-ol-models'); if (!mbox) return
+          // #310.13.5：走主进程代理（renderer 直连 fetch 被 Ollama CORS 白名单拦）
           let tags = null
           try {
-            const res = await fetch('http://127.0.0.1:11434/api/tags')
-            tags = res.ok ? await res.json() : null
+            const rr = await window.moonlybox.ollamaTags()
+            if (rr && rr.ok) tags = rr.tags
           } catch {}
           const models = (tags && Array.isArray(tags.models)) ? tags.models : []
           if (models.length === 0) {
@@ -1597,8 +1598,8 @@ async function renderWork(nav, arg, label2) {
                 const poll = async (left) => {
                   if (left <= 0) return
                   try {
-                    const res = await fetch('http://127.0.0.1:11434/api/tags')
-                    const j = res.ok ? await res.json() : null
+                    const rr = await window.moonlybox.ollamaTags()
+                    const j = rr && rr.ok ? rr.tags : null
                     if (j && Array.isArray(j.models) && j.models.some((x) => x.name === name || String(x.name).startsWith(name + ':'))) { renderState(); return }
                   } catch {}
                   setTimeout(() => poll(left - 1), 5000)

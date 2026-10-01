@@ -518,6 +518,17 @@ app.whenReady().then(() => {
       return { ok: false, error: String(e && e.message ? e.message : e) }
     }
   })
+  // #310.13.5：主进程代理 /api/tags（renderer 直连 fetch 会被 Ollama CORS 白名单拦——origin 非 localhost）
+  ipcMain.handle('ollama:tags', async () => {
+    try {
+      const ctl = new AbortController()
+      const t = setTimeout(() => ctl.abort(), 3000)
+      const res = await fetch((process.env.MOONLYBOX_OLLAMA_URL || 'http://127.0.0.1:11434') + '/api/tags', { signal: ctl.signal })
+      clearTimeout(t)
+      if (!res.ok) return { ok: false }
+      return { ok: true, tags: await res.json() }
+    } catch { return { ok: false } }
+  })
   // #310.11：启动系统级 Ollama 服务（spawn 分离，不随应用退出被杀）
   ipcMain.handle('ollama:serve', async (_e, cli) => {
     try {

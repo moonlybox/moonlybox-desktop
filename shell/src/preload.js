@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('moonlybox', {
   ollamaServe: (cli) => ipcRenderer.invoke('ollama:serve', cli),
   ollamaPick: () => ipcRenderer.invoke('ollama:pick'),
   ollamaPullTerm: (payload) => ipcRenderer.invoke('ollama:pullTerm', payload),
+  ollamaTags: () => ipcRenderer.invoke('ollama:tags'),
   // #310.7：调试日志镜像/日志目录打开/环境信息/自动更新开关
   debugLog: (line) => ipcRenderer.invoke('shell:debugLog', line),
   openLogDir: () => ipcRenderer.invoke('shell:openLogDir'),
