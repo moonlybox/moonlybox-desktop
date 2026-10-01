@@ -85,28 +85,20 @@ export function initVault(root: string): void {
   const readme = path.join(root, 'README.md')
   // #310.31：书房根 README=目录说明单源（每目录一个 ## 段，书房目录详情页按段拆分显示）。
   // 升级策略：文件不存在→写入默认模板；文件内容与旧默认模板完全一致（未被用户改过）→覆盖升级为新模板；其余（用户已定制）→不动。
-  // 历史默认模板全集（#310.31b 补：86ae493 初版无「图示」条目，用户书房 README 实为该形态——升级判定须覆盖）
-  const legacyDefaults = [
-    [
-      '# MyMoonVault',
-      '',
-      '- `文档/`、`知识页/`：云端镜像区（客户端管理；外部修改会在下次同步时被检测并提示）',
-      '- `收集箱/`：把新文件扔进这里 = 上传到云端（唯一上行口，处理完自动归位）',
-      '- `.moonlybox/`：同步元数据（请勿编辑）',
-      '',
-    ].join('\n'),
-    [
-      '# MyMoonVault',
-      '',
-      '- `文档/`、`知识页/`、`图示/`：云端镜像区（客户端管理；外部修改会在下次同步时被检测并提示）',
-      '- `收集箱/`：把新文件扔进这里 = 上传到云端（唯一上行口，处理完自动归位）',
-      '- `.moonlybox/`：同步元数据（请勿编辑）',
-      '',
-    ].join('\n'),
-  ]
   let current: string | null = null
   try { current = fs.readFileSync(readme, 'utf8') } catch {}
-  if (current === null || legacyDefaults.includes(current)) {
+  // #310.31c：升级判定=历史默认特征匹配（不穷举精确全文——历史形态有空行差异会漏）：
+  // 首行 # MyMoonVault + 含 .moonlybox 说明行 + 无 ## 段（新模板特征）+ 行数 ≤8（初版紧凑形态；用户真定制通常更长或有自有标题）
+  const isLegacyDefault = (t: string): boolean => {
+    const lines = t.replace(/\r\n/g, '\n').split('\n').filter((x) => x.trim() !== '')
+    return (
+      lines[0] === '# MyMoonVault' &&
+      lines.some((x) => x.includes('.moonlybox')) &&
+      !t.includes('\n## ') &&
+      lines.length <= 5
+    )
+  }
+  if (current === null || isLegacyDefault(current)) {
     fs.writeFileSync(readme, vaultReadmeTemplate())
   }
 }
