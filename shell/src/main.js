@@ -530,10 +530,17 @@ app.whenReady().then(() => {
     } catch { return { ok: false } }
   })
   // #310.11：启动系统级 Ollama 服务（spawn 分离，不随应用退出被杀）
+  // #310.16：Windows 弹窗根因修复——detached:true（DETACHED_PROCESS）使 serve 无 console，
+  // Ollama 启动时 spawn 的 runner 探测子进程（GPU 发现，日志可见数个 starting runner）各自新建可见 console=「连续数个弹窗」。
+  // 改：win32 去 detached（保留 CREATE_NO_WINDOW 隐藏 console，runner 继承之无窗）；Unix 保留 detached（SIGHUP 隔离）。
+  // Windows 下 Electron 父退出不会级联杀子进程，serve 存活不受影响。
   ipcMain.handle('ollama:serve', async (_e, cli) => {
     try {
-      const child = require('child_process').spawn(cli, ['serve'], { detached: true, stdio: 'ignore', windowsHide: true })
-      child.unref()
+      const isWin = process.platform === 'win32'
+      const child = isWin
+        ? require('child_process').spawn(cli, ['serve'], { stdio: 'ignore', windowsHide: true })
+        : require('child_process').spawn(cli, ['serve'], { detached: true, stdio: 'ignore' })
+      if (!isWin) child.unref()
       // 等 HTTP 就绪（最多 8s）
       for (let i = 0; i < 16; i++) {
         await new Promise((r) => setTimeout(r, 500))
