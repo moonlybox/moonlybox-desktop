@@ -279,26 +279,19 @@ function applyDownDoc(root: string, doc: any, directories: any[], manifest: Vaul
       return true
     }
   }
-  // #310.44：目标文件已存在且非镜像（manifest 未登记）=本地产物同名（回传产物与下行镜像 100% 撞名链：
-  // 本地产物名=源名，回传 title=源名，下行名=title）→收编：云端版落盘替换，登记 manifest，报告明示（不静默覆盖）
+  // #310.45（用户定案，逆转 #310.44 收编）：目标文件已存在且非镜像（manifest 未登记）=本地编译产物同名
+  // （撞名链 100%：本地产物名=源名，回传 title=源名，下行名=title）→**下行跳过，本地产物原样保留**——
+  // 产物是本地资产不被动；云端该知识页已通过回传与本地产物对应（cloudWikiId），无需物理镜像。
   if (!prev && fs.existsSync(file)) {
-    const localRaw = fs.readFileSync(file, 'utf8')
-    // 内容实质相同（本地产物剥掉 frontmatter 后与云端正文一致）→纯收编；不同→保留本地+冲突提示
-    const stripFm = (t: string) => t.replace(/^---\n[\s\S]*?\n---\n?/, '').trimStart().replace(/^> 知识页[^\n]*\n\n?/, '').trim()
-    const adopted = stripFm(localRaw) === String(doc.content ?? '').trim()
-    if (!adopted) {
-      report.conflicts.push({ path: rel, reason: '与本地编译产物同名且内容不同——云端版未下行（保留本地版）' })
-      return true
-    }
+    report.skipped.push(`kept local ${rel} (与本地编译产物同名，云端版不下行)`)
+    log(root, { op: 'skip-down-local', doc: doc.id, path: rel })
+    return true
   }
   // 新文档 / 云端版本前进 → 写盘（自写排除窗：登记 hash）
-  const wasLocal = !prev && fs.existsSync(file)
   fs.writeFileSync(file, content)
   manifest[doc.id] = { path: rel.split(path.sep).join('/'), sha256: sha256(content), version: doc.version, updatedAt: doc.updatedAt }
-  if (prev) report.updated.push(rel)
-  else if (wasLocal) report.skipped.push(`adopted ${rel} (本地编译产物已升级为云端镜像)`)
-  else report.downloaded.push(rel)
-  log(root, { op: prev ? 'update-down' : wasLocal ? 'adopt-down' : 'download', doc: doc.id, version: doc.version, path: rel })
+  if (prev) report.updated.push(rel); else report.downloaded.push(rel)
+  log(root, { op: prev ? 'update-down' : 'download', doc: doc.id, version: doc.version, path: rel })
   return true
 }
 
