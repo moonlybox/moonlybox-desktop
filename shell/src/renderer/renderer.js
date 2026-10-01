@@ -1523,7 +1523,8 @@ async function renderWork(nav, arg, label2) {
               await saveAppSettings({ general: { ...(g.general ?? {}), ollamaCli: r.cli } })
               st.className = 'set-status ok'
               st.textContent = t('ol.pickedOk').replace('{v}', r.version)
-              renderState()
+              // #310.12.1：反馈可读——立即重探会重建状态条把绿字瞬间抹掉（用户实测一闪即逝），延迟 1.2s 再接管
+              setTimeout(() => { renderState() }, 1200)
             }
           }
         }
