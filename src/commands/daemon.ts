@@ -30,6 +30,11 @@ import { cmdSync } from '../commands/sync'
 import { syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
+// #316.5：本地任务基建（多入口单执行器）
+import { listJobs, getJob, cancelJob, recoverOnBoot, createJob, contentHash, TASK_TYPES } from '../lib/tasks'
+import type { TaskType } from '../lib/tasks'
+import { runJob } from '../lib/compile-runner'
+import { compileModelLabel } from '../lib/compile-model'
 import { loadSettings, saveSettings, MESSAGING_PROVIDERS } from '../lib/settings'
 import { defaultVaultRoot, configDir } from '../lib/config'
 import * as path from 'node:path'
@@ -818,6 +823,47 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
       }
       break
     }
+    case 'tasks': {
+      // #316.5：本地任务基建——list/get/create_compile/cancel（多入口单执行器；任务类型白名单收敛）
+      try {
+        const op = String((args as Record<string, unknown>).op ?? 'list')
+        if (op === 'list') {
+          text = JSON.stringify({ ok: true, jobs: listJobs() })
+        } else if (op === 'get') {
+          const job = getJob(String((args as Record<string, unknown>).id ?? ''))
+          if (!job) { code = 1; text = '任务不存在' } else { text = JSON.stringify({ ok: true, job }) }
+        } else if (op === 'cancel') {
+          const job = cancelJob(String((args as Record<string, unknown>).id ?? ''))
+          if (!job) { code = 1; text = '任务不存在' } else { text = JSON.stringify({ ok: true, job }) }
+        } else if (op === 'create_compile') {
+          // 入口约定（#316.6）：paths=要编译的文档绝对路径数组（小月经 fs_list 圈定+ledger 过滤后传入）
+          const paths = (args as Record<string, unknown>).paths
+          if (!Array.isArray(paths) || paths.length === 0) {
+            code = 1
+            text = 'create_compile 需要非空 paths 数组'
+            break
+          }
+          if (paths.length > 500) {
+            code = 1
+            text = '单批任务上限 500 篇（拆分后再试）'
+            break
+          }
+          const items = (paths as string[]).map((p) => ({ path: String(p) }))
+          const label = compileModelLabel()
+          const job = createJob('compile', `知识整理 · ${items.length} 篇`, items, label ?? undefined)
+          // fire-and-forget：执行器异步跑（进度回写 jobs.json；本 RPC 立即返回 jobId）
+          void runJob(job.id).catch(() => {})
+          text = JSON.stringify({ ok: true, job })
+        } else {
+          code = 2
+          text = `未知 tasks op：${op}`
+        }
+      } catch (e: any) {
+        code = 1
+        text = String(e?.message ?? e)
+      }
+      break
+    }
     default:
       code = 2
       text = `未知命令：${req.cmd}`
@@ -826,6 +872,9 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
 }
 
 export async function runDaemon(): Promise<void> {
+  // #316.5：启动恢复——daemon 重启后 running/queued 任务 → queued（items 断点保留；执行由 tasks op 触发或任务页「继续」）
+  const recovered = recoverOnBoot()
+  if (recovered) console.log(`（任务恢复：${recovered} 个任务待续）`)
   process.stdout.write(JSON.stringify({ id: 0, event: 'ready' }) + '\n')
   const rl = require('node:readline').createInterface({ input: process.stdin })
   // P2：事件驱动行处理——dispatch await 期间到达的 confirm_response 必须能被处理

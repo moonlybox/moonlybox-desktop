@@ -30,8 +30,10 @@ export interface SettingsSchema {
     maxRetries: number // 模型重试次数（默认 10）
   }
   model: {
-    /** #283 对话默认模型：'platform:<id>' | 'custom:<id>' | 'local:<id>' | ''（空=回落旧 byok.json 兼容） */
+    /** #283 对话默认模型（历史名 default=chatDefault 语义）：'platform:<id>' | 'custom:<id>' | 'local:<id>' | ''（空=回落旧 byok.json 兼容） */
     default: string
+    /** #316.7 编译默认模型（知识整理）：同 default 引用形态；空/失效→回落 default→legacy（compile-model.resolveCompileModel） */
+    compileDefault?: string
     /** 平台 API 多服务商实例（每个可单独配置 key/启停；key 走钥匙串 account=llm:<id>） */
     providers: Array<{ id: string; providerId: string; enabled: boolean; model: string; baseUrl?: string }>
     /** 自定义多模型（OpenAI 兼容端点；本地推理 key 可空） */

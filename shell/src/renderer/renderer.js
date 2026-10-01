@@ -49,6 +49,7 @@ const ICON_PATHS = {
   backup: '<path d="M4 16.2A4.5 4.5 0 0 1 6.6 8a6 6 0 0 1 11.6 1.6A4 4 0 0 1 18 17.5"/><path d="M12 12v9"/><path d="m8 16 4-4 4 4"/>',
   cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
   diagram: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+  tasks: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
   xiaoyue: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
   help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
   settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
@@ -59,6 +60,7 @@ const NAVS = {
   diagram: { label: 'nav.diagram' },
   cloud: { label: 'nav.cloud' },
   backup: { label: 'nav.backup' },
+  tasks: { label: 'nav.tasks' },
   xiaoyue: { label: 'nav.xiaoyue' },
   help: { label: 'nav.help' },
   settings: { label: 'nav.settings' },
@@ -127,6 +129,7 @@ const I18N_DICT = {
   'nav.diagram': { zh: '图示', en: 'Diagrams' },
   'nav.cloud': { zh: '云端', en: 'Cloud' },
   'nav.backup': { zh: '备份', en: 'Backup' },
+  'nav.tasks': { zh: '任务', en: 'Tasks' },
   'nav.xiaoyue': { zh: '小月', en: 'Moonie' },
   'nav.help': { zh: '帮助', en: 'Help' },
   'nav.settings': { zh: '设置', en: 'Settings' },
@@ -218,6 +221,11 @@ const I18N_DICT = {
   'lib.vault': { zh: '书房目录（Vault）', en: 'Study Directory (Vault)' },
   'lib.notChosen': { zh: '未选择', en: 'Not chosen' },
   'lib.migrateBtn': { zh: '📦 迁移到新目录…', en: '📦 Migrate to New Directory…' },
+  'lib.compileTitle': { zh: '知识整理', en: 'Knowledge Compiling' },
+  'lib.compileDesc': { zh: '把书房文档用本地模型整理成知识页（存入「知识页」目录），在对话里让小月批量整理即可创建任务。', en: 'Compile study documents into knowledge pages with your local model (saved under "Knowledge Pages"). Ask Moonie in chat to compile in bulk.' },
+  'lib.compileModel': { zh: '整理所用模型', en: 'Compile model' },
+  'lib.compileFollow': { zh: '跟随对话默认模型', en: 'Follow chat default model' },
+  'lib.compileHint': { zh: '留空时按对话默认模型整理；本地模型推荐用于批量整理。', en: 'Leave empty to use the chat default model. Local models are recommended for bulk compiling.' },
   'lib.migrateTitle': { zh: '迁移书房目录', en: 'Migrate Study Directory' },
   'lib.migrateNew': { zh: '新目录（必须为空或不存在）', en: 'New directory (must be empty or not exist)' },
   'lib.migrateStart': { zh: '开始迁移', en: 'Start Migration' },
@@ -342,7 +350,21 @@ const I18N_DICT = {
   'tree.collapseAll': { zh: '全部收起', en: 'Collapse All' },
   'tree.isExpanded': { zh: '全部展开', en: 'Expand All' },
   'list.backup': { zh: '备份', en: 'Backup' },
-  'ui.new': { zh: '＋ 新建', en: '＋ New' },
+
+  'tk.empty': { zh: '暂无任务——在对话里让小月整理文档即创建', en: 'No tasks yet — ask Moonie in chat to compile docs' },
+  'tk.pickHint': { zh: '左侧选择任务查看详情。', en: 'Select a task on the left for details.' },
+  'tk.cancel': { zh: '取消任务', en: 'Cancel' },
+  'tk.stQueued': { zh: '排队中', en: 'Queued' },
+  'tk.stRunning': { zh: '执行中', en: 'Running' },
+  'tk.stDone': { zh: '已完成', en: 'Completed' },
+  'tk.stFail': { zh: '失败', en: 'Failed' },
+  'tk.stCancel': { zh: '已取消', en: 'Cancelled' },
+  'tk.iPending': { zh: '等待', en: 'Pending' },
+  'tk.iRunning': { zh: '整理中', en: 'Compiling' },
+  'tk.iDone': { zh: '完成', en: 'Done' },
+  'tk.iFail': { zh: '失败', en: 'Failed' },
+  'tk.iSkip': { zh: '跳过', en: 'Skipped' },
+  'tk.iCancel': { zh: '已取消', en: 'Cancelled' },  'ui.new': { zh: '＋ 新建', en: '＋ New' },
   'list.loading': { zh: '加载中…', en: 'Loading…' },
   'list.bkEmpty': { zh: '还没有备份目录<br/>点右上「＋ 新建」注册一个本地目录，<br/>把它同步到云端书房的指定目录下。', en: 'No backup folders yet<br/>Click "＋ New" (top right) to register a local folder,<br/>and sync it into a folder in your cloud study.' },
   'bk.holdN': { zh: ' 项已停更', en: ' items on hold' },
@@ -599,6 +621,16 @@ function t(key) {
   if (!e) return key
   return e[curLang()] ?? e.zh ?? key
 }
+// #316.7：模型下拉三组 optgroup 生成（对话/文档库-知识整理 共用；第三处消费者出现时继续复用）
+function modelPickerOpts(selectedValue) {
+  const mm = APP_SETTINGS?.model ?? {}
+  return `<optgroup label="${t('mp.groupCloud')}">${(mm.providers ?? []).filter((x) => x.enabled).map((x) => {
+    const pv = (APP_PROVIDERS?.platform ?? PLATFORM_PROVIDERS_FALLBACK).find((p) => p.id === x.providerId)
+    return `<option value="platform:${x.id}" ${selectedValue === `platform:${x.id}` ? 'selected' : ''}>${pv?.label ?? x.providerId} · ${x.model}</option>`
+  }).join('')}</optgroup>` +
+    `<optgroup label="${t('mp.groupCustom')}">${(mm.custom ?? []).filter((x) => x.enabled).map((x) => `<option value="custom:${x.id}" ${selectedValue === `custom:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>` +
+    `<optgroup label="${t('mp.groupLocal')}">${(mm.local ?? []).filter((x) => x.enabled).map((x) => `<option value="local:${x.id}" ${selectedValue === `local:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>`
+}
 async function loadAppSettings() {
   if (APP_SETTINGS) return APP_SETTINGS
   try {
@@ -809,6 +841,7 @@ const cloudIconSvg = (name) => `<svg class="cloud-ico" viewBox="0 0 24 24">${CLO
 const CLOUD_HIDDEN = new Set(['moments', 'square'])
 let currentCloudId = null // 云端列当前浏览项（active 高亮恢复用，#253.45）
 let currentBkId = null // 备份列当前选中项（#257）
+let currentTaskId = null // #316.5 任务页选中态
 
 async function renderList(nav) {
   const head = $('list-head')
@@ -882,6 +915,31 @@ async function renderList(nav) {
         el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">📁 ${e.localPath.split(/[\\/]/).pop()}</span>
           <span class="muted" style="font-size:10.5px;flex:none">${e.enabled ? (holdN ? `${holdN}${t('bk.holdN')}` : t('ui.enable')) : t('ui.stop')}</span>`
         el.onclick = () => { currentBkId = e.id; renderList('backup'); renderWork('backup', { id: e.id }) }
+        body.appendChild(el)
+      }
+    } catch (e) {
+      body.innerHTML = `<div class="muted" style="padding:10px">${t('list.loadFail')}</div>`
+    }
+    return
+  } else if (nav === 'tasks') {
+    // #316.5：任务页列表（origin 预留云端任务；v1 只有 local）
+    head.textContent = t('nav.tasks')
+    body.innerHTML = `<div class="muted" style="padding:10px">${t('list.loading')}</div>`
+    try {
+      const r = await window.moonlybox.rpc('tasks', { op: 'list' }, 10_000)
+      const jobs = JSON.parse(r.text).jobs ?? []
+      if (!jobs.length) {
+        body.innerHTML = `<div class="muted" style="padding:10px">${t('tk.empty')}</div>`
+        return
+      }
+      body.innerHTML = ''
+      const ICONS = { queued: '⏳', running: '⚙', completed: '✓', failed: '✗', cancelled: '⊘' }
+      for (const j of jobs) {
+        const el = document.createElement('div')
+        el.className = 'tree-item' + (currentTaskId === j.id ? ' active' : '')
+        el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${ICONS[j.status] ?? '•'} ${j.title}</span>
+          <span class="muted" style="font-size:10.5px;flex:none">${j.progress.done}/${j.progress.total}</span>`
+        el.onclick = () => { currentTaskId = j.id; renderList('tasks'); renderWork('tasks', { id: j.id }) }
         body.appendChild(el)
       }
     } catch (e) {
@@ -1287,14 +1345,7 @@ async function renderWork(nav, arg, label2) {
       const g = await loadAppSettings()
       const cv = g.chat ?? {}
       // #283：默认模型下拉=平台API/自定义/本地部署三组已启用实例列出（#316：本地部署已实装）
-      const mm = g.model ?? {}
-      const modelOpts =
-        `<optgroup label="${t('mp.groupCloud')}">${(mm.providers ?? []).filter((x) => x.enabled).map((x) => {
-          const pv = (APP_PROVIDERS?.platform ?? PLATFORM_PROVIDERS_FALLBACK).find((p) => p.id === x.providerId)
-          return `<option value="platform:${x.id}" ${mm.default === `platform:${x.id}` ? 'selected' : ''}>${pv?.label ?? x.providerId} · ${x.model}</option>`
-        }).join('')}</optgroup>` +
-        `<optgroup label="${t('mp.groupCustom')}">${(mm.custom ?? []).filter((x) => x.enabled).map((x) => `<option value="custom:${x.id}" ${mm.default === `custom:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>` +
-        `<optgroup label="${t('mp.groupLocal')}">${(mm.local ?? []).filter((x) => x.enabled).map((x) => `<option value="local:${x.id}" ${mm.default === `local:${x.id}` ? 'selected' : ''}>${x.name} · ${x.model}</option>`).join('')}</optgroup>`
+      const modelOpts = modelPickerOpts(g.model?.default) // #316.7：共享生成器
       panel(t('panel.chat'), t('panel.sub.chat'), `
         <div class="set-field" style="margin-bottom:14px"><label>${t('chat.defaultModel')}</label>
           <select id="sp-chat-model" class="set-select set-select-sm" style="max-width:420px">
@@ -1353,8 +1404,27 @@ async function renderWork(nav, arg, label2) {
         </div>
         <div class="set-row" style="margin:0"><button type="button" class="btn ghost" id="sp-vault-migrate" style="font-size:12px">${t('lib.migrateBtn')}</button><span class="set-desc" style="align-self:center">${t('lib.migrateNote')}</span></div>
         <div class="set-status" id="sp-vault-status"></div>
+        <div class="set-card" style="margin-top:14px"><div class="sc-main"><div class="sc-title">${t('lib.compileTitle')}</div><div class="sc-desc">${t('lib.compileDesc')}</div></div></div>
+        <div class="set-field" style="margin-top:6px"><label>${t('lib.compileModel')}</label>
+          <select id="sp-compile-model" class="set-select set-select-sm" style="max-width:420px">
+            <option value="">${t('lib.compileFollow')}</option>
+            ${modelOpts}
+          </select>
+          <div class="set-desc" style="margin-top:4px">${t('lib.compileHint')}</div>
+        </div>
+        <div class="set-status" id="sp-compile-status"></div>
       `)
       $('sp-vault').value = (await window.moonlybox.vaultGet()) ?? ''
+      // #316.7：知识整理默认模型（存 model.compileDefault——解析回落链见 compile-model.ts）
+      const gset = await loadAppSettings()
+      $('sp-compile-model').value = gset.model?.compileDefault ?? ''
+      $('sp-compile-model').onchange = async (e) => {
+        await saveAppSettings({ model: { compileDefault: e.target.value } })
+        const st = $('sp-compile-status')
+        st.className = 'set-status ok'
+        st.textContent = t('ui.saved')
+        setTimeout(() => { st.textContent = '' }, 2000)
+      }
       $('sp-vault-pick').onclick = async () => {
         const r = await window.moonlybox.vaultPick()
         if (r.ok) {
@@ -2155,6 +2225,54 @@ async function renderWork(nav, arg, label2) {
     return
   }
   // ---------- 备份（#257）：新建向导 + 详情面板 ----------
+  if (nav === 'tasks') {
+    // #316.5：任务详情（进度条/模型/逐项状态/取消/运行中 2s 自动刷新——切页即停，任务在 daemon 不受影响）
+    if (!arg?.id) {
+      w.innerHTML = `<div class="muted" style="padding:20px">${t('tk.pickHint')}</div>`
+      return
+    }
+    const r = await window.moonlybox.rpc('tasks', { op: 'get', id: arg.id }, 10_000)
+    if (r.event !== 'done' || r.code !== 0) {
+      w.innerHTML = `<div class="muted" style="padding:20px">${t('list.loadFail')}</div>`
+      return
+    }
+    const j = JSON.parse(r.text).job
+    const ST = { queued: t('tk.stQueued'), running: t('tk.stRunning'), completed: t('tk.stDone'), failed: t('tk.stFail'), cancelled: t('tk.stCancel') }
+    const IST = { pending: t('tk.iPending'), running: t('tk.iRunning'), done: t('tk.iDone'), failed: t('tk.iFail'), skipped: t('tk.iSkip'), cancelled: t('tk.iCancel') }
+    const pct = j.progress.total ? Math.round((j.progress.done / j.progress.total) * 100) : 0
+    const rows = j.items.map((it) => {
+      const name = it.path.split(/[\\/]/).pop()
+      const err = it.error ? `<div class="muted" style="font-size:11px;color:var(--danger,#e56969)">${esc(it.error)}</div>` : ''
+      const out = it.outPath ? `<div class="muted" style="font-size:11px">→ ${esc(it.outPath)}</div>` : ''
+      return `<div style="padding:7px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;gap:8px;align-items:baseline"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(name)}</span><span class="muted" style="font-size:11px;flex:none">${IST[it.status] ?? it.status}</span></div>${err}${out}
+      </div>`
+    }).join('')
+    w.innerHTML = `
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:10px">
+        <strong style="font-size:14px">${esc(j.title)}</strong>
+        <span class="muted" style="font-size:12px">${ST[j.status] ?? j.status}</span>
+        <span style="margin-left:auto;font-size:11px" class="muted">${esc(j.modelLabel ?? '')}</span>
+        ${['queued', 'running'].includes(j.status) ? `<button class="btn ghost" id="tk-cancel" style="font-size:12px;padding:2px 10px">${t('tk.cancel')}</button>` : ''}
+      </div>
+      <div style="padding:12px 18px">
+        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent);transition:width .4s"></div></div>
+        <div class="muted" style="font-size:11.5px;margin-top:6px">${j.progress.done}/${j.progress.total} · ${pct}%</div>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:0 18px 16px">${rows || `<div class="muted" style="padding:10px 0">${t('tk.empty')}</div>`}</div>`
+    const cbtn = $('tk-cancel')
+    if (cbtn) cbtn.onclick = async () => {
+      cbtn.disabled = true
+      await window.moonlybox.rpc('tasks', { op: 'cancel', id: j.id }, 10_000)
+      renderList('tasks')
+      renderWork('tasks', { id: j.id })
+    }
+    if (j.status === 'running' || j.status === 'queued') {
+      // 运行中自动刷新（2s）——用户切页即失效（无泄漏；任务在 daemon 不受影响）
+      setTimeout(() => { if (currentNav === 'tasks' && currentTaskId === j.id) renderWork('tasks', { id: j.id }) }, 2000)
+    }
+    return
+  }
   if (nav === 'backup') {
     if (arg?.create) {
       // 新建界面：本地目录选择 + 归属目录下拉 + 格式说明

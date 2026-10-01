@@ -207,6 +207,7 @@ import { webToolDefs, runWebTool } from '../lib/web-tools'
 import { docToolDefs, runDocTool } from '../lib/doc-tools'
 import { listAllCustomTools, callCustomTool, enabledCustomServers } from '../lib/mcp-custom'
 import { getWorkspace, loadChat, appendTurn as wsAppendTurn, isUnderDirs, chatTurnsForContext, primaryDir } from '../lib/workspaces'
+import { localTaskToolDefs, runLocalTaskTool } from '../lib/local-tasks-tool'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { defaultVaultRoot } from '../lib/config'
@@ -269,11 +270,14 @@ export async function runAgentTools(
   // #280 自定义 MCP：启用中的服务器工具并列装配（失败隔离——失败服务器只报告不阻塞）
   const customCat = await listAllCustomTools()
   const customDefs = customCat.tools
+  // #316.5：local_task 工具组（任务机制能力——创建/查询/取消走后台任务，不在对话内联执行）
+  const ltDefs = localTaskToolDefs()
   const system =
     `你是「小月」，用户个人知识库（魔力宝盒）的操作助理。你可以调用 MoonLink 工具帮用户：\n` +
     `收藏网页（add_bookmark）、记便签（add_sticky）、记待办（add_todo/complete_todo）、` +
     (memOn ? `保存记忆（add_memory）、` : ``) +
-    `查询书房（search_library/search_bookmarks${memOn ? '/search_memory' : ''}）${wDefs.length ? '，并可联网：web_search 网络搜索、fetch_url 读取网页' : ''}，可读文档：doc_read（txt/md/PDF/docx/html）${customDefs.length ? `，以及自定义 MCP 服务器工具（${enabledCustomServers().map((s) => s.name).join('、')}）` : ''}等。\n` +
+    `查询书房（search_library/search_bookmarks${memOn ? '/search_memory' : ''}）${wDefs.length ? '，并可联网：web_search 网络搜索、fetch_url 读取网页' : ''}，可读文档：doc_read（txt/md/PDF/docx/html）${customDefs.length ? `，以及自定义 MCP 服务器工具（${enabledCustomServers().map((s) => s.name).join('、')}）` : ''}等。\\n` +
+    `批量知识整理：用户想把文档「整理成知识页」时，先 local_task_list_uncompiled 扫描未整理清单（报数量），经确认后 local_task_create_compile 创建后台任务（不要在对话里逐篇处理；任务进度在「任务」页可见，用户问进度用 local_task_status）。\n` +
     `纪律：1. 用户意图涉及「记录/收藏/保存/查询」时主动调工具，不要只口头答应；\n` +
     `2. 参数从用户话里提取，缺关键参数先问；3. 操作完成后用一句话汇报结果；\n` +
     (memOn && memLocal ? `3.5. 用户陈述的长期事实/偏好会由记忆层静默沉淀（无需口头确认）；\n` : ``) +
@@ -315,6 +319,8 @@ export async function runAgentTools(
   }
   // #280 自定义 MCP 工具执行器（catalog 闭包随本轮装配）
   for (const d of customDefs) localToolsW[d.name] = (args) => callCustomTool(d.name, args, customCat).then((r) => JSON.stringify({ ok: r.ok, content: r.text }))
+  // #316.5：local_task 工具执行器（后台任务单源——创建后立即返回 jobId，不在对话内联执行）
+  for (const d of ltDefs) localToolsW[d.name] = (args) => runLocalTaskTool(d.name, args)
   // #282 工作空间 fs 工具（仅工作空间对话装配）：路径必须落在挂载目录内——越界返回 needs_approval 交 confirm 批准
   const fsTools: Array<{ name: string; title?: string; description?: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean }; inputSchema: unknown }> = []
   if (wsDirs.length) {
@@ -430,6 +436,7 @@ ${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}${skillBloc
       ...customDefs.map((d) => ({ ...d })),
       ...fsTools,
       ...skillDefs,
+      ...ltDefs, // #316.5：local_task 工具组
     ],
     chat: async (messages, tools) => {
       // #283：对话走模型注册表（设置-对话默认模型；空/失效回落旧 byok）

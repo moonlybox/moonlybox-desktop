@@ -67,37 +67,40 @@ function legacyKey(): string | null {
 }
 
 /** 解析当前应使用的模型：default 指向的已启用实例 → 旧 byok 回落 → null（未配置） */
+/** 按实例引用解析（'platform:<id>'|'custom:<id>'|'local:<id>'）——#316.7 单源化：resolveActiveModel 与 compile-model 共用 */
+export function pickModelInstance(id: string): ActiveModel | null {
+  const m = loadSettings().model
+  if (id.startsWith('platform:')) {
+    const inst = (m.providers ?? []).find((p) => p.id === id.slice(9) && p.enabled)
+    if (!inst) return null
+    const pv = PLATFORM_PROVIDERS.find((x) => x.id === inst.providerId)
+    const baseUrl = inst.baseUrl || pv?.baseUrl || ''
+    if (!baseUrl || !inst.model) return null
+    const apiKey = keychainKey(`llm:${inst.id}`)
+    // 平台实例 key 必填——缺 key 视为未就绪（配置半成品不参与解析，避免 byokReady 语义分裂）
+    if (!apiKey) return null
+    return { id: inst.id, kind: 'platform', label: pv?.label ?? inst.providerId, baseUrl, model: inst.model, apiKey }
+  }
+  if (id.startsWith('custom:')) {
+    const inst = (m.custom ?? []).find((c) => c.id === id.slice(7) && c.enabled)
+    if (!inst || !inst.baseUrl || !inst.model) return null
+    const apiKey = keychainKey(`llm:${inst.id}`)
+    if (!apiKey) return null // 非本地自定义端点 key 必填（本地端点保底走 legacy 回落）
+    return { id: inst.id, kind: 'custom', label: inst.name || '自定义', baseUrl: inst.baseUrl, model: inst.model, apiKey }
+  }
+  if (id.startsWith('local:')) {
+    const inst = (m.local ?? []).find((l) => l.id === id.slice(6) && l.enabled)
+    if (!inst) return null
+    // #310.14：本地模型接通 chat——Ollama OpenAI 兼容端点（无需 key）；inst.baseUrl 预留自定义端点
+    const baseUrl = (inst as { baseUrl?: string }).baseUrl || 'http://127.0.0.1:11434/v1'
+    return { id: inst.id, kind: 'local', label: inst.name || '本地部署', baseUrl, model: inst.model, apiKey: null }
+  }
+  return null
+}
+
 export function resolveActiveModel(): ActiveModel | null {
   const m = loadSettings().model
-  const pick = (id: string): ActiveModel | null => {
-    if (id.startsWith('platform:')) {
-      const inst = (m.providers ?? []).find((p) => p.id === id.slice(9) && p.enabled)
-      if (!inst) return null
-      const pv = PLATFORM_PROVIDERS.find((x) => x.id === inst.providerId)
-      const baseUrl = inst.baseUrl || pv?.baseUrl || ''
-      if (!baseUrl || !inst.model) return null
-      const apiKey = keychainKey(`llm:${inst.id}`)
-      // 平台实例 key 必填——缺 key 视为未就绪（配置半成品不参与解析，避免 byokReady 语义分裂）
-      if (!apiKey) return null
-      return { id: inst.id, kind: 'platform', label: pv?.label ?? inst.providerId, baseUrl, model: inst.model, apiKey }
-    }
-    if (id.startsWith('custom:')) {
-      const inst = (m.custom ?? []).find((c) => c.id === id.slice(7) && c.enabled)
-      if (!inst || !inst.baseUrl || !inst.model) return null
-      const apiKey = keychainKey(`llm:${inst.id}`)
-      if (!apiKey) return null // 非本地自定义端点 key 必填（本地端点保底走 legacy 回落）
-      return { id: inst.id, kind: 'custom', label: inst.name || '自定义', baseUrl: inst.baseUrl, model: inst.model, apiKey }
-    }
-    if (id.startsWith('local:')) {
-      const inst = (m.local ?? []).find((l) => l.id === id.slice(6) && l.enabled)
-      if (!inst) return null
-      // #310.14：本地模型接通 chat——Ollama OpenAI 兼容端点（无需 key）；inst.baseUrl 预留自定义端点
-      const baseUrl = (inst as { baseUrl?: string }).baseUrl || 'http://127.0.0.1:11434/v1'
-      return { id: inst.id, kind: 'local', label: inst.name || '本地部署', baseUrl, model: inst.model, apiKey: null }
-    }
-    return null
-  }
-  const hit = m.default ? pick(m.default) : null
+  const hit = m.default ? pickModelInstance(m.default) : null
   if (hit) return hit
   // 回落旧 byok.json（用户已配模型不丢；key=旧钥匙串 llm-byok 或 llm:<新id>）
   const lb = legacyByok()
