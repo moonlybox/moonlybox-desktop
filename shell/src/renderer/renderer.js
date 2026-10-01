@@ -278,6 +278,9 @@ const I18N_DICT = {
   'dg.untitled': { zh: '未命名图示', en: 'Untitled diagram' },
   'xy.historySep': { zh: '—— 以上为历史 ——', en: '—— history above ——' },
   'xy.thinking': { zh: '小月思考中…', en: 'Xiaoyue is thinking…' },
+  'xy.phaseTools': { zh: '工具就绪，正在思考…', en: 'Tools ready — thinking…' },
+  'xy.phaseModel': { zh: '模型已响应，继续处理…', en: 'Model responded — continuing…' },
+  'xy.phasePrep': { zh: '正在准备上下文…', en: 'Preparing context…' },
   'xy.stop': { zh: '■ 停止', en: '■ Stop' },
   'xy.stopped': { zh: '已停止——后台任务完成后自动结束，本轮内容不再显示', en: 'Stopped — the background task will finish on its own; this turn is no longer shown' },
   'xy.retry': { zh: '重试', en: 'Retry' },
@@ -3254,7 +3257,11 @@ function bindChat(chatInfo) {
     const el = logEl()
     if (!el) return
     const line = String(t)
+    // #310.17：静默行=不表示输出开始的过程注记——thinking 保持并更新阶段文案
+    if (/^（已接入工具 /.test(line)) { showThinking(t('xy.phaseTools')); return }
+    if (/^（本地|^（云端|^（上下文|^（记忆/.test(line)) { showThinking(t('xy.phasePrep')); return }
     // 分类规则（与 kernel 行形态一一对应）：
+    hideThinking()
     if (line.startsWith('你> ')) {
       flushCur()
       addMsg('user', line.slice(3))
@@ -3279,11 +3286,12 @@ function bindChat(chatInfo) {
       cur = { type: 'tool', el: body, text: '' }
       return
     }
-    if (/^（LLM 响应：/.test(line) || /^（已接入工具 /.test(line) || /^（本地/.test(line) || /^（云端/.test(line) || /^（上下文/.test(line)) {
+    if (/^（LLM 响应：/.test(line) || /^（本地/.test(line) || /^（云端/.test(line) || /^（上下文/.test(line)) {
       flushCur()
       const isThink = line.startsWith('（LLM 响应：')
       const body = addFold(isThink ? '💭 思考过程' : line.replace(/^（|）$/g, ''), line, 'think')
       cur = { type: 'think', el: body, text: line }
+      if (isThink) showThinking(t('xy.phaseModel')) // #310.17：诊断行进折叠卡但 thinking 持续（本轮还没结束）
       return
     }
     if (/^  → |^  ✗ |^  （/.test(line) && (cur.type === 'tool' || cur.type === 'think')) {
@@ -3325,7 +3333,7 @@ function bindChat(chatInfo) {
     window.moonlybox.subscribe()
     window.moonlybox.onKernelEvent((msg) => {
       if (xyAborted && (msg.event === 'log' || msg.event === 'stderr')) return // #310.14：停止后不上屏
-      if (msg.event === 'log') { hideThinking(); log(msg.payload) }
+      if (msg.event === 'log') { log(msg.payload) }
       else if (msg.event === 'stderr') { hideThinking(); log('[stderr] ' + msg.payload) }
       else if (msg.event === 'confirm_request') renderConfirmBar(msg.id, msg.payload)
       // #310.7：调试模式镜像（模块级异步查一次开关，避免每行 RPC）
@@ -3339,13 +3347,20 @@ function bindChat(chatInfo) {
   // 失败错误行附「重试」。RPC 无 abort 通道：停止=不再渲染后续行+结果丢弃（后台任务自然结束，诚实提示）。
   let xyAborted = false
   let thinkingEl = null
-  const showThinking = () => {
-    const el = document.createElement('div')
-    el.className = 'chat-act-line xy-thinking'
-    el.innerHTML = `<span class="xy-dot"></span><span class="xy-dot"></span><span class="xy-dot"></span> ${t('xy.thinking')}`
-    logEl().appendChild(el)
+  // #310.17：思考态=持续状态——静默行（装配/诊断/上下文注入）不摘除只更新文案；
+  // 活动行（工具调用/终答/普通过程行）才收。元素始终置底（插队行上屏后 thinking 移到末尾）。
+  const showThinking = (phase) => {
+    if (!thinkingEl) {
+      const el = document.createElement('div')
+      el.className = 'chat-act-line xy-thinking'
+      el.innerHTML = `<span class="xy-dot"></span><span class="xy-dot"></span><span class="xy-dot"></span> <span class="xy-thinking-text"></span>`
+      logEl().appendChild(el)
+      thinkingEl = el
+    } else {
+      logEl().appendChild(thinkingEl) // 置底
+    }
+    thinkingEl.querySelector('.xy-thinking-text').textContent = phase ?? t('xy.thinking')
     scroll()
-    thinkingEl = el
   }
   const hideThinking = () => { if (thinkingEl) { thinkingEl.remove(); thinkingEl = null } }
   async function askWith(q) {
