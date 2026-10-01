@@ -1342,7 +1342,7 @@ async function renderWork(nav, arg, label2) {
       }
     }
     w.innerHTML = `<div style="padding:16px 20px;border-bottom:1px solid var(--border)"><strong style="font-size:13px">📁 ${esc(arg.rel)}</strong></div>
-      <div style="flex:1;overflow-y:auto;padding:6px 20px 20px" class="md-view">${section ? mdToHtml(section) : `<div class="muted" style="padding:8px 0">${t('dir.noReadme')}</div>`}</div>`
+      <div style="flex:1;overflow-y:auto;padding:6px 20px 20px" class="md-view">${section ? renderMarkdownSafe(section) : `<div class="muted" style="padding:8px 0">${t('dir.noReadme')}</div>`}</div>`
     return
   }
   // ---------- 设置中心：第三列面板（#253.48） ----------
