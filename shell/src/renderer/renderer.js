@@ -1536,7 +1536,7 @@ async function renderWork(nav, arg, label2) {
               // #310.40：三闸结果全部回显（0 篇也要让用户知道原因——未登录/开关/无云端归属不再静默）
               st.textContent = db.reason ? `${t('lib.backfillNone')}（${db.reason}）` : t('lib.backfillDone').replace('{s}', db.scanned).replace('{p}', db.pushed)
               st.className = 'set-status ' + (db.reason ? 'warn' : 'ok')
-              setTimeout(() => { st.textContent = '' }, 6000)
+              setTimeout(() => { st.textContent = '' }, 15_000) // #310.41：15s（6s 用户反馈「一闪而过」看不清）
             }
           } catch {}
         }

@@ -266,7 +266,8 @@ export async function backfillPushAll(): Promise<{ scanned: number; pushed: numb
       if (!md.trim()) continue
       scanned++
       try {
-        await pushToMoon(job.id, it.outPath, it.srcHash, md)
+        // #310.41：传**源文档路径**（it.path）——pushToMoon 的 manifest 反查按源路径匹配（编译时语义）；产物路径会全部误判「源未同步」
+        await pushToMoon(job.id, it.path, it.srcHash, md)
         const cur2 = getJob(job.id)?.items.find((x) => x.path === it.path)
         if (cur2?.cloudWikiId) pushed++
         else skipped++
