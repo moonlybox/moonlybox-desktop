@@ -81,6 +81,11 @@ export interface ChatResult {
   error?: string
 }
 
+/** #310.14：本地端点判定（Ollama/LM Studio 等 127.0.0.1|localhost——无需 key） */
+function isLocalEndpoint(baseUrl: string): boolean {
+  return /\/\/?(127\.0\.0\.1|localhost|\[::1\])[:/]/.test(baseUrl) || baseUrl.startsWith('http://[::1]')
+}
+
 /** 单轮对话（非流式，CLI 场景 300 字纪律内无需流式渲染） */
 export async function byokChat(
   system: string,
@@ -92,12 +97,13 @@ export async function byokChat(
   const meta = modelOverride ? { baseUrl: modelOverride.baseUrl, model: modelOverride.model } : loadByokMeta()
   const apiKey = modelOverride ? modelOverride.apiKey : loadByokKey()
   if (!meta) return { ok: false, error: 'BYOK 未配置' }
-  if (!apiKey) return { ok: false, error: 'BYOK 未配置（API Key 缺失）' }
+  // #310.14：本地端点无需 key（Ollama 等）；远端缺 key 仍报 BYOK
+  if (!apiKey && !isLocalEndpoint(meta.baseUrl)) return { ok: false, error: 'BYOK 未配置（API Key 缺失）' }
 
   try {
     const res = await fetch(`${meta.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
       body: JSON.stringify({
         model: meta.model,
         messages: [
@@ -151,11 +157,12 @@ export async function byokChatMessages(
   const meta = modelOverride ? { baseUrl: modelOverride.baseUrl, model: modelOverride.model } : loadByokMeta()
   const apiKey = modelOverride ? modelOverride.apiKey : loadByokKey()
   if (!meta) return { ok: false, error: 'BYOK 未配置' }
-  if (!apiKey) return { ok: false, error: 'BYOK 未配置（API Key 缺失）' }
+  // #310.14：本地端点无需 key（Ollama 等）；远端缺 key 仍报 BYOK
+  if (!apiKey && !isLocalEndpoint(meta.baseUrl)) return { ok: false, error: 'BYOK 未配置（API Key 缺失）' }
   try {
     const res = await fetch(`${meta.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
       body: JSON.stringify({
         model: meta.model,
         messages,

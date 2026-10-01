@@ -277,6 +277,10 @@ const I18N_DICT = {
   'dg.quickDesc': { zh: '选择图示类型，创建后自动填充该类型的示例代码，稍后可修改。', en: 'Pick a type — sample code is filled on create, editable later.' },
   'dg.untitled': { zh: '未命名图示', en: 'Untitled diagram' },
   'xy.historySep': { zh: '—— 以上为历史 ——', en: '—— history above ——' },
+  'xy.thinking': { zh: '小月思考中…', en: 'Xiaoyue is thinking…' },
+  'xy.stop': { zh: '■ 停止', en: '■ Stop' },
+  'xy.stopped': { zh: '已停止——后台任务完成后自动结束，本轮内容不再显示', en: 'Stopped — the background task will finish on its own; this turn is no longer shown' },
+  'xy.retry': { zh: '重试', en: 'Retry' },
   'xy.createFail': { zh: '创建失败', en: 'Create failed' },
   'xy.wsNameReq': { zh: '名称必填', en: 'Name is required' },
   'xy.wsDirsReq': { zh: '至少选择一个工作目录', en: 'Pick at least one directory' },
@@ -2481,6 +2485,7 @@ async function renderWork(nav, arg, label2) {
       <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:16px;white-space:pre-wrap;user-select:text"></div>
       <div class="row" style="padding:12px 16px;border-top:1px solid var(--border)">
         <input id="q" placeholder="${meta ? (meta.workspaceId ? t('xy.qPlaceholder') : t('xy.docOnly')) : t('xy.pickFirst')}" style="flex:1" ${meta ? '' : 'disabled'} />
+        <button class="btn ghost" id="btn-stop" style="display:none">${t('xy.stop')}</button>
         <button class="btn" id="btn-ask" ${meta ? '' : 'disabled'}>${t('xy.send')}</button>
       </div>`
     if (meta) bindChat({ meta })
@@ -3319,8 +3324,9 @@ function bindChat(chatInfo) {
   if (!kernelEventBound) {
     window.moonlybox.subscribe()
     window.moonlybox.onKernelEvent((msg) => {
-      if (msg.event === 'log') log(msg.payload)
-      else if (msg.event === 'stderr') log('[stderr] ' + msg.payload)
+      if (xyAborted && (msg.event === 'log' || msg.event === 'stderr')) return // #310.14：停止后不上屏
+      if (msg.event === 'log') { hideThinking(); log(msg.payload) }
+      else if (msg.event === 'stderr') { hideThinking(); log('[stderr] ' + msg.payload) }
       else if (msg.event === 'confirm_request') renderConfirmBar(msg.id, msg.payload)
       // #310.7：调试模式镜像（模块级异步查一次开关，避免每行 RPC）
       if (msg.event === 'log' || msg.event === 'stderr') {
@@ -3329,26 +3335,55 @@ function bindChat(chatInfo) {
     })
     kernelEventBound = true
   }
-  async function ask() {
-    const q = $('q').value.trim()
-    if (!q) return
-    $('q').value = ''
+  // #310.14：运行态 UX——「小月思考中…」三点动画（首条过程行上屏即收）；停止按钮（前端中断上屏+丢弃结果）；
+  // 失败错误行附「重试」。RPC 无 abort 通道：停止=不再渲染后续行+结果丢弃（后台任务自然结束，诚实提示）。
+  let xyAborted = false
+  let thinkingEl = null
+  const showThinking = () => {
+    const el = document.createElement('div')
+    el.className = 'chat-act-line xy-thinking'
+    el.innerHTML = `<span class="xy-dot"></span><span class="xy-dot"></span><span class="xy-dot"></span> ${t('xy.thinking')}`
+    logEl().appendChild(el)
+    scroll()
+    thinkingEl = el
+  }
+  const hideThinking = () => { if (thinkingEl) { thinkingEl.remove(); thinkingEl = null } }
+  async function askWith(q) {
     const askBtn = $('btn-ask') // #283.11：await 最长 300s，期间切对话/切页重渲——持有引用，事后 querySelector 会是 null
     askBtn.disabled = true
+    const stopBtn = $('btn-stop')
+    if (stopBtn) stopBtn.style.display = ''
+    xyAborted = false
     addMsg('user', q) // #288：用户消息直接走气泡（不再经行分类）
+    showThinking()
     // #269：工具（管家模式）归 MCP 分类——mcp.builtinEnabled 总闸；#282 chatId/workspaceId 随请求
     const tools = APP_SETTINGS?.mcp?.builtinEnabled !== false
     const payload = { q, chatId: meta?.id, workspaceId: meta ? (meta.workspaceId ?? null) : undefined }
     if (tools) payload.tools = true
     const r = await window.moonlybox.rpc('xiaoyue', payload, 300_000)
     askBtn.disabled = false
+    if (stopBtn) stopBtn.style.display = 'none'
+    hideThinking()
     // #283.4：回答只显示一路——过程行（含「小月：」终答）已经 kernel log 实时上屏，
     // done.text 是同一批行的整包（parts.join），再 log 一次＝回答重复两段。done 分支只报错误。
-    if (!(r.event === 'done' && r.code === 0)) {
+    if (xyAborted) {
+      flushCur()
+      const el = document.createElement('div')
+      el.className = 'chat-act-line'
+      el.textContent = t('xy.stopped')
+      logEl().appendChild(el)
+      scroll()
+    } else if (!(r.event === 'done' && r.code === 0)) {
       flushCur()
       const errEl = document.createElement('div')
       errEl.className = 'chat-err'
       errEl.textContent = '⚠ ' + (r.message ?? r.text ?? t('ui.reqFail'))
+      const retry = document.createElement('button')
+      retry.className = 'btn ghost'
+      retry.textContent = t('xy.retry')
+      retry.style.marginLeft = '8px'
+      retry.onclick = () => { errEl.remove(); askWith(q) }
+      errEl.appendChild(retry)
       logEl().appendChild(errEl)
       scroll()
     }
@@ -3356,7 +3391,19 @@ function bindChat(chatInfo) {
     // 会话标题随首轮更新（列表刷新）
     if (meta && meta.title === '新对话') renderXiaoyueList()
   }
+  async function ask() {
+    const q = $('q').value.trim()
+    if (!q) return
+    $('q').value = ''
+    await askWith(q)
+  }
   $('btn-ask').onclick = ask
+  // #310.14：停止——置 aborted：后续 kernel log 不再上屏，RPC 结果丢弃
+  const bindStop = () => {
+    const sb = $('btn-stop')
+    if (sb) sb.onclick = () => { xyAborted = true; hideThinking() }
+  }
+  bindStop()
   // #305：绑定完成即聚焦输入框（连续渲染后可直接输入；输入法状态不打断）
   // #307.3：focus 换 forceFocus——删除/confirm 等操作后焦点系统脏态下普通 focus() 会被忽略
   setTimeout(() => { const q = $('q'); if (q && !q.disabled) forceFocus(q) }, 50)

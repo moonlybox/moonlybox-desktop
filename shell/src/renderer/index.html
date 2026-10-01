@@ -266,6 +266,12 @@
   .msg-role { font-size: 11px; color: var(--muted); margin: 0 4px; }
   .chat-activity { align-self: flex-start; max-width: 88%; display: flex; flex-direction: column; gap: 3px; }
   .chat-act-line { font-size: 12px; color: var(--muted); user-select: text; padding: 1px 4px; border-radius: 6px; }
+/* #310.14：小月思考中——三点跳动动画 */
+.xy-thinking { display: flex; align-items: center; gap: 5px; }
+.xy-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: xyBlink 1.2s infinite ease-in-out; }
+.xy-dot:nth-child(2) { animation-delay: .2s; }
+.xy-dot:nth-child(3) { animation-delay: .4s; }
+@keyframes xyBlink { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
   .chat-act-line.indent { padding-left: 22px; }
   details.chat-fold { font-size: 12px; color: var(--muted); }
   details.chat-fold summary { cursor: pointer; padding: 2px 6px; border-radius: 6px; user-select: none; }

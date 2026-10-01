@@ -91,7 +91,9 @@ export function resolveActiveModel(): ActiveModel | null {
     if (id.startsWith('local:')) {
       const inst = (m.local ?? []).find((l) => l.id === id.slice(6) && l.enabled)
       if (!inst) return null
-      return { id: inst.id, kind: 'local', label: inst.name || '本地部署', baseUrl: '', model: inst.model, apiKey: null } // v1 预留：无端点语义
+      // #310.14：本地模型接通 chat——Ollama OpenAI 兼容端点（无需 key）；inst.baseUrl 预留自定义端点
+      const baseUrl = (inst as { baseUrl?: string }).baseUrl || 'http://127.0.0.1:11434/v1'
+      return { id: inst.id, kind: 'local', label: inst.name || '本地部署', baseUrl, model: inst.model, apiKey: null }
     }
     return null
   }
