@@ -357,6 +357,8 @@ const I18N_DICT = {
   'tk.pickHint': { zh: '左侧选择任务查看详情。', en: 'Select a task on the left for details.' },
   'tk.startedAt': { zh: '启动于', en: 'Started at' },
   'tk.pagesTab': { zh: '知识页', en: 'Knowledge pages' },
+  'tk.tabItems': { zh: '任务清单', en: 'Items' },
+  'tk.tabPages': { zh: '产物', en: 'Outputs' },
   'tk.pagesEmpty': { zh: '暂无本地知识页产物。', en: 'No local knowledge pages yet.' },
   'tk.selectAll': { zh: '全选', en: 'Select all' },
   'tk.delSelected': { zh: '删除所选', en: 'Delete selected' },
@@ -959,18 +961,8 @@ async function renderList(nav) {
     try {
       const r = await window.moonlybox.rpc('tasks', { op: 'list' }, 10_000)
       const jobs = JSON.parse(r.text).jobs ?? []
-      // #316 骨架批配套：知识页产物管理入口（列表顶部固定项）
-      let pageCount = 0
-      try {
-        const rp = await window.moonlybox.rpc('tasks', { op: 'pages' }, 15_000)
-        pageCount = (JSON.parse(rp.text).pages ?? []).length
-      } catch {}
+      // #310.27：知识页入口迁出任务侧栏（产物≠任务类型，层级错位）——书房「知识页」目录节点+任务详情「产物」tab 承接
       body.innerHTML = ''
-      const pagesEl = document.createElement('div')
-      pagesEl.className = 'tree-item' + (currentTaskId === '__pages__' ? ' active' : '')
-      pagesEl.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">📄 ${t('tk.pagesTab')}</span><span class="muted" style="font-size:10.5px;flex:none">${pageCount}</span>`
-      pagesEl.onclick = () => { currentTaskId = '__pages__'; renderList('tasks'); renderWork('tasks', { pages: true }) }
-      body.appendChild(pagesEl)
       if (!jobs.length) return
       const ICONS = { queued: '⏳', running: '⚙', completed: '✓', failed: '✗', cancelled: '⊘' }
       for (const j of jobs) {
@@ -1288,7 +1280,54 @@ async function renderWork(nav, arg, label2) {
     return
   }
   if (nav === 'vault' && arg?.dir) {
-    w.innerHTML = `<div style="padding:20px" class="muted">📁 ${arg.rel}</div>`
+    // #310.27：「知识页」目录=产物管理视图（从任务页迁入——产物归书房；勾选批量删+ledger 重置）。
+    // 其余目录保持占位（后续按产物类型同构扩展：download/backup 等任务产物目录）。
+    if (arg.rel === '知识页') {
+      w.innerHTML = `<div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+        <strong style="font-size:14px">${t('tk.pagesTab')}</strong>
+        <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:4px;margin-left:auto"><input type="checkbox" id="tp-selall" /> ${t('tk.selectAll')}</label>
+        <button class="btn ghost" id="tp-del" style="font-size:12px;padding:2px 10px">${t('tk.delSelected')}</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:6px 18px 16px" id="tp-list"><div class="muted" style="padding:10px">${t('list.loading')}</div></div>`
+      const list = $('tp-list')
+      let pages = []
+      try {
+        const rp = await window.moonlybox.rpc('tasks', { op: 'pages' }, 15_000)
+        pages = JSON.parse(rp.text).pages ?? []
+      } catch {} // 老内核（无 pages op）/解析失败→空态，不整体崩
+      if (!pages.length) {
+        list.innerHTML = `<div class="muted" style="padding:14px 0">${t('tk.pagesEmpty')}</div>`
+        return
+      }
+      list.innerHTML = pages.map((p) => {
+        const cloud = p.cloudWikiId ? `<span class="muted" style="font-size:10.5px;margin-left:6px">☁ ${t('tk.pgPending')}</span>` : ''
+        const gone = p.exists ? '' : `<span style="font-size:10.5px;margin-left:6px;color:var(--danger,#e56969)">${t('tk.pgMissing')}</span>`
+        const name = String(p.path).split(/[\\/]/).pop()
+        return `<div class="tp-row" style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+          <input type="checkbox" class="tp-chk" data-abs="${esc(p.abs)}" ${p.exists ? '' : 'disabled'} />
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}${cloud}${gone}</div>
+            <div class="muted" style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.jobTitle)} · ${esc(p.finishedAt ? new Date(p.finishedAt).toLocaleString() : '')}</div>
+          </div>
+        </div>`
+      }).join('')
+      $('tp-selall').onchange = (e) => { list.querySelectorAll('.tp-chk:not(:disabled)').forEach((c) => { c.checked = e.target.checked }) }
+      $('tp-del').onclick = async () => {
+        const sel = [...list.querySelectorAll('.tp-chk:checked')].map((c) => c.dataset.abs)
+        if (!sel.length) return
+        if (!confirm(t('tk.delConfirm').replace('{n}', sel.length))) return
+        const rd = await window.moonlybox.rpc('tasks', { op: 'delete_pages', paths: sel }, 30_000)
+        try {
+          const d = JSON.parse(rd.text)
+          if (d.ok) {
+            alert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger))
+            renderList('vault'); renderWork('vault', { rel: arg.rel, dir: true })
+          } else alert(t('lib.delFail') + (d.message ?? ''))
+        } catch { alert(t('lib.delFail')) }
+      }
+      return
+    }
+    w.innerHTML = `<div style="padding:20px" class="muted">📁 ${esc(arg.rel)}</div>`
     return
   }
   // ---------- 设置中心：第三列面板（#253.48） ----------
@@ -2279,52 +2318,6 @@ async function renderWork(nav, arg, label2) {
   }
   // ---------- 备份（#257）：新建向导 + 详情面板 ----------
   if (nav === 'tasks') {
-    // #316 骨架批配套：知识页产物管理（列表/批量删+ledger 重置）
-    if (arg?.pages) {
-      w.innerHTML = `<div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-        <strong style="font-size:14px">${t('tk.pagesTab')}</strong>
-        <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:4px;margin-left:auto"><input type="checkbox" id="tp-selall" /> ${t('tk.selectAll')}</label>
-        <button class="btn ghost" id="tp-del" style="font-size:12px;padding:2px 10px">${t('tk.delSelected')}</button>
-      </div>
-      <div style="flex:1;overflow-y:auto;padding:6px 18px 16px" id="tp-list"><div class="muted" style="padding:10px">${t('list.loading')}</div></div>`
-      const list = $('tp-list')
-      let pages = []
-      try {
-        const rp = await window.moonlybox.rpc('tasks', { op: 'pages' }, 15_000)
-        pages = JSON.parse(rp.text).pages ?? []
-      } catch {} // 老内核（无 pages op）/解析失败→空态，不整体崩
-      if (!pages.length) {
-        list.innerHTML = `<div class="muted" style="padding:14px 0">${t('tk.pagesEmpty')}</div>`
-        return
-      }
-      list.innerHTML = pages.map((p) => {
-        const cloud = p.cloudWikiId ? `<span class="muted" style="font-size:10.5px;margin-left:6px">☁ ${t('tk.pgPending')}</span>` : ''
-        const gone = p.exists ? '' : `<span style="font-size:10.5px;margin-left:6px;color:var(--danger,#e56969)">${t('tk.pgMissing')}</span>`
-        const name = String(p.path).split('/').pop()
-        return `<div class="tp-row" style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
-          <input type="checkbox" class="tp-chk" data-abs="${esc(p.abs)}" ${p.exists ? '' : 'disabled'} />
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}${cloud}${gone}</div>
-            <div class="muted" style="font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.jobTitle)} · ${esc(p.finishedAt ? new Date(p.finishedAt).toLocaleString() : '')}</div>
-          </div>
-        </div>`
-      }).join('')
-      $('tp-selall').onchange = (e) => { list.querySelectorAll('.tp-chk:not(:disabled)').forEach((c) => { c.checked = e.target.checked }) }
-      $('tp-del').onclick = async () => {
-        const sel = [...list.querySelectorAll('.tp-chk:checked')].map((c) => c.dataset.abs)
-        if (!sel.length) return
-        if (!confirm(t('tk.delConfirm').replace('{n}', sel.length))) return
-        const rd = await window.moonlybox.rpc('tasks', { op: 'delete_pages', paths: sel }, 30_000)
-        try {
-          const d = JSON.parse(rd.text)
-          if (d.ok) {
-            alert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger))
-            renderList('tasks'); renderWork('tasks', { pages: true })
-          } else alert(t('lib.delFail') + (d.message ?? ''))
-        } catch { alert(t('lib.delFail')) }
-      }
-      return
-    }
     // #316.5 任务详情 + #310.23：骨架一次渲染+局部 patch（自动刷新不再整页 innerHTML——滚动位置保持/无闪烁）；
     // items 按状态着色（done 绿底/failed 红/running accent+spinner）
     if (!arg?.id) {
@@ -2411,6 +2404,8 @@ async function renderWork(nav, arg, label2) {
     }
     const j = JSON.parse(r.text).job
     const startedHtml = (() => { const d = j.startedAt ? new Date(j.startedAt) : null; return d && !isNaN(d) ? `<div class="muted" style="font-size:11px;width:100%" id="tk-started">${t('tk.startedAt')} ${d.toLocaleString()}</div>` : '<div id="tk-started" style="display:none"></div>' })()
+    // #310.27：详情双 tab——「任务清单」（源文档维度）与「产物」（done 产物维度）平行
+    const donePages = j.items.filter((it) => it.status === 'done' && it.outPath)
     w.innerHTML = `
       <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
         <strong style="font-size:14px" id="tk-head">${esc(j.title)}</strong>
@@ -2423,7 +2418,51 @@ async function renderWork(nav, arg, label2) {
         <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div id="tk-bar" style="height:100%;width:${j.progress.total ? Math.round((j.progress.done / j.progress.total) * 100) : 0}%;background:var(--accent);transition:width .4s"></div></div>
         <div class="muted" style="font-size:11.5px;margin-top:6px" id="tk-cnt">${j.progress.done}/${j.progress.total}</div>
       </div>
-      <div style="flex:1;overflow-y:auto;padding:0 18px 16px" id="tk-list">${j.items.map(itemRow).join('') || `<div class="muted tk-empty-hint" style="padding:10px 0">${t('tk.empty')}</div>`}</div>`
+      <div style="padding:0 18px;display:flex;gap:8px;border-bottom:1px solid var(--border)" id="tk-tabs">
+        <button class="btn ghost" id="tk-tab-items" style="font-size:12px;padding:3px 10px;border-bottom:2px solid var(--accent)">${t('tk.tabItems')}</button>
+        <button class="btn ghost" id="tk-tab-pages" style="font-size:12px;padding:3px 10px">${t('tk.tabPages')} (${donePages.length})</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:0 18px 16px" id="tk-list">${j.items.map(itemRow).join('') || `<div class="muted tk-empty-hint" style="padding:10px 0">${t('tk.empty')}</div>`}</div>
+      <div style="flex:1;overflow-y:auto;padding:6px 18px 16px;display:none" id="tk-pages">
+        ${donePages.length ? donePages.map((it) => {
+          const name = String(it.outPath).split(/[\\/]/).pop()
+          const cloud = it.cloudWikiId ? `<span class="muted" style="font-size:10.5px;margin-left:6px">☁ ${t('tk.pgPending')}</span>` : ''
+          return `<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+            <input type="checkbox" class="tkp-chk" data-abs="${esc(it.outPath)}" />
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}${cloud}</div>
+              <div class="muted" style="font-size:10.5px">${esc(t('tk.iDone'))}</div>
+            </div>
+          </div>`
+        }).join('') : `<div class="muted" style="padding:10px 0">${t('tk.pagesEmpty')}</div>`}
+        ${donePages.length ? `<div style="padding:10px 0"><button class="btn ghost" id="tkp-del" style="font-size:12px;padding:2px 10px">${t('tk.delSelected')}</button></div>` : ''}
+      </div>`
+    // tab 切换（DOM 显隐，不整页重渲）
+    const listEl0 = $('tk-list'), pagesEl0 = $('tk-pages')
+    $('tk-tab-items').onclick = () => {
+      listEl0.style.display = ''; pagesEl0.style.display = 'none'
+      $('tk-tab-items').style.borderBottom = '2px solid var(--accent)'
+      $('tk-tab-pages').style.borderBottom = '2px solid transparent'
+    }
+    $('tk-tab-pages').onclick = () => {
+      listEl0.style.display = 'none'; pagesEl0.style.display = ''
+      $('tk-tab-pages').style.borderBottom = '2px solid var(--accent)'
+      $('tk-tab-items').style.borderBottom = '2px solid transparent'
+    }
+    const delBtn = $('tkp-del')
+    if (delBtn) delBtn.onclick = async () => {
+      const sel = [...pagesEl0.querySelectorAll('.tkp-chk:checked')].map((c) => c.dataset.abs)
+      if (!sel.length) return
+      if (!confirm(t('tk.delConfirm').replace('{n}', sel.length))) return
+      const rd = await window.moonlybox.rpc('tasks', { op: 'delete_pages', paths: sel }, 30_000)
+      try {
+        const d = JSON.parse(rd.text)
+        if (d.ok) {
+          alert(t('tk.delDone').replace('{d}', d.deleted).replace('{r}', d.resetLedger))
+          renderWork('tasks', { id: j.id })
+        } else alert(t('lib.delFail') + (d.message ?? ''))
+      } catch { alert(t('lib.delFail')) }
+    }
     bindCancel(j.id)
     if (j.status === 'running' || j.status === 'queued') schedule(j.id)
     return
