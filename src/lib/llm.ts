@@ -153,6 +153,8 @@ export async function byokChatMessages(
   timeoutMs = 90_000,
   /** #283：模型注册表实例（resolveActiveModel 结果）——传入时替代全局 byok 配置 */
   modelOverride?: { baseUrl: string; model: string; apiKey: string | null },
+  /** #310.19：生成上限（默认 4000 保持兼容；思考型模型 reasoning 占额+知识页长文都需要更大余量） */
+  maxTokens = 4000,
 ): Promise<ChatWithToolsResult> {
   const meta = modelOverride ? { baseUrl: modelOverride.baseUrl, model: modelOverride.model } : loadByokMeta()
   const apiKey = modelOverride ? modelOverride.apiKey : loadByokKey()
@@ -168,7 +170,7 @@ export async function byokChatMessages(
         model: meta.model,
         messages,
         ...(tools && tools.length ? { tools } : {}),
-        max_tokens: 4000,
+        max_tokens: maxTokens, // #310.19：可变上限（默认 4000）
         temperature: 0.3,
       }),
       signal: AbortSignal.timeout(timeoutMs),

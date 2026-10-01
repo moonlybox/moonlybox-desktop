@@ -443,7 +443,8 @@ ${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}${skillBloc
       const { resolveActiveModel } = await import('../lib/model-registry')
       const active = resolveActiveModel()
       const r = await chatWithRetry(
-        () => byokChatMessages(messages, tools as never, 90_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined),
+        // #310.19：max_tokens 16000——思考型模型 tools 协议下 reasoning 吃掉 4000 全额的余量
+        () => byokChatMessages(messages, tools as never, 90_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined, 16_000),
         (attempt, total, err) => console.log(`（LLM 调用失败，重试 ${attempt}/${total}：${err.slice(0, 80)}）`),
       )
       // #280.3.2：【真根因修复】toolCalls 必须透传——原 `{ ok, text }` 把 tool_calls 静默丢弃，

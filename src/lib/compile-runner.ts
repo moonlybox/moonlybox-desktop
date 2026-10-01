@@ -31,8 +31,9 @@ async function compileOneDoc(srcPath: string, srcText: string): Promise<string> 
       { role: 'user', content: `文档名：${fileName}\n\n文档内容：\n${srcText.slice(0, 24_000)}` },
     ],
     undefined,
-    180_000,
+    480_000, // #310.19：长生成超时配 16000 tokens 余量（约 50 tok/s 云端 × 8min）
     { baseUrl: model.baseUrl, model: model.model, apiKey: model.apiKey },
+    16_000, // #310.19：知识页长文生成余量（4000 会截断产物）
   )
   if (!r.ok || !r.text) throw new Error(r.error ?? '模型返回空内容')
   return r.text
