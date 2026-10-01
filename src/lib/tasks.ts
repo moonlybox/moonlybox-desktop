@@ -195,7 +195,8 @@ export function listPages(vaultRoot: string): PageEntry[] {
   for (const job of readStore().jobs) {
     for (const it of job.items) {
       if (it.status !== 'done' || !it.outPath) continue
-      const abs = path.join(vaultRoot, it.outPath)
+      // #310.26：outPath 形态兼容——#316 第一批真链路 writeOut 存绝对路径，早期/测试数据为相对路径
+      const abs = path.isAbsolute(it.outPath) ? it.outPath : path.join(vaultRoot, it.outPath)
       const prev = byPath.get(abs)
       // 同产物多任务（重编译）：保留最近任务
       if (prev && prev.finishedAt && job.finishedAt && prev.finishedAt >= job.finishedAt) continue
@@ -240,7 +241,9 @@ export function deletePages(vaultRoot: string, absPaths: string[]): { deleted: n
     for (const job of store.jobs) {
       let changed = false
       for (const it of job.items) {
-        if (it.status !== 'done' || !it.outPath || !delSet.has(path.join(vaultRoot, it.outPath))) continue
+        if (it.status !== 'done' || !it.outPath) continue
+        const itAbs = path.isAbsolute(it.outPath) ? it.outPath : path.join(vaultRoot, it.outPath)
+        if (!delSet.has(itAbs)) continue
         it.status = 'pending'
         delete it.outPath
         delete it.cloudWikiId
