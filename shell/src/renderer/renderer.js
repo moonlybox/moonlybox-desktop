@@ -504,6 +504,9 @@ const I18N_DICT = {
   'ol.noModelsTitle': { zh: '尚未拉取模型', en: 'No models pulled yet' },
   'ol.installedModelsTitle': { zh: '已装模型（勾选接入）', en: 'Installed models (check to connect)' },
   'ol.addedCount': { zh: '已接入 {n} 个模型', en: 'Connected {n} model(s)' },
+  'ol.pickBtn': { zh: '手工定位', en: 'Locate manually' },
+  'ol.pickFail': { zh: '定位失败', en: 'Locate failed' },
+  'ol.pickedOk': { zh: '已定位 Ollama {v}——重新检测中…', en: 'Located Ollama {v} — re-probing…' },
   'ol.dlBtn': { zh: '⬇ 打开 Ollama 下载页', en: '⬇ Open Ollama Download Page' },
   'ol.recheck': { zh: '↻ 重新检测', en: '↻ Re-check' },
   'ol.pullHint': { zh: '在终端执行 <code>ollama pull qwen3:4b</code> 拉取模型后，回到此页即可一键接入。', en: 'Run <code>ollama pull qwen3:4b</code> in a terminal, then come back here to connect with one click.' },
@@ -1482,7 +1485,9 @@ async function renderWork(nav, arg, label2) {
       {
         const box = $('sp-ol-state')
         const renderState = async () => {
-          const p = await window.moonlybox.ollamaProbe()
+          let savedCli = null
+          try { savedCli = ((await loadAppSettings()).general ?? {}).ollamaCli ?? null } catch {}
+          const p = await window.moonlybox.ollamaProbe(savedCli)
           if (!p) { box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.detectFail')}</div><div class="sc-desc">${t('ol.retryHint')}</div></div>`; return }
           if (p.state === 'running') {
             box.innerHTML = `<div class="sc-main"><div class="sc-title">✅ ${t('ol.runningTitle').replace('{v}', esc(p.version || '?'))}</div>
@@ -1500,10 +1505,26 @@ async function renderWork(nav, arg, label2) {
           } else {
             box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.notFoundTitle')}</div>
               <div class="sc-desc">${t('ol.notFoundDesc')}</div>
-              <button type="button" class="btn ghost" id="sp-ol-dl" style="margin-top:8px">${t('ol.dlBtn')}</button>
-              <button type="button" class="btn ghost" id="sp-ol-recheck" style="margin-top:8px;margin-left:6px">${t('ol.recheck')}</button></div>`
+              <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+                <button type="button" class="btn ghost" id="sp-ol-dl">${t('ol.dlBtn')}</button>
+                <button type="button" class="btn ghost" id="sp-ol-pick">${t('ol.pickBtn')}</button>
+                <button type="button" class="btn ghost" id="sp-ol-recheck">${t('ol.recheck')}</button>
+              </div>
+              <div class="set-status" id="sp-ol-pick-status" style="margin-top:6px"></div></div>`
             $('sp-ol-dl').onclick = () => window.moonlybox.openExternal('https://ollama.com/download')
             $('sp-ol-recheck').onclick = () => renderState()
+            // #310.12：手工定位——文件选择→--version 校验→存 settings.general.ollamaCli→重探
+            $('sp-ol-pick').onclick = async () => {
+              const st = $('sp-ol-pick-status')
+              const r = await window.moonlybox.ollamaPick()
+              if (r.canceled) return
+              if (!r.ok) { st.className = 'set-status err'; st.textContent = r.error ?? t('ol.pickFail'); return }
+              const g = await loadAppSettings()
+              await saveAppSettings({ general: { ...(g.general ?? {}), ollamaCli: r.cli } })
+              st.className = 'set-status ok'
+              st.textContent = t('ol.pickedOk').replace('{v}', r.version)
+              renderState()
+            }
           }
         }
         // #310.11：从 /api/tags 列已装模型，勾选即建实例（写入 settings.model.local + baseUrl 默认）

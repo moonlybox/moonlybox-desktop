@@ -458,16 +458,34 @@ app.whenReady().then(() => {
     }
   })
   // #310.11：Ollama 四态探测（服务在跑/装了没跑/没装/失效修复由 renderer 侧对话失败触发）
-  ipcMain.handle('ollama:probe', async () => {
+  ipcMain.handle('ollama:probe', async (_e, cliOverride) => {
     const running = await probeOllamaHttp().catch(() => null)
     if (running && running.version) return { state: 'running', version: running.version }
-    const cli = findOllamaCli()
+    // #310.12：手工定位的 cli 优先（renderer 从 settings.general.ollamaCli 读出传入）
+    const cli = (cliOverride && fs.existsSync(cliOverride)) ? cliOverride : findOllamaCli()
     if (!cli) return { state: 'not_found' }
     let version = null
     try {
       version = require('child_process').execFileSync(cli, ['--version'], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
     } catch {}
     return { state: 'installed_stopped', cli, version }
+  })
+  // #310.12：手工定位 Ollama 可执行文件——文件选择框 + --version 校验（不落盘，存储走 renderer settings.general.ollamaCli）
+  ipcMain.handle('ollama:pick', async () => {
+    const r = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      title: '定位 Ollama 可执行文件',
+      filters: process.platform === 'win32' ? [{ name: 'ollama.exe', extensions: ['exe'] }] : undefined,
+    })
+    if (r.canceled || !r.filePaths?.[0]) return { ok: false, canceled: true }
+    const cli = r.filePaths[0]
+    try {
+      const version = require('child_process').execFileSync(cli, ['--version'], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+      if (!version) return { ok: false, error: '校验失败（无版本输出）' }
+      return { ok: true, cli, version }
+    } catch (e) {
+      return { ok: false, error: '所选文件不是可用的 Ollama：' + String(e && e.message ? e.message.split('\n')[0] : e) }
+    }
   })
   // #310.11：启动系统级 Ollama 服务（spawn 分离，不随应用退出被杀）
   ipcMain.handle('ollama:serve', async (_e, cli) => {
