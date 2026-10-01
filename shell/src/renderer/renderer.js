@@ -3569,7 +3569,8 @@ function renderConfirmBar(rpcId, payload) {
   if (!log) return
   const bar = document.createElement('div')
   bar.style.cssText = 'background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.55);border-radius:8px;padding:8px;margin:6px 0'
-  bar.textContent = `⚙ ${payload.tool} ${payload.argsJson}（写操作，确认执行？）`
+  // #310.20：daemon 发的字段名是 args（非 argsJson）——修 undefined 直出；参数截 200 防长参撑爆确认条
+  bar.textContent = `⚙ ${payload.tool} ${String(payload.args ?? '').slice(0, 200)}（写操作，确认执行？）`
   const yes = document.createElement('button')
   yes.className = 'btn'; yes.textContent = t('ui.confirm'); yes.style.marginRight = '6px'
   const no = document.createElement('button')
