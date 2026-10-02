@@ -760,6 +760,15 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         const s = loadSettings()
         const localInstances = s.model?.local ?? []
         const defaultId = String(s.model?.default ?? '')
+        // #317.F16/P3k：名单外的本机已装模型（用户自装，如 deepseek-r1-distill:8b）——收编进名单卡，
+        // 老「已装模型（勾选接入）」卡退役（勾选+批量接入交互有「接入后锁死无法解除」缺陷，用户实证）。
+        const catalogIds = new Set(LOCAL_MODEL_CATALOG.map((x) => x.id as string))
+        const otherInstalled = Object.entries(installed)
+          .filter(([tag]) => !catalogIds.has(tag))
+          .map(([tag, sizeGB]) => {
+            const inst = localInstances.find((x: { model?: string }) => x.model === tag)
+            return { id: tag, sizeGB, configured: !!inst, enabled: !!inst?.enabled, instanceId: inst?.id ?? null }
+          })
         const { defaultParams } = require('../lib/local-models') as typeof import('../lib/local-models')
         const models = LOCAL_MODEL_CATALOG.map((spec) => {
           const instSize = installed[spec.id]
@@ -780,7 +789,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           }
         })
         code = 0
-        text = JSON.stringify({ ok: true, hw, ollamaState, defaultModel: defaultId.startsWith('local:') ? defaultId.slice(6) : null, models })
+        text = JSON.stringify({ ok: true, hw, ollamaState, defaultModel: defaultId.startsWith('local:') ? defaultId.slice(6) : null, models, otherInstalled })
       } catch (e: any) {
         code = 1
         text = String(e?.message ?? e)

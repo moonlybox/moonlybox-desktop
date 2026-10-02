@@ -1829,7 +1829,6 @@ async function renderWork(nav, arg, label2) {
         <div id="sp-lm-profile">${lmSkel('正在检测本机硬件（内存/显卡/磁盘）…')}</div>
         <div id="sp-ol-state" class="set-card" style="margin-top:10px"><div class="sc-main"><div class="sc-title">${t('ol.detecting')}</div><div class="sc-desc">${t('ol.detectDesc')}</div></div></div>
         <div id="sp-lm-catalog" style="margin-top:10px">${lmSkel('等待硬件检测结果后查询推荐模型清单…')}</div>
-        <div id="sp-ol-models"></div>
       `)
       // #317.F16/P1：硬件画像+模型名单卡（fit 分级）——主体是「模型本身」，Ollama 降权为状态条
       // #317.F16/P3j：抽具名函数——Ollama「启动」成功后需重拉名单（模型卡「未安装/未运行」stale 问题）
@@ -1860,6 +1859,25 @@ async function renderWork(nav, arg, label2) {
         </div>`
         // #317.F16/P2：GPU 预期说明（感知不配置——Ollama 自动 offload，客户端只管说清楚）
         const gpuHint = hw.gpuName ? '检测到独显：Ollama 将自动用 GPU 加速（快）' : '未检测到独显：纯 CPU 运行，大模型较慢，建议选小档'
+        // #317.F16/P3k：本机其他已装模型（名单外自装，如 deepseek-r1:8b）收编进名单卡——老「勾选接入」卡退役
+        const otherHtml = (lm.otherInstalled && lm.otherInstalled.length) ? `
+          <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border);font-size:11.5px;color:var(--muted)">本机其他已装模型（名单外自装）</div>
+          ${lm.otherInstalled.map((o) => `
+          <div style="border:1px solid var(--border);border-radius:10px;padding:12px 16px;background:var(--bg2);margin-top:8px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <b style="font-size:13.5px">${esc(o.id)}</b>
+              <span style="font-size:11px;color:var(--muted)">${o.sizeGB != null ? o.sizeGB.toFixed(1) + 'GB' : ''}</span>
+              ${o.configured ? '<span style="font-size:11px;color:var(--ok,#22c55e)">✓ 已接入</span>' : '<span style="font-size:11px;color:var(--muted)">未接入</span>'}
+              <span style="flex:1"></span>
+              ${o.configured
+                ? `<button type="button" class="btn ghost" data-lmremove-other="${esc(o.instanceId ?? o.id)}" data-lmremove-name="${esc(o.id)}" style="font-size:12px">解除接入</button>`
+                : `<button type="button" class="btn ghost" data-lmadd-other="${esc(o.id)}" style="font-size:12px">接入</button>`}
+            </div>
+            ${o.configured ? `<div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted)">子任务调用
+              <select class="set-select set-select-sm" data-olsubov="${esc(o.id)}" style="padding:2px 6px;font-size:11px;width:auto">
+                <option value="auto">跟随默认</option><option value="on">允许</option><option value="off">禁止</option>
+              </select></div>` : ''}
+          </div>`).join('')}` : ''
         catBox.innerHTML = `<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">${gpuHint}</div>` + lm.models.map((m) => {
           const b = FIT_BADGE[m.fit] || FIT_BADGE.ok
           const stateTxt = m.installed ? (lm.ollamaState === 'running' ? '✅ 就绪' : '已安装（Ollama 未运行）') : '未安装'
@@ -1903,7 +1921,7 @@ async function renderWork(nav, arg, label2) {
             ${m.caps && m.caps.length ? `<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${m.caps.map((c) => `<span style="font-size:10.5px;padding:1px 7px;border-radius:5px;background:var(--bg3,#1e293b);color:var(--muted)">${c === 'tools' ? '工具调用' : c === 'thinking' ? '思考' : c === 'embed' ? '嵌入检索' : c}</span>`).join('')}</div>` : ''}
             ${tuneBlock}
           </div>`
-        }).join('<div style="height:8px"></div>')
+        }).join('<div style="height:8px"></div>') + otherHtml
         // P2 动作接线
         catBox.querySelectorAll('[data-lmpull]').forEach((el) => { el.onclick = async () => {
           const name = el.dataset.lmpull; el.disabled = true; el.textContent = '安装中…'
@@ -1954,6 +1972,51 @@ async function renderWork(nav, arg, label2) {
           await saveAppSettings({ model: { local: arr } })
           renderWork('settings')
         } })
+        // #317.F16/P3k：其他已装模型——接入/解除/子任务覆盖
+        catBox.querySelectorAll('[data-lmadd-other]').forEach((el) => { el.onclick = async () => {
+          const name = el.dataset.lmaddOther; el.disabled = true; el.textContent = '接入中…'
+          const g = await loadAppSettings()
+          const mcfg = g.model ?? {}
+          const arr = [...(mcfg.local ?? [])]
+          if (!arr.some((x) => x.model === name)) {
+            arr.push({ id: `ol-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: `Ollama · ${name}`, model: name, enabled: true, baseUrl: 'http://127.0.0.1:11434/v1' })
+          }
+          const r = await saveAppSettings({ model: { local: arr, ...(arr.length && !mcfg.default ? { default: `local:${arr[0].id}` } : {}) } })
+          if (r.ok) renderCatalog(); else { el.disabled = false; el.textContent = '接入' }
+        } })
+        catBox.querySelectorAll('[data-lmremove-other]').forEach((el) => { el.onclick = async () => {
+          const id = el.dataset.lmremoveOther; const name = el.dataset.lmremoveName
+          const g = await loadAppSettings()
+          const mcfg = g.model ?? {}
+          const inst = (mcfg.local ?? []).find((x) => x.id === id)
+          const arr = (mcfg.local ?? []).filter((x) => x.id !== id)
+          // 边界：解除的是当前对话默认→清 default 指向（避免悬空引用）
+          const wasDefault = inst && mcfg.default === `local:${inst.id}`
+          const r = await saveAppSettings({ model: { local: arr, ...(wasDefault ? { default: '' } : {}) } })
+          if (r.ok) {
+            if (wasDefault) { /* default 已清空：对话会回退云端默认，名单卡刷新后可重选 */ }
+            renderCatalog()
+          }
+        } })
+        catBox.querySelectorAll('select[data-olsubov]').forEach((sel) => {
+          // 预选已存值
+          ;(async () => {
+            try {
+              const g = await loadAppSettings()
+              const inst = (g.model?.local ?? []).find((x) => x.model === sel.dataset.olsubov)
+              const v = inst?.subAgentOverride
+              sel.value = v === true ? 'on' : v === false ? 'off' : 'auto'
+            } catch {}
+          })()
+          sel.onchange = async (e) => {
+            e.stopPropagation()
+            const name = e.currentTarget.dataset.olsubov
+            const v = e.currentTarget.value === 'on' ? true : e.currentTarget.value === 'off' ? false : 'auto'
+            const g2 = await loadAppSettings()
+            const arr2 = (g2.model?.local ?? []).map((x) => (x.model === name ? { ...x, subAgentOverride: v } : x))
+            await saveAppSettings({ model: { local: arr2 } })
+          }
+        })
       }
       renderCatalog()
       {
@@ -1974,7 +2037,6 @@ async function renderWork(nav, arg, label2) {
               ? `<div class="sc-desc" style="color:var(--warn,#f59e0b)">⚠ 上下文 ${p.context} 过小（工具清单会被截断）——点下方「启动」由本客户端按内存自动重配</div>`
               : ''
             box.innerHTML = `<div class="sc-main"><div class="sc-title">✅ Ollama 运行中 ${p.version ? 'v' + esc(p.version) : ''}${ctxTxt}</div>${warnTxt}</div>`
-            await renderOllamaModels()
           } else if (p.state === 'installed_stopped') {
             // #317.F16/P3e：单行「Ollama v0.32 · 未运行 [启动]」
             box.innerHTML = `<div class="sc-main" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="sc-title">Ollama ${p.version ? 'v' + esc(p.version) : ''} · 未运行</div>
@@ -2013,131 +2075,6 @@ async function renderWork(nav, arg, label2) {
               // #310.12.1：反馈可读——立即重探会重建状态条把绿字瞬间抹掉（用户实测一闪即逝），延迟 1.2s 再接管
               setTimeout(() => { renderState() }, 1200)
             }
-          }
-        }
-        // #310.11：从 /api/tags 列已装模型，勾选即建实例（写入 settings.model.local + baseUrl 默认）
-        const renderOllamaModels = async () => {
-          const mbox = $('sp-ol-models'); if (!mbox) return
-          // #310.13.5：走主进程代理（renderer 直连 fetch 被 Ollama CORS 白名单拦）
-          let tags = null
-          try {
-            const rr = await window.moonlybox.ollamaTags()
-            if (rr && rr.ok) tags = rr.tags
-          } catch {}
-          const models = (tags && Array.isArray(tags.models)) ? tags.models : []
-          if (models.length === 0) {
-            // #310.13：推荐模型一键拉取（唤起系统终端可见执行；完整应用内下载器仍在挂账）
-            const RECO = [
-              { m: 'qwen3:4b', sz: '~2.6 GB', spec: '4B', ok: 'ol.recoRam8' },
-              { m: 'llama3.2:3b', sz: '~2.0 GB', spec: '3B', ok: 'ol.recoRam8' },
-              { m: 'qwen2.5:7b', sz: '~4.7 GB', spec: '7B', ok: 'ol.recoRam16' },
-              { m: 'gemma3:4b', sz: '~3.3 GB', spec: '4B', ok: 'ol.recoRam8' },
-            ]
-            // #310.13.3：不用 .set-card（flex 横排会挤压 sc-main）——标题/描述/表格独立行排版
-            mbox.innerHTML = `<div style="border:1px solid var(--border);border-radius:10px;padding:13px 16px;background:var(--bg2)">
-              <div style="font-size:13px;font-weight:500">${t('ol.noModelsTitle')}</div>
-              <div style="font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5">${t('ol.pullHint')}</div>
-              <table style="margin-top:10px;width:100%;border-collapse:collapse;font-size:12.5px">
-                <thead><tr style="text-align:left;color:var(--muted);font-size:11px">
-                  <th style="padding:4px 6px;border-bottom:1px solid var(--border);font-weight:600">${t('ol.tblModel')}</th>
-                  <th style="padding:4px 6px;border-bottom:1px solid var(--border);font-weight:600">${t('ol.tblSpec')}</th>
-                  <th style="padding:4px 6px;border-bottom:1px solid var(--border);font-weight:600">${t('ol.tblSize')}</th>
-                  <th style="padding:4px 6px;border-bottom:1px solid var(--border);font-weight:600">${t('ol.tblRam')}</th>
-                  <th style="padding:4px 6px;border-bottom:1px solid var(--border)"></th>
-                </tr></thead>
-                <tbody>
-                  ${RECO.map((x) => `<tr>
-                    <td style="padding:6px;border-bottom:1px solid var(--border);font-weight:600;white-space:nowrap">${x.m}</td>
-                    <td style="padding:6px;border-bottom:1px solid var(--border)">${x.spec}</td>
-                    <td style="padding:6px;border-bottom:1px solid var(--border);white-space:nowrap">${x.sz}</td>
-                    <td style="padding:6px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--muted)">${t(x.ok)}</td>
-                    <td style="padding:6px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap">
-                      <button type="button" class="btn ghost" data-olpull="${x.m}">${t('ol.recoPull')}</button>
-                    </td>
-                  </tr>`).join('')}
-                </tbody>
-              </table>
-              <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
-                <button type="button" class="btn ghost" id="sp-ol-recheck2">${t('ol.recheck')}</button>
-              </div>
-              <div class="set-status" id="sp-ol-pull-status" style="margin-top:6px"></div>
-            </div>`
-            const pull = async (name) => {
-              const st = $('sp-ol-pull-status')
-              const g = await loadAppSettings()
-              const cli = ((g.general ?? {}).ollamaCli) || null
-              const r = await window.moonlybox.ollamaPullTerm({ cli, model: name })
-              if (r && r.ok) {
-                st.className = 'set-status ok'
-                st.textContent = t('ol.pullLaunched').replace('{m}', name)
-                // #310.13.4：拉取轮询——模型出现在 /api/tags 即自动整卡刷新（免手动重新检测）
-                const poll = async (left) => {
-                  if (left <= 0) return
-                  try {
-                    const rr = await window.moonlybox.ollamaTags()
-                    const j = rr && rr.ok ? rr.tags : null
-                    if (j && Array.isArray(j.models) && j.models.some((x) => x.name === name || String(x.name).startsWith(name + ':'))) { renderState(); return }
-                  } catch {}
-                  setTimeout(() => poll(left - 1), 5000)
-                }
-                setTimeout(() => poll(120), 5000)
-              } else {
-                st.className = 'set-status err'
-                st.textContent = (r && r.error) || t('ol.pullFail')
-              }
-            }
-            mbox.querySelectorAll('[data-olpull]').forEach((el) => { el.onclick = () => pull(el.dataset.olpull) })
-            $('sp-ol-recheck2').onclick = () => renderState()
-            return
-          }
-          // #310.13.6：已接入的模型在列表中标记（disabled+绿字）——接入成功后重绘不再无反馈
-          let addedNames = []
-          try {
-            const g0 = await loadAppSettings()
-            addedNames = ((g0.model ?? {}).local ?? []).map((x) => x.model)
-          } catch {}
-          mbox.innerHTML = `<div class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.installedModelsTitle')}</div>
-            <div class="sc-desc">${t('ol.installedDesc')}</div></div>
-            <div id="sp-ol-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
-              ${models.map((mm2) => {
-                const added = addedNames.includes(mm2.name)
-                const instL = added ? (APP_SETTINGS?.model?.local ?? []).find((x) => x.model === mm2.name) : null
-                const ovSel = (v) => `<select class="set-select set-select-sm" data-olsubov="${esc(mm2.name)}" title="${t('xy.subAgent')}" style="padding:2px 6px;font-size:11px;width:auto;margin-left:6px">
-                  <option value="auto" ${!v || v === 'auto' ? 'selected' : ''}>${t('xy.subOvAuto')}</option>
-                  <option value="on" ${v === true ? 'selected' : ''}>${t('xy.subOvOn')}</option>
-                  <option value="off" ${v === false ? 'selected' : ''}>${t('xy.subOvOff')}</option>
-                </select>`
-                return `<label style="display:flex;align-items:center;gap:8px;font-size:13px${added ? ';opacity:.65' : ''}"><input type="checkbox" data-olmodel="${esc(mm2.name)}" ${added ? 'disabled checked' : ''}> <span>${esc(mm2.name)} · ${(mm2.size / 1073741824).toFixed(1)} GB${added ? ` · <span style="color:var(--ok,#16a34a)">${t('ol.addedTag')}</span>` : ''}</span>${added ? ovSel(instL?.subAgentOverride) : ''}</label>`
-              }).join('')}
-            </div>
-            <button type="button" class="btn ghost" id="sp-ol-add" style="margin-top:10px">${t('ol.addPicked')}</button>
-            <div class="set-status" id="sp-ol-status" style="margin-top:6px"></div></div>`
-          // #317.6b：本地实例子任务覆盖三态
-          mbox.querySelectorAll('select[data-olsubov]').forEach((sel) => {
-            sel.onchange = async (e) => {
-              e.stopPropagation()
-              const name = e.currentTarget.dataset.olsubov
-              const v = e.currentTarget.value === 'on' ? true : e.currentTarget.value === 'off' ? false : 'auto'
-              const g2 = await loadAppSettings()
-              const arr2 = (g2.model?.local ?? []).map((x) => (x.model === name ? { ...x, subAgentOverride: v } : x))
-              await saveAppSettings({ model: { local: arr2 } })
-            }
-          })
-          $('sp-ol-add').onclick = async () => {
-            const picked = [...mbox.querySelectorAll('input[data-olmodel]:checked')].map((el) => el.dataset.olmodel)
-            const st = $('sp-ol-status')
-            if (picked.length === 0) { st.className = 'set-status err'; st.textContent = t('ol.pickFirst'); return }
-            const g = await loadAppSettings()
-            const mcfg = g.model ?? {}
-            const arr = [...(mcfg.local ?? [])]
-            for (const name of picked) {
-              if (arr.some((x) => x.model === name)) continue // 已接入去重
-              arr.push({ id: `ol-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: `Ollama · ${name}`, model: name, enabled: true, baseUrl: 'http://127.0.0.1:11434/v1' })
-            }
-            const r = await saveAppSettings({ model: { local: arr, ...(arr.length && !mcfg.default ? { default: `local:${arr[0].id}` } : {}) } })
-            st.className = r.ok ? 'set-status ok' : 'set-status err'
-            st.textContent = r.ok ? t('ol.addedCount').replace('{n}', picked.length) : (r.error ?? t('ui.saveFail'))
-            if (r.ok) setTimeout(() => renderWork('settings'), 1500)
           }
         }
         renderState()
