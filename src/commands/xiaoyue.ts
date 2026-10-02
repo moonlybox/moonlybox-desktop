@@ -487,16 +487,41 @@ ${skillIdx}`
   // #317.④ 记忆检索化：画像（USER.md）常驻+长期记忆（MEMORY.md）按问题检索 top-N——替代全文灌窗+截断
   const memQuery = [question, ...built.messages.filter((m) => m.role === 'user').slice(-2).map((m) => String(m.content))].join(' ')
   const memBlock = memOn && memLocal ? localMemoryRetrieveBlock(defaultVaultRoot(), memQuery, { topN: 8, maxChars: Math.min(1200, memCfg.injectLimit ?? 5000) }) : ''
-  const systemWithMemory =
-    memOn && memLocal
-      ? `${system}
+  // #317.P4：云端模型优化缓存命中（cacheOptimize 默认开，仅云端 API 模型生效）——
+  // prompt cache 是前缀匹配：memBlock 每轮随问题变，留在 system 会打碎整个前缀。云端=动态块挪到本轮问题尾部（前缀全静态）；
+  // 本地部署无 cache 计费，效率优先维持 memBlock 前置 system（模型对 system 内记忆权重感更高）。
+  const cloudModel = await (async () => {
+    try {
+      const st = loadSettings()
+      if (!st.model?.default) return false
+      const { pickModelInstance } = await import('../lib/model-registry')
+      const inst = pickModelInstance(st.model.default)
+      return !!inst && inst.kind !== 'local'
+    } catch { return false }
+  })()
+  const cacheOptimizeOn = cloudModel && loadSettings().chat?.cacheOptimize !== false
+  const profileBlock = memOn && memLocal
+    ? `
 
 以下是已知的用户画像（本机记忆层，常驻），回答时自然运用，不要逐条复述：
-${localMemoryContext(defaultVaultRoot(), 1200)}${memBlock ? `
+${localMemoryContext(defaultVaultRoot(), 1200)}`
+    : ''
+  const memTail = memOn && memLocal && memBlock
+    ? `
+
+[本机长期记忆·检索命中（与当前问题相关，按需引用）]
+${memBlock}`
+    : ''
+  const systemWithMemory = cacheOptimizeOn
+    ? system + profileBlock + skillBlock
+    : (memOn && memLocal
+        ? `${system}${profileBlock}${memBlock ? `
 
 以下是与你当前问题相关的长期记忆（检索命中，按需引用）：
 ${memBlock}` : ''}${skillBlock}`
-      : system + skillBlock
+        : system + skillBlock)
+  // 云端优化开：memTail 注入本轮问题尾部（agentLoop deps.question）；关：空
+  const questionFinal = cacheOptimizeOn ? `${built.messages.filter((m) => m.role === 'user').at(-1)?.content ?? question}${memTail}` : (built.messages.filter((m) => m.role === 'user').at(-1)?.content ?? question)
   for (const f of customCat.failures) console.log(`（自定义 MCP ${f.name} 连接失败：${f.error}）`)
   // #317.⑥ LLM 调用单源（主/子共用；子任务 withThinking=false——D6 精简）
   const makeChatFn = (withThinking: boolean): typeof import('../lib/llm').byokChatMessages => async (messages, tools) => {
@@ -535,7 +560,7 @@ ${memBlock}` : ''}${skillBlock}`
   ]
   const result = await agentLoop({
     system: systemWithMemory,
-    question: built.messages.filter((m) => m.role === 'user').at(-1)?.content ?? question,
+    question: questionFinal,
     ready: true,
     excludeTools: memOn ? [] : ['add_memory', 'search_memory'],
     localTools,
