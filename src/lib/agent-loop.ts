@@ -288,7 +288,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       // #317.F14：自纠循环（上限 2 次）——首版修正令 200 字被 4B 模型当新题目展开分析（真机：重写回复本身
       // 又是 2000 字「检查是否符合…草拟…」），改极短硬令+多轮兜底
       for (let fixRound = 0; fixRound < 2 && isLeakyAnswer(text); fixRound++) {
-        say(`（检测到回复夹带分析过程，正在要求模型重写…${fixRound + 1}/2）`)
+        say(`（回复夹带了分析过程，正在自动重写 ${fixRound + 1}/2——最终回答以重写后的干净版为准）`)
         const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: '不要分析。直接输出最终中文回答本身。' }], undefined)
         if (fix.ok && fix.text && fix.text.trim()) text = fix.text
       }
