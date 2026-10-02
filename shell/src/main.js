@@ -568,9 +568,12 @@ app.whenReady().then(() => {
       const winLog = path.join(process.env.LOCALAPPDATA || '', 'Ollama', 'server.log')
       const logFile = isWin ? winLog : path.join(os.tmpdir(), 'moonlybox-ollama-serve.log')
       if (isWin) {
-        // start 的第一个引号参数会被当窗口标题——先放 '' 占位；整体单串走 shell 避免 cmd 二次解析分裂参数
-        const line = `start /b "" "${cli}" serve`
-        const child = require('child_process').spawn('cmd.exe', ['/c', line], { stdio: 'ignore', windowsHide: true, shell: false, env: serveEnv })
+        // #317.F16/P3i：start /b 在真机 0.32.14 失效（手动 PowerShell serve 可起=start /b 无 console 环境
+        // 与新版 ollama 不兼容；F4 时代成功=旧版行为）。改 powershell Start-Process -WindowStyle Hidden：
+        // 真隐藏窗+独立于客户端+运行环境最接近手动 PowerShell（用户实证可行）。
+        // 引号：-FilePath/-ArgumentList 路径含空格由内层引号处理；ps 命令串整体经 -Command 传递。
+        const ps = `Start-Process -FilePath '${cli.replace(/'/g, "''")}' -ArgumentList 'serve' -WindowStyle Hidden`
+        const child = require('child_process').spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { stdio: 'ignore', windowsHide: true, shell: false, env: serveEnv })
         child.unref()
       } else {
         const out = fs.openSync(logFile, 'a')
