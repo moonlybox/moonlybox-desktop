@@ -2,7 +2,7 @@
  * 提供商清单云端源（#276）：平台为统一源（`GET /api/client/providers`，登录后拉取），
  * 本地缓存 providers-cache.json；未登录/离线/过期失败 → 缓存 → 内置表兜底。
  * messaging 恒本地内置（本地组件能力，不走云端清单）。
- * 正常维护渠道=平台更新发布云端程序内置清单；admin 应急手工项为未来预留（orphan 标记不受内置覆盖）。
+ * 维护渠道=平台更新发布云端程序内置清单（提供商变更走正常发版，无手工应急通道）。
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
