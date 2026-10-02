@@ -80,7 +80,7 @@ export function listUncompiled(): { total: number; uncompiled: string[]; truncat
     try {
       const text = fs.readFileSync(p, 'utf8')
       if (!text.trim()) continue
-      if (!isCompiled(contentHash(text))) uncompiled.push(p)
+      if (!isCompiled(contentHash(text), root)) uncompiled.push(p)
     } catch {}
   }
   return { total: all.length, uncompiled: uncompiled.slice(0, 200), truncated: uncompiled.length > 200 }

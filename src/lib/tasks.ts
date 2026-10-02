@@ -225,8 +225,16 @@ export function ledgerUpsert(entry: LedgerEntry): void {
 }
 
 /** 按 hash 判定（含 in-flight 迁移：旧 jobs done items 有 srcHash 的灌入一次） */
-export function isCompiled(srcHash: string): boolean {
-  if (ledgerLoad().some((e) => e.hash === srcHash)) return true
+export function isCompiled(srcHash: string, vaultRoot?: string): boolean {
+  {
+    const entries = ledgerLoad()
+    const hit = entries.filter((e) => e.hash === srcHash)
+    if (hit.length) {
+      // #317.8b A1 惰性修复：命中条目 srcPath 失联时同 hash 找新家（vaultRoot 缺省=跳过跟随，语义不变）
+      if (vaultRoot && hit.some((e) => !e.srcPath || !fs.existsSync(e.srcPath))) ledgerFollow(entries, vaultRoot)
+      return true
+    }
+  }
   // #317.8 迁移：旧账（jobs.items 带 srcHash 的 done）一次性灌入独立账本
   const store = readStore()
   let migrated = false
@@ -255,6 +263,68 @@ function ledgerDeleteByOutPath(absOut: string, vaultRoot: string): number {
   return n
 }
 
+// ==================== #317.8b ledger 与源文档关联细化（挂账收口） ====================
+// A1 惰性修复：判定/列举命中时发现 srcPath 失联 → 全书房扫同 hash 文件自动改写条目（无 watcher，零新增基建）
+// A2 源删除：全书房无同 hash → 条目保留（产物是独立资产照常列出），仅标注 srcMissing
+// C1 边界收口：ledgerUpsert 拒书房外路径入账
+/** 书房内判定（C1） */
+function underVault(p: string, vaultRoot: string): boolean {
+  const abs = path.isAbsolute(p) ? p : path.join(vaultRoot, p)
+  const rel = path.relative(vaultRoot, abs)
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+}
+
+/** ledgerUpsert 的书房内校验包装（C1）：书房外路径不入账（防将来入口放宽时账本被污染） */
+export function ledgerUpsertGuarded(entry: LedgerEntry, vaultRoot: string): boolean {
+  if (!underVault(entry.srcPath, vaultRoot)) return false
+  ledgerUpsert(entry)
+  return true
+}
+
+/** 全书房扫同内容文件（A1）：返回与 hash 匹配的首个路径（确定性排序保证幂等） */
+export function findSrcByHash(vaultRoot: string, hash: string, exclude: string[] = []): string | null {
+  if (!vaultRoot) return null
+  const hits: string[] = []
+  const walk = (dir: string, depth: number) => {
+    if (depth > 6) return
+    let list: fs.Dirent[] = []
+    try { list = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const d of list) {
+      if (d.name.startsWith('.') || d.name === 'node_modules') continue
+      const p = path.join(dir, d.name)
+      if (d.isDirectory()) walk(p, depth + 1)
+      else if (/\.(md|markdown|txt)$/i.test(d.name)) {
+        try {
+          const h = contentHash(fs.readFileSync(p, 'utf8'))
+          if (h === hash) hits.push(p)
+        } catch { /* 跳过不可读 */ }
+      }
+    }
+  }
+  walk(vaultRoot, 0)
+  hits.sort()
+  const ex = new Set(exclude.map((x) => path.resolve(x)))
+  return hits.find((h) => !ex.has(path.resolve(h))) ?? null
+}
+
+/** 惰性跟随（A1+A2）：校验条目 srcPath；失联→同 hash 找新家改写；全书房无→保留条目（isCompiled 用，注意别在热路径频繁全扫） */
+function ledgerFollow(entries: LedgerEntry[], vaultRoot: string): void {
+  if (!vaultRoot) return
+  let changed = false
+  for (const e of entries) {
+    if (e.srcPath && fs.existsSync(e.srcPath)) continue
+    // srcPath 空（老数据兼容）或失联：
+    const fresh = findSrcByHash(vaultRoot, e.hash, [e.srcPath])
+    if (fresh) {
+      e.srcPath = fresh
+      changed = true
+    }
+    // 找不到新家=A2 保留条目原样（srcMissing 标注在展示层按 existsSync 现算，不落账）
+  }
+  if (changed) ledgerSave(entries)
+}
+
+
 /** #316 骨架批配套：知识页产物聚合（任务页「知识页」tab 数据源——jobs items done 的 outPath，去重+存在性） */
 export interface PageEntry {
   path: string
@@ -271,6 +341,8 @@ export interface PageEntry {
   /** #310.46：云端准入回执（下行打标）——「✓ 已同步」态 */
   syncedAt?: string
   srcPath: string
+  /** #317.8b A2：源文档失联（已删/移走且全书房无同内容）——展示「源已删除」标注 */
+  srcMissing?: boolean
 }
 
 export function listPages(vaultRoot: string): PageEntry[] {
@@ -292,17 +364,21 @@ export function listPages(vaultRoot: string): PageEntry[] {
         finishedAt: job.finishedAt,
         cloudWikiId: it.cloudWikiId,
         srcPath: it.path,
+        srcMissing: it.path ? !fs.existsSync(it.path) : undefined,
       })
     }
   }
 
   // #317.8：ledger 合并——任务已删除但 ledger 记录的产物仍列出（产物是资产，不随任务记录消失）
   const jobsById = new Map(readStore().jobs.map((j) => [j.id, j]))
+  // #317.8b A1 惰性修复：合并前先跟随一次（srcPath 失联的同 hash 条目找新家；找不到=A2 保留）
+  ledgerFollow(ledgerLoad(), vaultRoot)
   for (const e of ledgerLoad()) {
     if (!e.outPath) continue
     const abs = path.isAbsolute(e.outPath) ? e.outPath : path.join(vaultRoot, e.outPath)
     if (byPath.has(abs)) continue
-    const srcExists = fs.existsSync(e.srcPath)
+    const srcExists = e.srcPath ? fs.existsSync(e.srcPath) : false
+    // A2：源删除但产物在 → 照常列出（产物是独立资产）；源产物都无 → 孤儿条目跳过
     if (!srcExists && !fs.existsSync(abs)) continue
     byPath.set(abs, {
       path: e.outPath,
@@ -312,6 +388,7 @@ export function listPages(vaultRoot: string): PageEntry[] {
       jobTitle: (e.jobId && jobsById.get(e.jobId)?.title) ?? '（任务已删除）',
       finishedAt: e.at,
       srcPath: e.srcPath,
+      srcMissing: e.srcPath ? !fs.existsSync(e.srcPath) : undefined,
     })
   }
 
