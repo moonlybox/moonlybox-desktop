@@ -395,6 +395,9 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       messages.push({ role: 'tool', tool_call_id: oc.id, content: oc.content })
       used.push({ name: oc.name, ok: oc.ok })
     }
+    // #317.F11：终答轮收尾指令——qwen3 关思考后会把模板指令/对话当「题目」分析、英文推理链泄进正文
+    // （真机：list_todos 返回空后输出 500 字英文 "Wait, let's see..."）。紧贴工具结果下指令压住：
+    messages.push({ role: 'system', content: '工具结果已返回（上面最后一条 tool 消息）。现在直接给用户写最终回答：一两句话、中文、面向用户；如果结果是空列表就明确说没有。禁止：分析这轮对话本身、复述任何指令文本、输出推理过程（"Wait/首先/需要确认"式文字）、提出调用更多工具。' })
   }
   // #317.2：预算/轮数判停——不再丢一句占位话，改为一次无工具 LLM 调用汇总已有结果
   try {
