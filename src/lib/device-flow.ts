@@ -84,3 +84,24 @@ export async function pollToken(clientId: string, deviceCode: string, baseUrl?: 
   if (json.error === 'expired_token') return { status: 'expired', error: json.error }
   return { status: 'expired', error: json.error ?? `HTTP ${res.status}` }
 }
+
+// #317.5：access_token 过期（<60s 余量）自动用 refresh_token 续期+落盘——从 daemon.ts 上收单源
+// （此前只在 profile/nav 三处调用；moonlink.rpc 与 apiGet 系裸用 creds.accessToken→登录超 1h 后 MCP/同步 401「未登录或登录已过期」而 UI 仍显示已登录）
+export async function ensureFreshToken(): Promise<{ accessToken: string; creds: Credentials }> {
+  const creds = loadCredentials()
+  if (!creds?.accessToken) throw new Error('未登录')
+  const exp = creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt).getTime() : 0
+  if (exp - Date.now() > 60_000) return { accessToken: creds.accessToken, creds }
+  if (!creds.refreshToken) throw new Error('登录态已过期且无 refresh_token，请重新登录')
+  const clientId = creds.clientId
+  if (!clientId) throw new Error('缺少 clientId，请重新登录')
+  const tokens = await refreshAccessToken(clientId, creds.refreshToken)
+  const fresh = {
+    ...creds,
+    accessToken: tokens.access_token,
+    accessTokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    refreshToken: tokens.refresh_token ?? creds.refreshToken,
+  }
+  saveCredentials(fresh)
+  return { accessToken: fresh.accessToken, creds: fresh }
+}

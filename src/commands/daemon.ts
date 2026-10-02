@@ -26,6 +26,7 @@ import {
   listWorkspaces, getWorkspace, createWorkspace, updateWorkspace, deleteWorkspace,
   listChats, listChatsByWorkspace, loadChat, saveChat, createChat, deleteChat, appendTurn,
 } from '../lib/workspaces'
+import { ensureFreshToken } from '../lib/device-flow'
 import { cmdSync } from '../commands/sync'
 import { initVault, syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
@@ -60,25 +61,7 @@ const pendingConfirms = new Map<number, (v: boolean) => void>()
 // #253 登录会话（Device Flow 两段式：start 领码 → 壳轮询 poll；不阻塞 daemon worker）
 const loginSession: { clientId: string; deviceCode: string; userCode: string; url: string; interval: number } | null = null
 
-// #253.32：access_token 过期（<60s 余量）自动用 refresh_token 续期+落盘；失败抛出（调用方降级）
-async function ensureFreshToken(): Promise<{ accessToken: string; creds: any }> {
-  const creds = loadCredentials()
-  if (!creds?.accessToken) throw new Error('未登录')
-  const exp = creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt).getTime() : 0
-  if (exp - Date.now() > 60_000) return { accessToken: creds.accessToken, creds }
-  if (!creds.refreshToken) throw new Error('登录态已过期且无 refresh_token，请重新登录')
-  const clientId = creds.clientId
-  if (!clientId) throw new Error('缺少 clientId，请重新登录')
-  const tokens = await refreshAccessToken(clientId, creds.refreshToken)
-  const fresh = {
-    ...creds,
-    accessToken: tokens.access_token,
-    accessTokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-    refreshToken: tokens.refresh_token ?? creds.refreshToken,
-  }
-  saveCredentials(fresh)
-  return { accessToken: fresh.accessToken, creds: fresh }
-}
+// #317.5：ensureFreshToken 上收 device-flow.ts 单源（moonlink.rpc/apiGet 系也接入续期）——本文件原 #253.32 实现移除
 
 function requestUiConfirm(
   rpcId: number,

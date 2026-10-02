@@ -12,6 +12,14 @@ let sessionId: string | null = null
 let nextId = 1
 
 async function rpc<T = any>(method: string, params?: unknown, opts?: { baseUrl?: string }): Promise<T> {
+  // #317.5：调用前续期（access_token 1h 过期——此前裸用 creds.accessToken，登录超 1h 后 MCP 401「未登录或登录已过期」而 UI 仍显示已登录）
+  try {
+    const { ensureFreshToken } = await import('./device-flow')
+    await ensureFreshToken()
+  } catch (e: any) {
+    // 未登录/无 refresh_token：维持原报错语义（agent-loop 已做失败隔离提示）
+    throw new Error(String(e?.message ?? e).includes('未登录') ? '未登录：先运行 `moonlybox login`' : `登录态续期失败：${String(e?.message ?? e).slice(0, 60)}`)
+  }
   const creds = loadCredentials()
   if (!creds?.accessToken) {
     throw new Error('未登录：先运行 `moonlybox login`')
