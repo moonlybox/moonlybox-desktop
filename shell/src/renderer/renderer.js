@@ -1071,7 +1071,6 @@ async function renderList(nav) {
     return
   } else if (nav === 'cloud') {
     // #254：云端功能=服务端下发 manifest（功能升级/新增零客户端发版）
-    setFrameTabCtx('cloud', arg?.label ?? '')
     const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
     if (r.event !== 'done' || r.code !== 0) {
       body.innerHTML = `<div class="muted" style="padding:10px">${t('list.navLoadFail')}` + (r.text || r.message) + '</div>'
@@ -3077,6 +3076,7 @@ async function renderWork(nav, arg, label2) {
   }
   if (nav === 'cloud' && arg && typeof arg === 'object') {
     // #254：云端功能页=WebView 承载 web SPA（布局/交互/多视图=web 端现成；升级零客户端发版）
+    setFrameTabCtx('cloud', arg.label ?? '')
     const gen = ++renderGen // #299：本协程世代号——期间用户切走则后续步骤全部作废
     const genValid = () => gen === renderGen && $('cloud-wv') !== null
     // #253.41/#253.42：防闪烁+加载动画——webview 初始透明+spinner 覆盖层，目标页 did-finish-load 后淡入并移除 spinner（无调试文字）
