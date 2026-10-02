@@ -285,10 +285,12 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     if (!res.toolCalls || res.toolCalls.length === 0) {
       let text = res.text ?? ''
       // #317.F12：推理泄漏检测+一次自纠——system 纪律失守时兜底（判窄不判宽，避免误伤正常长答）
-      if (isLeakyAnswer(text)) {
-        say('（检测到回复夹带分析过程，正在要求模型重写…）')
-        const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: '你的上一条回复夹带了内部分析过程，没有直接回答问题。请重新输出：若问题需要查数据，直接发起对应的工具调用（工具都真实可用）；若已有工具结果，只给面向用户的最终中文回答本身（一两句话或简洁清单）。不要分析工具列表、不要复述工具 JSON、不要任何「不过/但根据/可能需要」式论证。' }], undefined)
-        if (fix.ok && fix.text && !isLeakyAnswer(fix.text)) text = fix.text
+      // #317.F14：自纠循环（上限 2 次）——首版修正令 200 字被 4B 模型当新题目展开分析（真机：重写回复本身
+      // 又是 2000 字「检查是否符合…草拟…」），改极短硬令+多轮兜底
+      for (let fixRound = 0; fixRound < 2 && isLeakyAnswer(text); fixRound++) {
+        say(`（检测到回复夹带分析过程，正在要求模型重写…${fixRound + 1}/2）`)
+        const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: '不要分析。直接输出最终中文回答本身。' }], undefined)
+        if (fix.ok && fix.text && fix.text.trim()) text = fix.text
       }
       return { answer: text, toolCalls: used }
     }
@@ -423,7 +425,7 @@ function isLeakyAnswer(text: string): boolean {
   const t = (text ?? '').trim()
   if (!t) return false
   // 泄漏开头特征（真机样本：「好的，用户让我…」「首先，我需要…」「Wait, let's see…」）
-  const heads = ['好的，用户', '首先，我需要', '首先我需要', 'Wait,', "Wait '", '让我分析', '我需要看看', '我需要检查', '可能的回复是', "Okay, let's", 'Okay, the user']
+  const heads = ['好的，用户', '首先，用户', '用户让我', '用户问', '首先，我需要', '首先我需要', 'Wait,', "Wait '", '让我分析', '我需要看看', '我需要检查', '可能的回复是', "Okay, let's", 'Okay, the user', '草拟', '检查是否符合', '回顾我的上一条回复', '关键点：用户']
   if (heads.some((h) => t.startsWith(h))) return true
   // 中文语境里成段英文思维链（≥2 段 40+ 连续英文字符）
   const englishRuns = t.match(/[A-Za-z][A-Za-z',. ]{39,}/g)
