@@ -554,7 +554,13 @@ ${memBlock}` : ''}${skillBlock}`
     const { resolveActiveModel } = await import('../lib/model-registry')
     const active = resolveActiveModel()
     // #317.4：思考模式档位（主会话每次调用现读——切档即刻生效；子任务不读，D6 精简）
-    const thinking = withThinking && loadSettings().chat?.thinking === 'on' ? ('on' as const) : ('off' as const)
+    // #317.F16/P3p：本地默认思考=开（用户拍板 2026-10-02）——4B 关思考在 MoonLink 工具场景实证不可用
+    // （正文夹带分析/自纠重写循环），思考开（reasoning_effort low）全场景干净。用户显式设置仍生效：
+    // chat.thinking==='off'→关；'on'→开；未设置时本地默认模型→'on'，云端维持 off。
+    const s0 = loadSettings()
+    const explicit = s0.chat?.thinking
+    const isLocalDefault = String(s0.model?.default ?? '').startsWith('local:')
+    const thinking = withThinking && (explicit ? explicit === 'on' : isLocalDefault) ? ('on' as const) : ('off' as const)
     // #317.F7：本地小模型降档——qwen3:4b 级 ~8 tok/s，16000 上限=最长 32 分钟生成窗口（假死根源）；
     // 对话场景 4096 封顶（300 字回答纪律+工具循环短决策；编译链路独立不受影响），云端维持 16000
     const { isLocalEndpoint } = await import('../lib/llm')

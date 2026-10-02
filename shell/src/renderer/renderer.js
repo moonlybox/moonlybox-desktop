@@ -4055,6 +4055,12 @@ function bindChat(chatInfo) {
     scroll()
   }
   const hideThinking = () => { if (thinkingEl) { thinkingEl.remove(); thinkingEl = null } }
+  // #317.F16/P3p：思考档位有效值（与 xiaoyue 侧同源逻辑）——显式设置优先；未设置时本地默认模型=开（用户拍板）
+  const xyThinkEffective = () => {
+    const ex = APP_SETTINGS?.chat?.thinking
+    if (ex === 'on' || ex === 'off') return ex === 'on'
+    return String(APP_SETTINGS?.model?.default ?? '').startsWith('local:')
+  }
   async function askWith(q) {
     const askBtn = $('btn-ask') // #283.11：await 最长 300s，期间切对话/切页重渲——持有引用，事后 querySelector 会是 null
     askBtn.disabled = true
@@ -4173,7 +4179,8 @@ function bindChat(chatInfo) {
     const list = xyModelList()
     const cur = list.find((x) => x.ref === (mm.default ?? ''))
     const ml = $('xy-model-label'); if (ml) ml.textContent = cur ? cur.label : t('xy.model')
-    const tl = $('xy-think-label'); if (tl) tl.textContent = `${t('xy.thinking')}: ${(APP_SETTINGS?.chat?.thinking === 'on') ? t('xy.thinkOn') : t('xy.thinkOff')}`
+    const tl = $('xy-think-label')
+    if (tl) tl.textContent = `${t('xy.thinking')}: ${xyThinkEffective() ? t('xy.thinkOn') : t('xy.thinkOff')}`
   }
   refreshFunLabels()
   $('xy-model-btn')?.addEventListener('click', (e) => {
@@ -4189,7 +4196,7 @@ function bindChat(chatInfo) {
   $('xy-think-btn')?.addEventListener('click', (e) => {
     e.stopPropagation()
     openMenu(e.currentTarget, (menu) => {
-      const cur = APP_SETTINGS?.chat?.thinking === 'on'
+      const cur = xyThinkEffective()
       menuItem(menu, t('xy.thinkOn'), cur, async () => { await saveAppSettings({ chat: { ...APP_SETTINGS.chat, thinking: 'on' } }); refreshFunLabels() })
       menuItem(menu, t('xy.thinkOff'), !cur, async () => { await saveAppSettings({ chat: { ...APP_SETTINGS.chat, thinking: 'off' } }); refreshFunLabels() })
     })
