@@ -8,7 +8,7 @@ const ZH: Dict = {
   'nav.home': '首页', 'nav.cloud': '云端', 'nav.vault': '书房', 'nav.settings': '设置',
   'settings.title': '设置', 'settings.general': '通用', 'settings.appearance': '外观',
   'settings.library': '文档库', 'settings.chat': '对话', 'settings.model': '模型',
-  'settings.messaging': '消息平台', 'settings.mcp': 'MCP', 'settings.skills': '技能',
+  'settings.messaging': '消息接入', 'settings.mcp': 'MCP', 'settings.skills': '技能',
   'settings.websearch': '网络搜索', 'settings.docproc': '文档处理', 'settings.memory': '记忆',
   'settings.saved': '已保存', 'settings.save': '保存', 'settings.test': '测试连接',
   'settings.enabled': '启用', 'settings.disabled': '停用',

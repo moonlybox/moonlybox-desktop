@@ -177,7 +177,7 @@ export const WEBSEARCH_PROVIDERS: Array<{ id: string; label: string; baseUrl: st
   { id: 'custom', label: '自定义（MCP 端点）', baseUrl: '', needs: ['baseUrl', 'apiKey'] },
 ]
 
-/** 消息平台（#256.5：参考 Hermes 可对接平台；token/key 一律钥匙串不入本清单） */
+/** 消息接入（#256.5：参考 Hermes 可对接平台；token/key 一律钥匙串不入本清单） */
 export const MESSAGING_PROVIDERS: Array<{ id: string; label: string; needs: Array<{ key: string; label: string; secret?: boolean }> }> = [
   { id: 'feishu', label: '飞书', needs: [{ key: 'appId', label: 'App ID' }, { key: 'appSecret', label: 'App Secret', secret: true }] },
   { id: 'wecom', label: '企业微信（AI 机器人）', needs: [{ key: 'botId', label: 'Bot ID' }, { key: 'secret', label: 'Bot Secret', secret: true }] },

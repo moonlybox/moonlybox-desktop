@@ -670,7 +670,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
                 dp.config = cleanCfg
               }
             }
-            // #286：消息平台——secret 字段（token 类）剥入钥匙串（account=msg:<platform>:<key>），
+            // #286：消息接入——secret 字段（token 类）剥入钥匙串（account=msg:<platform>:<key>），
             // settings.json 只落非敏感 config + keyStored 标记；明文/旧哨兵形态都处理
             const mg = patch.messaging as Record<string, unknown> | undefined
             if (mg && typeof mg === 'object' && mg.providers && typeof mg.providers === 'object') {

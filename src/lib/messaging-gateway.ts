@@ -1,5 +1,5 @@
 /**
- * 消息平台网关（#286，Hermes gateway 范式 TS 轻量版）。
+ * 消息接入网关（#286，Hermes gateway 范式 TS 轻量版）。
  *
  * 架构：daemon 内常驻网关——settings.messaging.providers 配置驱动，每启用平台一个 adapter；
  * 收件（轮询/长连接）→ 统一 InboundMessage → runAgentTools（无头小月，chatId=msg:<platform>:<chatId> 持久化）→ 回复投递。
@@ -11,7 +11,7 @@ import * as path from 'node:path'
 import qrcodeGen from 'qrcode-generator'
 import { loadSettings } from './settings'
 
-/** 消息平台凭据钥匙串（account=msg:<platform>:<key>，secret 字段一律不入 settings.json） */
+/** 消息接入凭据钥匙串（account=msg:<platform>:<key>，secret 字段一律不入 settings.json） */
 function msgKeyGet(platform: string, key: string): string | null {
   try {
     const { Entry } = require('@napi-rs/keyring') as typeof import('@napi-rs/keyring')
