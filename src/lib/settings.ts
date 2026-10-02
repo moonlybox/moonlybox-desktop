@@ -28,6 +28,8 @@ export interface SettingsSchema {
     compressThreshold: number // 压缩阈值 50~100（%）
     compressTarget: number // 压缩目标 10~30（%）
     maxRetries: number // 模型重试次数（默认 10）
+    /** #317.4：思考模式档位（小月对话输入框下拉）——'off'=关思考（默认，#310.36 现状）；'on'=开启思考（不注入关思考指令/Ollama think:true） */
+    thinking?: 'on' | 'off'
   }
   model: {
     /** #283 对话默认模型（历史名 default=chatDefault 语义）：'platform:<id>' | 'custom:<id>' | 'local:<id>' | ''（空=回落旧 byok.json 兼容） */

@@ -611,6 +611,10 @@ const I18N_DICT = {
   'dg.quickNew': { zh: '新建图示', en: 'New Diagram' },
   'dg.quickHint': { zh: '打开左侧已有图示继续编辑。', en: 'Open an existing diagram on the left to keep editing.' },
   'xy.send': { zh: '发送', en: 'Send' },
+  'xy.model': { zh: '模型', en: 'Model' },
+  'xy.thinking': { zh: '思考', en: 'Thinking' },
+  'xy.thinkOn': { zh: '开', en: 'On' },
+  'xy.thinkOff': { zh: '关', en: 'Off' },
   'lg.openAuth': { zh: '打开授权页', en: 'Open Auth Page' },
   'ue.keyKept': { zh: 'API Key（只存钥匙串）', en: 'API Key (keychain only)' },
   'ue.keySet': { zh: '已配置，不回显', en: 'Configured (hidden)' },
@@ -2930,10 +2934,15 @@ async function renderWork(nav, arg, label2) {
     w.innerHTML = `
       ${meta ? `<div class="muted" style="padding:8px 16px 0;font-size:12px">${meta.title} · ${wsLabel}</div>` : ''}
       <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:16px;white-space:pre-wrap;user-select:text"></div>
-      <div class="row" style="padding:12px 16px;border-top:1px solid var(--border)">
-        <input id="q" placeholder="${meta ? (meta.workspaceId ? t('xy.qPlaceholder') : t('xy.docOnly')) : t('xy.pickFirst')}" style="flex:1" ${meta ? '' : 'disabled'} />
-        <button class="btn ghost" id="btn-stop" style="display:none">${t('xy.stop')}</button>
-        <button class="btn" id="btn-ask" ${meta ? '' : 'disabled'}>${t('xy.send')}</button>
+      <div style="padding:8px 16px 12px;border-top:1px solid var(--border)">
+        <textarea id="q" rows="1" placeholder="${meta ? (meta.workspaceId ? t('xy.qPlaceholder') : t('xy.docOnly')) : t('xy.pickFirst')}" style="display:block;width:100%;resize:none;box-sizing:border-box;line-height:1.5;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg,#0f172a);color:var(--fg,#e2e8f0);font:inherit;max-height:160px;overflow-y:auto" ${meta ? '' : 'disabled'}></textarea>
+        <div class="row" style="margin-top:6px;align-items:center;gap:8px">
+          <button class="btn ghost" id="xy-model-btn" style="font-size:12px" ${meta ? '' : 'disabled'}>⚙ <span id="xy-model-label"></span></button>
+          <button class="btn ghost" id="xy-think-btn" style="font-size:12px" ${meta ? '' : 'disabled'}>🧠 <span id="xy-think-label"></span></button>
+          <div style="flex:1"></div>
+          <button class="btn ghost" id="btn-stop" style="display:none">${t('xy.stop')}</button>
+          <button class="btn" id="btn-ask" ${meta ? '' : 'disabled'}>${t('xy.send')}</button>
+        </div>
       </div>`
     if (meta) bindChat({ meta })
     else w.insertAdjacentHTML('afterbegin', '<div class="muted" style="padding:16px">左侧新建工作空间或对话开始。</div>')
@@ -3884,10 +3893,81 @@ function bindChat(chatInfo) {
     if (sb) sb.onclick = () => { xyAborted = true; hideThinking() }
   }
   bindStop()
+  // #317.4：底部功能区——模型/思考 自绘下拉（dg-menu 范式：fixed+body 挂载+外点关闭；原生 select/confirm 禁用铁律）
+  const closeMenu = (m) => { m?.remove(); document.removeEventListener('pointerdown', m?._pd, true) }
+  const openMenu = (anchor, build) => {
+    const existed = document.querySelector('.xy-menu')
+    if (existed) { closeMenu(existed); return }
+    const menu = document.createElement('div')
+    menu.className = 'xy-menu'
+    menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:180px;max-height:280px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.35)'
+    menu.style.visibility = 'hidden'
+    document.body.appendChild(menu)
+    build(menu)
+    const rect = anchor.getBoundingClientRect()
+    const mh = menu.offsetHeight
+    const below = rect.top - 4 - mh >= 8 // 输入框在底部——默认向上弹
+    menu.style.left = `${Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)}px`
+    menu.style.top = `${below ? rect.top - mh - 4 : rect.bottom + 4}px`
+    menu.style.visibility = ''
+    menu._pd = (ev) => { if (!menu.contains(ev.target) && ev.target !== anchor && !anchor.contains(ev.target)) closeMenu(menu) }
+    setTimeout(() => document.addEventListener('pointerdown', menu._pd, true), 0)
+  }
+  const menuItem = (menu, label, active, onclick) => {
+    const it = document.createElement('div')
+    it.textContent = (active ? '✓ ' : '') + label
+    it.style.cssText = `padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--fg,#e2e8f0);${active ? 'background:rgba(99,102,241,.18);' : ''}`
+    it.onmouseenter = () => { if (!active) it.style.background = 'rgba(148,163,184,.12)' }
+    it.onmouseleave = () => { if (!active) it.style.background = '' }
+    it.onclick = () => { closeMenu(menu); onclick() }
+    menu.appendChild(it)
+  }
+  // 模型列表（与设置页 modelPickerOpts 同源：平台/自定义/本地 三组已启用实例）
+  const xyModelList = () => {
+    const mm = APP_SETTINGS?.model ?? {}
+    const out = []
+    for (const x of (mm.providers ?? []).filter((x) => x.enabled)) {
+      const pv = (APP_PROVIDERS?.platform ?? PLATFORM_PROVIDERS_FALLBACK).find((p) => p.id === x.providerId)
+      out.push({ ref: `platform:${x.id}`, label: `${pv?.label ?? x.providerId} · ${x.model}` })
+    }
+    for (const x of (mm.custom ?? []).filter((x) => x.enabled)) out.push({ ref: `custom:${x.id}`, label: `${x.name} · ${x.model}` })
+    for (const x of (mm.local ?? []).filter((x) => x.enabled)) out.push({ ref: `local:${x.id}`, label: `${x.name} · ${x.model}` })
+    return out
+  }
+  const refreshFunLabels = () => {
+    const mm = APP_SETTINGS?.model ?? {}
+    const list = xyModelList()
+    const cur = list.find((x) => x.ref === (mm.default ?? ''))
+    const ml = $('xy-model-label'); if (ml) ml.textContent = cur ? cur.label : t('xy.model')
+    const tl = $('xy-think-label'); if (tl) tl.textContent = `${t('xy.thinking')}: ${(APP_SETTINGS?.chat?.thinking === 'on') ? t('xy.thinkOn') : t('xy.thinkOff')}`
+  }
+  refreshFunLabels()
+  $('xy-model-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    openMenu(e.currentTarget, (menu) => {
+      const cur = APP_SETTINGS?.model?.default ?? ''
+      for (const m of xyModelList()) menuItem(menu, m.label, m.ref === cur, async () => {
+        const r = await saveAppSettings({ model: { ...APP_SETTINGS.model, default: m.ref } })
+        if (r?.ok) refreshFunLabels() // saveAppSettings 已回写 APP_SETTINGS
+      })
+    })
+  })
+  $('xy-think-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation()
+    openMenu(e.currentTarget, (menu) => {
+      const cur = APP_SETTINGS?.chat?.thinking === 'on'
+      menuItem(menu, t('xy.thinkOn'), cur, async () => { await saveAppSettings({ chat: { ...APP_SETTINGS.chat, thinking: 'on' } }); refreshFunLabels() })
+      menuItem(menu, t('xy.thinkOff'), !cur, async () => { await saveAppSettings({ chat: { ...APP_SETTINGS.chat, thinking: 'off' } }); refreshFunLabels() })
+    })
+  })
   // #305：绑定完成即聚焦输入框（连续渲染后可直接输入；输入法状态不打断）
   // #307.3：focus 换 forceFocus——删除/confirm 等操作后焦点系统脏态下普通 focus() 会被忽略
   setTimeout(() => { const q = $('q'); if (q && !q.disabled) forceFocus(q) }, 50)
-  $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') ask() })
+  // #317.4：textarea 自适应高度（1 行起步，随内容长高，max-height 160px 后内滚）+Enter 发送/Shift+Enter 换行
+  const qTa = $('q')
+  const autoGrow = () => { qTa.style.height = 'auto'; qTa.style.height = Math.min(qTa.scrollHeight, 160) + 'px' }
+  qTa.addEventListener('input', autoGrow)
+  qTa.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask() } })
   // #307.3：点击输入框时若焦点系统脏（点了没反应），pointerdown 内先强重置再聚焦——同点击动作内自愈
   $('q').addEventListener('pointerdown', () => { const q = $('q'); if (q && !q.disabled) forceFocus(q) })
   // #282：恢复历史轮次（#288：气泡形态）

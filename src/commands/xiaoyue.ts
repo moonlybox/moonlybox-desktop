@@ -464,9 +464,11 @@ ${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}${skillBloc
       // #283：对话走模型注册表（设置-对话默认模型；空/失效回落旧 byok）
       const { resolveActiveModel } = await import('../lib/model-registry')
       const active = resolveActiveModel()
+      // #317.4：思考模式档位（输入框下拉写 settings.chat.thinking，每次调用现读——切档即刻生效）
+      const thinking = loadSettings().chat?.thinking === 'on' ? ('on' as const) : ('off' as const)
       const r = await chatWithRetry(
         // #310.19：max_tokens 16000——思考型模型 tools 协议下 reasoning 吃掉 4000 全额的余量
-        () => byokChatMessages(messages, tools as never, 90_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined, 16_000),
+        () => byokChatMessages(messages, tools as never, 90_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined, 16_000, thinking),
         (attempt, total, err) => console.log(`（LLM 调用失败，重试 ${attempt}/${total}：${err.slice(0, 80)}）`),
       )
       // #280.3.2：【真根因修复】toolCalls 必须透传——原 `{ ok, text }` 把 tool_calls 静默丢弃，

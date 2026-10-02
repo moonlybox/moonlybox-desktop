@@ -155,6 +155,8 @@ export async function byokChatMessages(
   modelOverride?: { baseUrl: string; model: string; apiKey: string | null },
   /** #310.19：生成上限（默认 4000 保持兼容；思考型模型 reasoning 占额+知识页长文都需要更大余量） */
   maxTokens = 4000,
+  /** #317.4：思考模式档位（小月对话输入框）——'on'=不注入关思考指令（GLM 回归默认思考/Ollama think:true）；缺省 off=现状 */
+  thinkingMode?: 'on' | 'off',
 ): Promise<ChatWithToolsResult> {
   const meta = modelOverride ? { baseUrl: modelOverride.baseUrl, model: modelOverride.model } : loadByokMeta()
   const apiKey = modelOverride ? modelOverride.apiKey : loadByokKey()
@@ -176,8 +178,8 @@ export async function byokChatMessages(
         // 按端点家族注入（严格校验端点对未知字段 400，不能全量注入）：
         // - Ollama 本地：think:false
         // - 智谱 GLM（glm-4.5+ 默认开思考）：thinking:{type:'disabled'}
-        ...(isLocalEndpoint(meta.baseUrl) && /:11434|\/ollama/i.test(meta.baseUrl) ? { think: false } : {}),
-        ...(/bigmodel\.cn|\/glm/i.test(meta.baseUrl) ? { thinking: { type: 'disabled' } } : {}),
+        ...(isLocalEndpoint(meta.baseUrl) && /:11434|\/ollama/i.test(meta.baseUrl) ? { think: thinkingMode === 'on' } : {}),
+        ...(thinkingMode !== 'on' && /bigmodel\.cn|\/glm/i.test(meta.baseUrl) ? { thinking: { type: 'disabled' } } : {}),
       }),
       signal: AbortSignal.timeout(timeoutMs),
     })
