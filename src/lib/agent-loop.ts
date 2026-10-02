@@ -287,7 +287,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       // #317.F12：推理泄漏检测+一次自纠——system 纪律失守时兜底（判窄不判宽，避免误伤正常长答）
       if (isLeakyAnswer(text)) {
         say('（检测到回复夹带分析过程，正在要求模型重写…）')
-        const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: '你的上一条回复夹带了内部分析过程/英文思考，没有直接回答问题。请重新输出：只给面向用户的最终中文回答本身，一两句话或一个简洁清单，不要任何分析、计划、草稿对照。' }], undefined)
+        const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: '你的上一条回复夹带了内部分析过程，没有直接回答问题。请重新输出：若问题需要查数据，直接发起对应的工具调用（工具都真实可用）；若已有工具结果，只给面向用户的最终中文回答本身（一两句话或简洁清单）。不要分析工具列表、不要复述工具 JSON、不要任何「不过/但根据/可能需要」式论证。' }], undefined)
         if (fix.ok && fix.text && !isLeakyAnswer(fix.text)) text = fix.text
       }
       return { answer: text, toolCalls: used }
@@ -429,5 +429,10 @@ function isLeakyAnswer(text: string): boolean {
   const englishRuns = t.match(/[A-Za-z][A-Za-z',. ]{39,}/g)
   const cjk = (t.match(/[\u4e00-\u9fff]/g) ?? []).length
   if (englishRuns && englishRuns.length >= 2 && cjk < englishRuns.join('').length) return true
+  // #317.F13：纯中文分析腔泄漏（真机：2000 字「不过，…但根据…可能需要…」反复论证工具列表）——
+  // 分析连接词高频+直接引用 tools JSON 字面（"type": "function"）任一命中
+  if ((t.match(/不过，/g) ?? []).length >= 3) return true
+  if ((t.match(/但根据/g) ?? []).length >= 3) return true
+  if (t.includes('"type": "function"') || t.includes('"type":"function"')) return true
   return false
 }
