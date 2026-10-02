@@ -562,6 +562,12 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             settings: s,
             providers,
           })
+        } else if (op1 === 'subAgentVerdict') {
+          // #317.6b：子任务准入判定（当前默认模型）——设置页提示+装配同源
+          const { subAgentVerdict } = await import('../lib/sub-agent-policy')
+          const st = loadSettings()
+          const v = subAgentVerdict(st.model?.default ?? '')
+          text = JSON.stringify({ ok: true, ...v })
         } else if (op1 === 'save') {
           const patch = (args.patch ?? {}) as Record<string, unknown>
           if (!patch || typeof patch !== 'object' || Array.isArray(patch) || Object.keys(patch).length === 0) {

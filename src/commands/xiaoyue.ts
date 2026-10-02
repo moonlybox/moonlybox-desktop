@@ -420,7 +420,28 @@ export async function runAgentTools(
     : {}
   let localTools: Record<string, (args: Record<string, unknown>) => Promise<string>> = { ...baseLocalTools, ...localToolsW }
   // #317.⑥ 子任务隔离（D8 用户定案：仅设置里手动开启——默认不装配）
-  if (loadSettings().agent?.subAgent === true) {
+  // #317.6b 三层判定：总闸开 且 实例覆盖≠false 且（覆盖=true 或 auto 按部署形态判定——云端开/本地参数量判定/未知关）
+  const stNow = loadSettings()
+  const mrefNow = stNow.model?.default ?? ''
+  const findInst = () => {
+    if (!mrefNow) return null
+    const p = (stNow.model?.providers ?? []).find((x) => `platform:${x.id}` === mrefNow)
+    if (p) return p as { subAgentOverride?: boolean | 'auto' }
+    const c = (stNow.model?.custom ?? []).find((x) => `custom:${x.id}` === mrefNow)
+    if (c) return c as { subAgentOverride?: boolean | 'auto' }
+    const l = (stNow.model?.local ?? []).find((x) => `local:${x.id}` === mrefNow)
+    return l ? (l as { subAgentOverride?: boolean | 'auto' }) : null
+  }
+  const ovNow = findInst()?.subAgentOverride ?? 'auto'
+  let subAgentAllow = false
+  if (stNow.agent?.subAgent === true && ovNow !== false) {
+    if (ovNow === true) subAgentAllow = true
+    else {
+      const { subAgentVerdict } = await import('../lib/sub-agent-policy')
+      subAgentAllow = subAgentVerdict(mrefNow).allow
+    }
+  }
+  if (subAgentAllow) {
     localTools = {
       ...localTools,
       sub_agent: async (args: Record<string, unknown>) => {

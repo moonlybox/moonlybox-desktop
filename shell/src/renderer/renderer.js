@@ -618,6 +618,11 @@ const I18N_DICT = {
   'xy.thinkOn': { zh: '开', en: 'On' },
   'xy.subAgent': { zh: '小月子任务（实验）', en: 'Xiaoyue subagent (experimental)' },
   'xy.subAgentDesc': { zh: '允许小月在对话中派出独立子任务执行复杂多步研究（子任务过程静默，结论回主对话；写操作仍会向你确认）。默认关闭。', en: 'Let Xiaoyue dispatch isolated subagents for complex multi-step research in chat (silent run, summary returns to main chat; writes still ask you). Off by default.' },
+  'xy.subAgentOk': { zh: '当前模型可支撑子任务。', en: 'Current model supports subagents.' },
+  'xy.subOvAuto': { zh: '子任务:自动', en: 'Subagent: auto' },
+  'xy.subOvOn': { zh: '子任务:开', en: 'Subagent: on' },
+  'xy.subOvOff': { zh: '子任务:关', en: 'Subagent: off' },
+  'xy.subAgentOff': { zh: '子任务未开启或当前模型不建议开启。', en: 'Subagent is off or not recommended for the current model.' },
   'xy.thinkOff': { zh: '关', en: 'Off' },
   'lg.openAuth': { zh: '打开授权页', en: 'Open Auth Page' },
   'ue.keyKept': { zh: 'API Key（只存钥匙串）', en: 'API Key (keychain only)' },
@@ -1527,6 +1532,7 @@ async function renderWork(nav, arg, label2) {
           <input type="range" id="sp-ct" min="50" max="100" step="5" value="${cv.compressThreshold ?? 80}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
         <div class="set-card"><div class="sc-main"><div class="sc-title">${t('xy.subAgent')}</div><div class="sc-desc">${t('xy.subAgentDesc')}</div></div>
           <button type="button" class="toggle ${(g.agent?.subAgent ?? false) ? 'on' : ''}" id="sp-subagent"></button></div>
+        <div class="set-desc" id="sp-subagent-hint" style="margin:-6px 0 10px;min-height:16px"></div>
         <div class="set-field"><label>${t('chat.cgLabel')}<span id="sp-cg-v">${cv.compressTarget ?? 20}%</span></label>
           <input type="range" id="sp-cg" min="10" max="30" step="5" value="${cv.compressTarget ?? 20}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
         <div class="set-field"><label>${t('chat.retryLabel')}</label>
@@ -1561,8 +1567,23 @@ async function renderWork(nav, arg, label2) {
         }, agent: { subAgent: $('sp-subagent').classList.contains('on') } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? t('ui.saved') + t('ui.appliesInstant') : (r.error ?? t('ui.saveFail'))
+        void refreshSubAgentHint()
       }
       for (const id of ['sp-ctx', 'sp-compress', 'sp-ct', 'sp-cg', 'sp-retry', 'sp-subagent']) $(id).onchange = saveChat
+      // #317.6b：子任务准入提示（当前默认模型判定；总闸关=显示总闸提示）
+      const refreshSubAgentHint = async () => {
+        const el = $('sp-subagent-hint'); if (!el) return
+        try {
+          const r = await window.moonlybox.rpc('settings', { op: 'subAgentVerdict' }, 10_000)
+          if (r.event === 'done' && r.code === 0) {
+            const v = JSON.parse(r.text)
+            const on = $('sp-subagent').classList.contains('on')
+            el.textContent = on ? (v.hint || t('xy.subAgentOk')) : (v.hint || t('xy.subAgentOff'))
+            el.style.color = (v.allow && on) || (!v.allow && !on) ? '' : 'var(--warn, #c80)'
+          }
+        } catch { el.textContent = '' }
+      }
+      refreshSubAgentHint()
     } else if (cat.id === 'library') {
       // #316.7：gset 先取（模板内 modelPickerOpts 求值需要）
       const gset = await loadAppSettings()
@@ -1718,8 +1739,18 @@ async function renderWork(nav, arg, label2) {
             <div style="display:flex;align-items:center;gap:8px">
               ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">${t('mp.setDefault')}</button>`}
               <button type="button" class="btn ghost" data-act="del" style="padding:2px 8px;font-size:11px">${t('mp.del')}</button>
+              <select class="set-select set-select-sm" data-act="subov" title="${t('xy.subAgent')}" style="padding:2px 6px;font-size:11px;width:auto">
+                <option value="auto" ${inst.subAgentOverride == null || inst.subAgentOverride === 'auto' ? 'selected' : ''}>${t('xy.subOvAuto')}</option>
+                <option value="on" ${inst.subAgentOverride === true ? 'selected' : ''}>${t('xy.subOvOn')}</option>
+                <option value="off" ${inst.subAgentOverride === false ? 'selected' : ''}>${t('xy.subOvOff')}</option>
+              </select>
               <button type="button" class="toggle ${inst.enabled ? 'on' : ''}" data-act="toggle"></button>
             </div>`
+          card.querySelector('[data-act=subov]').onchange = async (e) => {
+            const v = e.currentTarget.value === 'on' ? true : e.currentTarget.value === 'off' ? false : 'auto'
+            const arr = insts.map((x) => (x.id === inst.id ? { ...x, subAgentOverride: v } : x))
+            await saveAppSettings({ model: { providers: arr } })
+          }
           const defBtnP = card.querySelector('[data-act=default]')
           if (defBtnP) defBtnP.onclick = async () => {
             await saveAppSettings({ model: { default: `platform:${inst.id}` } })
@@ -1902,11 +1933,28 @@ async function renderWork(nav, arg, label2) {
             <div id="sp-ol-list" style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
               ${models.map((mm2) => {
                 const added = addedNames.includes(mm2.name)
-                return `<label style="display:flex;align-items:center;gap:8px;font-size:13px${added ? ';opacity:.65' : ''}"><input type="checkbox" data-olmodel="${esc(mm2.name)}" ${added ? 'disabled checked' : ''}> <span>${esc(mm2.name)} · ${(mm2.size / 1073741824).toFixed(1)} GB${added ? ` · <span style="color:var(--ok,#16a34a)">${t('ol.addedTag')}</span>` : ''}</span></label>`
+                const instL = added ? (APP_SETTINGS?.model?.local ?? []).find((x) => x.model === mm2.name) : null
+                const ovSel = (v) => `<select class="set-select set-select-sm" data-olsubov="${esc(mm2.name)}" title="${t('xy.subAgent')}" style="padding:2px 6px;font-size:11px;width:auto;margin-left:6px">
+                  <option value="auto" ${!v || v === 'auto' ? 'selected' : ''}>${t('xy.subOvAuto')}</option>
+                  <option value="on" ${v === true ? 'selected' : ''}>${t('xy.subOvOn')}</option>
+                  <option value="off" ${v === false ? 'selected' : ''}>${t('xy.subOvOff')}</option>
+                </select>`
+                return `<label style="display:flex;align-items:center;gap:8px;font-size:13px${added ? ';opacity:.65' : ''}"><input type="checkbox" data-olmodel="${esc(mm2.name)}" ${added ? 'disabled checked' : ''}> <span>${esc(mm2.name)} · ${(mm2.size / 1073741824).toFixed(1)} GB${added ? ` · <span style="color:var(--ok,#16a34a)">${t('ol.addedTag')}</span>` : ''}</span>${added ? ovSel(instL?.subAgentOverride) : ''}</label>`
               }).join('')}
             </div>
             <button type="button" class="btn ghost" id="sp-ol-add" style="margin-top:10px">${t('ol.addPicked')}</button>
             <div class="set-status" id="sp-ol-status" style="margin-top:6px"></div></div>`
+          // #317.6b：本地实例子任务覆盖三态
+          mbox.querySelectorAll('select[data-olsubov]').forEach((sel) => {
+            sel.onchange = async (e) => {
+              e.stopPropagation()
+              const name = e.currentTarget.dataset.olsubov
+              const v = e.currentTarget.value === 'on' ? true : e.currentTarget.value === 'off' ? false : 'auto'
+              const g2 = await loadAppSettings()
+              const arr2 = (g2.model?.local ?? []).map((x) => (x.model === name ? { ...x, subAgentOverride: v } : x))
+              await saveAppSettings({ model: { local: arr2 } })
+            }
+          })
           $('sp-ol-add').onclick = async () => {
             const picked = [...mbox.querySelectorAll('input[data-olmodel]:checked')].map((el) => el.dataset.olmodel)
             const st = $('sp-ol-status')
@@ -1957,9 +2005,19 @@ async function renderWork(nav, arg, label2) {
             <div class="sc-desc">${inst.model} · ${inst.baseUrl}</div></div>
             <div style="display:flex;align-items:center;gap:8px">
               ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">${t('mp.setDefault')}</button>`}
+              <select class="set-select set-select-sm" data-act="subov" title="${t('xy.subAgent')}" style="padding:2px 6px;font-size:11px;width:auto">
+                <option value="auto" ${inst.subAgentOverride == null || inst.subAgentOverride === 'auto' ? 'selected' : ''}>${t('xy.subOvAuto')}</option>
+                <option value="on" ${inst.subAgentOverride === true ? 'selected' : ''}>${t('xy.subOvOn')}</option>
+                <option value="off" ${inst.subAgentOverride === false ? 'selected' : ''}>${t('xy.subOvOff')}</option>
+              </select>
               <button type="button" class="toggle ${inst.enabled ? 'on' : ''}" data-act="toggle"></button>
               <span data-act="del" style="color:var(--muted);cursor:pointer;padding:0 4px">×</span>
             </div>`
+          card.querySelector('[data-act=subov]').onchange = async (e) => {
+            const v = e.currentTarget.value === 'on' ? true : e.currentTarget.value === 'off' ? false : 'auto'
+            const arr = insts.map((x) => (x.id === inst.id ? { ...x, subAgentOverride: v } : x))
+            await saveAppSettings({ model: { custom: arr } })
+          }
           // #283.1：默认实例无「设为默认」按钮——querySelector 判空再绑（null.onclick 报错源）
           const defBtn = card.querySelector('[data-act=default]')
           if (defBtn) defBtn.onclick = async () => {

@@ -43,11 +43,11 @@ export interface SettingsSchema {
     /** #316 第二批：编译产物回传云端（§5.16.4 C 方案）——本地先行落书房，回传落云端待准入；失败不阻断本地（#284 syncToMoon 同构）。默认开 */
     syncToMoon?: boolean
     /** 平台 API 多服务商实例（每个可单独配置 key/启停；key 走钥匙串 account=llm:<id>） */
-    providers: Array<{ id: string; providerId: string; enabled: boolean; model: string; baseUrl?: string }>
+    providers: Array<{ id: string; providerId: string; enabled: boolean; model: string; baseUrl?: string; /** #317.6b 子任务覆盖：true=强制开/false=强制关/缺省='auto'=按部署形态判定（云端开/本地关/未知关） */ subAgentOverride?: boolean | 'auto' }>
     /** 自定义多模型（OpenAI 兼容端点；本地推理 key 可空） */
-    custom: Array<{ id: string; name: string; baseUrl: string; model: string; enabled: boolean }>
+    custom: Array<{ id: string; name: string; baseUrl: string; model: string; enabled: boolean; subAgentOverride?: boolean | 'auto' }>
     /** 本地部署（#310.11 实装，结构同 custom；本地接入写此数组） */
-    local: Array<{ id: string; name: string; model: string; enabled: boolean; baseUrl?: string }> // #310.11：本地端点（默认 Ollama /v1）
+    local: Array<{ id: string; name: string; model: string; enabled: boolean; baseUrl?: string; subAgentOverride?: boolean | 'auto' }> // #310.11：本地端点（默认 Ollama /v1）
     /** 遗留字段（<=#282 单模型形态），迁移后零消费 */
     provider?: string
     /** 遗留字段（<=#282），迁移后零消费 */
