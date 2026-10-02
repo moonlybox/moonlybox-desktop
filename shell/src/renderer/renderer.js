@@ -883,21 +883,31 @@ try { applyRailLangTips() } catch {} // 顶层执行（NAVS/t 已定义；APP_SE
 })();  // 下行若接 IIFE/字面量须分号（ASI 纪律）
 
 function renderFrameTabs() {
+  // #317.MDI（用户定案修正）：两页帧——「默认页帧」=所有非小月功能共用（文字随当前聚焦功能+上下文更新）；
+  // 「小月页帧」=独立持久容器（访问过小月后出现）。左侧 rail 已有高亮，页帧不再按功能多开。
   const box = $('frame-tabs')
   box.innerHTML = ''
-  for (const nav of openFrames) {
+  const mk = (nav, label, active, onclick) => {
     const b = document.createElement('button')
-    b.className = 'frame-tab' + (nav === currentNav ? ' active' : '')
-    const ctx = FRAME_CTX[nav]
-    b.innerHTML = `${navIconSvg(nav, 13)}<span style="vertical-align:middle;margin-left:5px">${t(NAVS[nav].label)}${ctx ? `<span style="opacity:.65;font-weight:400"> · ${ctx}</span>` : ''}</span>`
-    b.onclick = () => switchNav(nav)
+    b.className = 'frame-tab' + (active ? ' active' : '')
+    b.innerHTML = `${navIconSvg(nav, 13)}<span style="vertical-align:middle;margin-left:5px">${label}</span>`
+    b.onclick = onclick
     box.appendChild(b)
+  }
+  const defNav = currentNav === 'xiaoyue' ? (switchNav._lastDef ?? 'vault') : currentNav
+  if (currentNav !== 'xiaoyue') switchNav._lastDef = currentNav
+  const cur = FRAME_CTX[defNav]
+  const defLabel = `${t(NAVS[defNav]?.label ?? 'nav.vault')}${cur ? `<span style="opacity:.65;font-weight:400"> · ${cur}</span>` : ''}`
+  mk(defNav, defLabel, currentNav !== 'xiaoyue', () => switchNav(defNav))
+  if (openFrames.has('xiaoyue')) {
+    const ctx = FRAME_CTX['xiaoyue']
+    mk('xiaoyue', `小月${ctx ? `<span style="opacity:.65;font-weight:400"> · ${ctx}</span>` : ''}`, currentNav === 'xiaoyue', () => switchNav('xiaoyue'))
   }
 }
 
 function switchNav(nav) {
   currentNav = nav
-  openFrames.add(nav)
+  if (nav === 'xiaoyue') openFrames.add('xiaoyue') // #317.MDI：仅标记「小月页帧已开」（出现独立页帧）
   document.querySelectorAll('.rail-btn[data-nav]').forEach((el) => el.classList.toggle('active', el.dataset.nav === nav))
   renderFrameTabs()
   renderList(nav)
@@ -1369,18 +1379,18 @@ async function renderXiaoyuePane(arg) {
     }
     // #283.4：标签带工作空间名——用户能一眼确认当前对话是否真的挂在工作空间下（fs 工具只在此时装配）
     let wsName = ''
-    if (meta?.workspaceId) {
+    if (xyPaneMeta?.workspaceId) {
       try {
         const rw = await window.moonlybox.rpc('workspace', { op: 'list' }, 10_000)
-        wsName = (JSON.parse(rw.text).workspaces ?? []).find((x) => x.id === meta.workspaceId)?.name ?? ''
+        wsName = (JSON.parse(rw.text).workspaces ?? []).find((x) => x.id === xyPaneMeta.workspaceId)?.name ?? ''
       } catch {}
     }
-    const wsLabel = meta ? (meta.workspaceId ? `📁 工作空间${wsName ? `「${wsName}」` : ''}对话（可读写挂载目录）` : '💬 无工作空间（无本地文件访问，仅文档库/MCP）') : ''
+    const wsLabel = xyPaneMeta ? (xyPaneMeta.workspaceId ? `📁 工作空间${wsName ? `「${wsName}」` : ''}对话（可读写挂载目录）` : '💬 无工作空间（无本地文件访问，仅文档库/MCP）') : ''
     w.innerHTML = `
-      ${xyPaneMeta ? `<div class="muted" style="padding:8px 16px 0;font-size:12px">${meta.title} · ${wsLabel}</div>` : ''}
+      ${xyPaneMeta ? `<div class="muted" style="padding:8px 16px 0;font-size:12px">${xyPaneMeta.title} · ${wsLabel}</div>` : ''}
       <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:16px;white-space:pre-wrap;user-select:text"></div>
       <div style="padding:8px 16px 12px;border-top:1px solid var(--border)">
-        <textarea id="q" rows="1" placeholder="${xyPaneMeta ? (meta.workspaceId ? t('xy.qPlaceholder') : t('xy.docOnly')) : t('xy.pickFirst')}" style="display:block;width:100%;resize:none;box-sizing:border-box;line-height:1.5;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg,#0f172a);color:var(--fg,#e2e8f0);font:inherit;max-height:160px;overflow-y:auto" ${xyPaneMeta ? '' : 'disabled'}></textarea>
+        <textarea id="q" rows="1" placeholder="${xyPaneMeta ? (xyPaneMeta.workspaceId ? t('xy.qPlaceholder') : t('xy.docOnly')) : t('xy.pickFirst')}" style="display:block;width:100%;resize:none;box-sizing:border-box;line-height:1.5;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg,#0f172a);color:var(--fg,#e2e8f0);font:inherit;max-height:160px;overflow-y:auto" ${xyPaneMeta ? '' : 'disabled'}></textarea>
         <div class="row" style="margin-top:6px;align-items:center;gap:8px">
           <button class="btn ghost" id="xy-model-btn" style="font-size:12px" ${xyPaneMeta ? '' : 'disabled'}>⚙ <span id="xy-model-label"></span></button>
           <button class="btn ghost" id="xy-think-btn" style="font-size:12px" ${xyPaneMeta ? '' : 'disabled'}>🧠 <span id="xy-think-label"></span></button>
@@ -1420,6 +1430,8 @@ async function renderWork(nav, arg, label2) {
     return renderXiaoyuePane(arg)
   }
   const w = defPane
+  // #317.MDI：无选中对象（列表态）→ 清上下文（各分支选中后再覆盖）
+  if (!arg) setFrameTabCtx(nav, '')
   if (nav === 'vault' && arg && !arg.dir) {
     // 文件工作台：阅读（默认，md 渲染+mermaid 出图）⇄ 编辑 双态切换（#253.49 用户：预览为默认，不固定分栏）
     const r = await window.moonlybox.fsRead(arg.rel)
