@@ -11,6 +11,8 @@ import * as path from 'node:path'
 export interface SkillMeta {
   name: string
   description: string
+  /** #317.⑤b：'auto'=小月自沉淀写入；undefined=用户手工技能（自沉淀 patch 不可改写） */
+  source?: string
   dir: string
   /** SKILL.md 全文（view 用，装配时只消费 name/description） */
   size: number
@@ -22,15 +24,17 @@ function skillsRoot(vaultRoot: string): string {
 }
 
 /** 解析 SKILL.md frontmatter（极简 YAML：仅 name/description 两键，够用不引依赖） */
-export function parseFrontmatter(raw: string): { name: string; description: string } {
+export function parseFrontmatter(raw: string): { name: string; description: string; source?: string } {
   const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw)
   if (!m) return { name: '', description: '' }
-  const out = { name: '', description: '' }
+  const out = { name: '', description: '', source: undefined as string | undefined }
   for (const line of m[1].split(/\r?\n/)) {
     const kv = /^(\w+)\s*:\s*(.+)$/.exec(line.trim())
     if (!kv) continue
     if (kv[1] === 'name') out.name = kv[2].trim().replace(/^["']|["']$/g, '')
     if (kv[1] === 'description') out.description = kv[2].trim().replace(/^["']|["']$/g, '')
+    // #317.⑤b：source: auto=小月自沉淀写入——无此标记=用户手工技能（自沉淀 patch 不可改写）
+    if (kv[1] === 'source') out.source = kv[2].trim().replace(/^["']|["']$/g, '')
   }
   return out
 }
@@ -65,6 +69,7 @@ export function listSkills(vaultRoot: string): SkillMeta[] {
     out.push({
       name: fm.name || ent.name,
       description: fm.description,
+      source: fm.source,
       dir,
       size: Buffer.byteLength(raw),
       files,
@@ -185,12 +190,16 @@ export function skillAutoWrite(
   if (!name || !body) return { ok: false, action: 'skipped', name, reason: '名称或正文为空' }
   const root = skillsRoot(vaultRoot)
   const existing = listSkills(vaultRoot)
-  // 同名 → 更新
-  const same = existing.find((s) => s.name === name)
+  // #317.⑤b：手工技能（无 source: auto）不可被自沉淀改写——同名/相似命中一律视为「不存在」，走新建/跳过
+  const autos = existing.filter((s) => s.source === 'auto')
+  // 同名 → 更新（仅限 auto 技能）
+  const same = autos.find((s) => s.name === name)
   if (same) return writeSkillDir(vaultRoot, name, desc, body, 'updated')
-  // 相似 → 更新最相近
+  // 同名但对象是手工技能 → 拒绝改写（目录冲突不可新建，skip）
+  if (existing.some((s) => s.name === name)) return { ok: false, action: 'skipped', name, reason: '同名用户手工技能不可自动改写' }
+  // 相似 → 更新最相近（仅限 auto 技能；用户手工技能防改写）
   let best: { skill: SkillMeta; score: number } | null = null
-  for (const s of existing) {
+  for (const s of autos) {
     const score = textOverlap(desc, s.description)
     if (score >= 0.6 && (!best || score > best.score)) best = { skill: s, score }
   }
@@ -204,7 +213,7 @@ export function skillAutoWrite(
 function writeSkillDir(vaultRoot: string, name: string, desc: string, body: string, action: 'created' | 'updated'): SkillWriteResult {
   const dir = path.join(skillsRoot(vaultRoot), name)
   fs.mkdirSync(dir, { recursive: true })
-  const fm = `---\nname: ${name}\ndescription: ${desc.replace(/\n/g, ' ')}\n---\n\n`
+  const fm = `---\nname: ${name}\ndescription: ${desc.replace(/\n/g, ' ')}\nsource: auto\n---\n\n`
   fs.writeFileSync(path.join(dir, 'SKILL.md'), fm + body + '\n', 'utf8')
   return { ok: true, action, name }
 }
