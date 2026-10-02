@@ -1832,7 +1832,8 @@ async function renderWork(nav, arg, label2) {
         <div id="sp-ol-models"></div>
       `)
       // #317.F16/P1：硬件画像+模型名单卡（fit 分级）——主体是「模型本身」，Ollama 降权为状态条
-      ;(async () => {
+      // #317.F16/P3j：抽具名函数——Ollama「启动」成功后需重拉名单（模型卡「未安装/未运行」stale 问题）
+      const renderCatalog = async () => {
         const profBox = $('sp-lm-profile'); const catBox = $('sp-lm-catalog')
         if (!profBox || !catBox) return
         let lm = null
@@ -1953,7 +1954,8 @@ async function renderWork(nav, arg, label2) {
           await saveAppSettings({ model: { local: arr } })
           renderWork('settings')
         } })
-      })()
+      }
+      renderCatalog()
       {
         const box = $('sp-ol-state')
         const renderState = async () => {
@@ -1984,6 +1986,7 @@ async function renderWork(nav, arg, label2) {
                 // #317.F15b：启动即按内存配好上下文（≥14G→32768/≥7G→16384/≥3.5G→8192）——安装全程无需用户手配
                 if (r.contextLength) { b.textContent = `${t('ol.startBtn')} ✓（上下文 ${r.contextLength}）` } 
                 await renderState()
+                renderCatalog() // #317.F16/P3j：名单卡当时渲染的 ollamaState=not running（模型卡「未运行/未安装」stale）——启动成功后整卡重拉
               } else { b.disabled = false; b.textContent = t('ol.startRetry'); }
             }
           } else {
