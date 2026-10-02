@@ -1822,9 +1822,49 @@ async function renderWork(nav, arg, label2) {
     } else if (cat.id === 'model' && currentSetSub === 'local') {
       // #310.11：本地部署四态探测（公用不私用：检测已有 Ollama 直接复用，不重复安装；失效给修复入口）
       panel(t('panel.model.local'), t('panel.sub.model.local'), `
-        <div id="sp-ol-state" class="set-card"><div class="sc-main"><div class="sc-title">${t('ol.detecting')}</div><div class="sc-desc">${t('ol.detectDesc')}</div></div></div>
+        <div id="sp-lm-profile"></div>
+        <div id="sp-lm-catalog" style="margin-top:10px"></div>
+        <div id="sp-ol-state" class="set-card" style="margin-top:10px"><div class="sc-main"><div class="sc-title">${t('ol.detecting')}</div><div class="sc-desc">${t('ol.detectDesc')}</div></div></div>
         <div id="sp-ol-models"></div>
       `)
+      // #317.F16/P1：硬件画像+模型名单卡（fit 分级）——主体是「模型本身」，Ollama 降权为状态条
+      ;(async () => {
+        const profBox = $('sp-lm-profile'); const catBox = $('sp-lm-catalog')
+        if (!profBox || !catBox) return
+        let lm = null
+        try { lm = await window.moonlybox.rpc('localModels', {}, 10000) } catch {}
+        if (!lm || !lm.ok) { profBox.innerHTML = ''; catBox.innerHTML = ''; return }
+        const hw = lm.hw
+        const FIT_BADGE = {
+          recommended: { txt: '推荐', color: 'var(--ok,#22c55e)' },
+          ok: { txt: '可用', color: 'var(--muted)' },
+          warn: { txt: '勉强', color: 'var(--warn,#f59e0b)' },
+          blocked: { txt: '不建议', color: 'var(--err,#ef4444)' },
+        }
+        profBox.innerHTML = `<div style="border:1px solid var(--border);border-radius:10px;padding:11px 16px;background:var(--bg2);font-size:12.5px;display:flex;gap:14px;flex-wrap:wrap;color:var(--muted)">
+          <span>💾 内存 <b style="color:var(--fg)">${hw.memTotalGB.toFixed(0)}GB</b>（可用 ${hw.memFreeGB.toFixed(0)}GB）</span>
+          ${hw.gpuName ? `<span>🖥 GPU ${esc(hw.gpuName)}</span>` : '<span>🖥 无独显信息（按内存评估）</span>'}
+          ${hw.diskFreeGB != null ? `<span>📀 磁盘余量 <b style="color:var(--fg)">${hw.diskFreeGB.toFixed(0)}GB</b></span>` : ''}
+          <span>⚙ Ollama ${lm.ollamaState === 'running' ? '运行中' : '未运行'}</span>
+        </div>`
+        catBox.innerHTML = lm.models.map((m) => {
+          const b = FIT_BADGE[m.fit] || FIT_BADGE.ok
+          const stateTxt = m.installed ? (lm.ollamaState === 'running' ? '✅ 就绪' : '已安装（Ollama 未运行）') : '未安装'
+          return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px 16px;background:var(--bg2)">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <b style="font-size:13.5px">${esc(m.title)}</b>
+              <span style="font-size:11px;padding:1px 8px;border-radius:99px;border:1px solid ${b.color};color:${b.color}">${b.txt}</span>
+              <span style="font-size:11px;color:var(--muted)">${stateTxt}</span>
+              <span style="flex:1"></span>
+              <span style="font-size:11px;color:var(--muted)">${m.sizeGB.toFixed(1)}GB · 上下文 ${m.ctxSuggest}</span>
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5">${esc(m.tagline)}</div>
+            ${m.fitReason ? `<div style="font-size:11.5px;color:${b.color};margin-top:4px">${esc(m.fitReason)}</div>` : ''}
+            ${m.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:3px;opacity:.85">ℹ ${esc(m.notes)}</div>` : ''}
+            ${m.caps && m.caps.length ? `<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${m.caps.map((c) => `<span style="font-size:10.5px;padding:1px 7px;border-radius:5px;background:var(--bg3,#1e293b);color:var(--muted)">${c === 'tools' ? '工具调用' : c === 'thinking' ? '思考' : c === 'embed' ? '嵌入检索' : c}</span>`).join('')}</div>` : ''}
+          </div>`
+        }).join('<div style="height:8px"></div>')
+      })()
       {
         const box = $('sp-ol-state')
         const renderState = async () => {

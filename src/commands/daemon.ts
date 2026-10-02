@@ -743,6 +743,46 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
       }
       break
     }
+    case 'localModels': {
+      // #317.F16/P1：本地模型库——名单×硬件画像×fit 分级×已装态（/api/tags）×settings 关联，一次拉全
+      try {
+        const { LOCAL_MODEL_CATALOG, hardwareProfile, fitFor } = require('../lib/local-models') as typeof import('../lib/local-models')
+        const { loadSettings } = require('../lib/settings') as typeof import('../lib/settings')
+        const hw = await hardwareProfile()
+        // 已装态：Ollama /api/tags（运行中才有；未运行=空+ollamaState 提示）
+        let installed: Record<string, number> = {}
+        let ollamaState = 'stopped'
+        try {
+          const r = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(1500) }).then((x) => x.json())
+          for (const m of r?.models ?? []) installed[m.name] = (m.size ?? 0) / 2 ** 30
+          ollamaState = 'running'
+        } catch { /* 未运行 */ }
+        const s = loadSettings()
+        const localInstances = s.model?.local ?? []
+        const models = LOCAL_MODEL_CATALOG.map((spec) => {
+          const instSize = installed[spec.id]
+          const fit = fitFor(spec, hw, instSize)
+          const inst = localInstances.find((x: { model?: string }) => x.model === spec.id)
+          return {
+            ...spec,
+            installed: instSize != null,
+            installedSizeGB: instSize ?? null,
+            fit: fit.level,
+            fitReason: fit.reason ?? null,
+            ctxSuggest: fit.ctxSuggest,
+            configured: !!inst,
+            enabled: !!inst?.enabled,
+            instanceId: inst?.id ?? null,
+          }
+        })
+        code = 0
+        text = JSON.stringify({ ok: true, hw, ollamaState, models })
+      } catch (e: any) {
+        code = 1
+        text = String(e?.message ?? e)
+      }
+      break
+    }
     case 'diagram': {
       // 图示（#252 §8）：list|save|activate|get——壳工作台 ↔ 服务端图示 API（草稿两级制）
       try {
