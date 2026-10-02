@@ -577,13 +577,15 @@ app.whenReady().then(() => {
         const child = require('child_process').spawn(cli, ['serve'], { detached: true, stdio: ['ignore', out, out], env: serveEnv })
         child.unref()
       }
-      // 等 HTTP 就绪（最多 8s）
+      // 等 HTTP 就绪（最多 8s）——记录探测历程，失败时给用户可行动的线索而非空白
+      const probeLog = []
       for (let i = 0; i < 16; i++) {
         await new Promise((r) => setTimeout(r, 500))
-        const v = await probeOllamaHttp().catch(() => null)
+        const v = await probeOllamaHttp().catch((e) => ({ err: String(e && e.message ? e.message : e).slice(0, 60) }))
         if (v && v.version) return { ok: true, version: v.version, contextLength: ctxLen ?? null }
+        if (i % 4 === 0) probeLog.push(v && v.err ? `#${i}:${v.err}` : `#${i}:无响应`)
       }
-      // 失败：带日志尾部（用户能立刻看到「address already in use」/「invalid context length」等真因）
+      // 日志尾（Win=Ollama 自身 server.log；Unix=自落日志）低位读，不整读大文件
       let tail = ''
       try {
         const st = fs.statSync(logFile)
@@ -593,7 +595,8 @@ app.whenReady().then(() => {
         fs.closeSync(fd)
         tail = buf.toString('utf-8')
       } catch {}
-      return { ok: false, error: `启动超时（服务未响应）${tail ? '——日志：' + tail.replace(/\s+/g, ' ').slice(-260) : ''}` }
+      const cmdHint = isWin ? `手动复现（PowerShell）："${cli}" serve` : `手动复现：${cli} serve`
+      return { ok: false, error: `启动超时（${probeLog.join(' ')}）${tail ? '——日志：' + tail.replace(/\s+/g, ' ').slice(-200) : ''}。${cmdHint}` }
     } catch (e) {
       return { ok: false, error: String(e && e.message ? e.message : e) }
     }
