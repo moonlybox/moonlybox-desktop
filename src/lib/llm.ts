@@ -179,9 +179,10 @@ export async function byokChatMessages(
         temperature: 0.3,
         // #310.36：思考型模型关思考（编译/分析类任务无需 reasoning；思考吃满 max_tokens=空正文主因）
         // 按端点家族注入（严格校验端点对未知字段 400，不能全量注入）：
-        // - Ollama 本地：think:false
+        // - Ollama 本地 /v1：reasoning_effort:'none'——#317.F9：/v1 不认原生 think 字段（静默忽略→思考照开→空内容循环），
+        //   关思考唯一姿势是 OpenAI 标准 reasoning_effort（ollama#14820/#14821）；on 档注入 'low' 而非不注入（/v1 无字段=自动开思考）
         // - 智谱 GLM（glm-4.5+ 默认开思考）：thinking:{type:'disabled'}
-        ...(isLocalEndpoint(meta.baseUrl) && /:11434|\/ollama/i.test(meta.baseUrl) ? { think: thinkingMode === 'on' } : {}),
+        ...(isLocalEndpoint(meta.baseUrl) && /:11434|\/ollama/i.test(meta.baseUrl) ? { reasoning_effort: thinkingMode === 'on' ? 'low' : 'none' } : {}),
         ...(thinkingMode !== 'on' && /bigmodel\.cn|\/glm/i.test(meta.baseUrl) ? { thinking: { type: 'disabled' } } : {}),
       }),
       signal: AbortSignal.timeout(effectiveTimeout),
