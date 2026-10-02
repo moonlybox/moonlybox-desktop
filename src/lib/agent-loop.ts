@@ -133,8 +133,28 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   }))
   say(`（已接入工具 ${tools.length} 个${builtinNames.size ? `，含内置 ${builtinNames.size} 个` : ''}）`)
 
+  // #317.9：工具感知引导（Hermes 同款 tool-aware）——按**实际装配**的工具生成能力清单追加为第二条 system。
+  // 根治：xiaoyue.ts 旧 system 硬编码工具清单（漏 list_todos 等）误导小模型「没有列出待办的功能」。
+  // 分类规则：名称语义分桶（列出/查询类显式点名——小模型最易漏）；无工具则不注入（零幻觉引导）。
+  const has = (n: string) => tools.some((t) => t.name === n)
+  const caps: string[] = []
+  const pick = (...names: string[]) => names.filter(has).join('/')
+  if (has('add_todo') || has('list_todos')) caps.push(`待办：记待办 ${pick('add_todo')}、查待办 ${pick('list_todos')}（含按状态过滤）、完成/改/删 ${pick('complete_todo', 'update_todo', 'delete_todo')}、转便签 ${pick('convert_todo_to_sticky')}`)
+  if (has('add_sticky') || has('list_stickies')) caps.push(`便签：记便签 ${pick('add_sticky')}、看便签 ${pick('list_stickies')}、改/删 ${pick('update_sticky', 'delete_sticky')}`)
+  if (has('add_bookmark')) caps.push(`收藏：收藏网页 ${pick('add_bookmark')}、查收藏 ${pick('search_bookmarks')}、整理 ${pick('organize_bookmarks', 'update_bookmark')}`)
+  if (has('add_memory') || has('search_memory')) caps.push(`记忆：存 ${pick('add_memory')}、查 ${pick('search_memory')}`)
+  if (has('search_library')) caps.push(`书房：查文档 ${pick('search_library')}、看索引 ${pick('list_library_index')}、主题 ${pick('search_topics')}`)
+  if (has('web_search')) caps.push(`联网：搜索 web_search、读网页 ${pick('fetch_url')}`)
+  if (has('local_task_create_compile')) caps.push(`知识整理：local_task_list_uncompiled 扫描→确认→local_task_create_compile 后台任务；进度 local_task_status`)
+  if (has('skill_list')) caps.push(`技能：skill_list 列出、skill_view 读全文`)
+  const customN = tools.filter((t) => t.name.startsWith('mcp_') || t.name.includes('__')).map((t) => t.name)
+  if (customN.length) caps.push(`自定义 MCP：${customN.slice(0, 8).join('、')}${customN.length > 8 ? ' 等' : ''}`)
+  const toolGuide = caps.length
+    ? `\n【当前可用工具】\n${caps.map((c) => '- ' + c).join('\n')}\n用户问题只要可能由上述某工具回答（尤其是「列出/查看/有多少/我的…」类查询），先调工具再回答；不确定就选最接近的一个试，不要凭空说「没有该功能」。`
+    : ''
+
   const messages: import('../lib/llm').ChatMessage[] = [
-    { role: 'system', content: system },
+    { role: 'system', content: system + toolGuide },
     { role: 'user', content: question },
   ]
   const used: Array<{ name: string; ok: boolean }> = []
