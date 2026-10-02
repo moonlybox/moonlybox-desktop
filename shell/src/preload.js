@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld('moonlybox', {
   // #310.7：调试日志镜像/日志目录打开/环境信息/自动更新开关
   debugLog: (line) => ipcRenderer.invoke('shell:debugLog', line),
   openLogDir: () => ipcRenderer.invoke('shell:openLogDir'),
+  // #317.MDI/M2：系统通知（后台任务完成提醒）
+  notify: (title, body) => ipcRenderer.invoke('shell:notify', { title, body }),
   envInfo: () => ipcRenderer.invoke('shell:envInfo'),
   setAutoUpdate: (on) => ipcRenderer.invoke('shell:setAutoUpdate', on),
 })

@@ -68,6 +68,10 @@ const NAVS = {
 let currentNav = null
 // #317.MDI：小月持久面板当前会话（模块级——切功能页不销毁）
 let xyPaneMeta = null
+// #317.MDI/M2：后台完成未读集合（会话 id）——打开该对话即清除
+const xyUnread = new Set()
+// #317.MDI/M2：执行中会话集合（askWith 生命周期）
+const xyRunning = new Set()
 function xyActiveChatTitle() {
   return xyPaneMeta?.title ?? ''
 }
@@ -3706,13 +3710,16 @@ async function renderXiaoyueList() {
     await renderWork('xiaoyue', { chat: id })
   }
   const chatItem = (c, wsId) => {
+    // #317.MDI/M2：未读徽标（后台完成未查看）
+    const unread = xyUnread.has(c.id)
+    const running = xyRunning.has(c.id)
     const el = document.createElement('div')
     el.className = 'tree-item xy-chat' + (c.id === xyActiveChat ? ' active' : '')
     el.style.paddingLeft = '26px'
     el.dataset.chat = c.id
     // #303：删除收敛进 ⋯ 更多菜单（挂 body+fixed，#301 范式）
-    el.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💬 ${c.title}</span><span data-more="1" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('dg.more')}">⋯</span>`
-    el.onclick = (e) => { if (!e.target.dataset.more) openChat(c.id, wsId) }
+    el.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💬 ${c.title}${running ? ' <span style="color:var(--muted);font-size:10px">⟳ 执行中</span>' : ''}${unread ? ' <span style="background:var(--err,#ef4444);color:#fff;border-radius:99px;font-size:10px;padding:0 6px">NEW</span>' : ''}</span><span data-more="1" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('dg.more')}">⋯</span>`
+    el.onclick = (e) => { if (!e.target.dataset.more) { xyUnread.delete(c.id); openChat(c.id, wsId) } }
     el.querySelector('[data-more]').onclick = (e) => {
       e.stopPropagation()
       const existed = document.querySelector('.xy-menu')
@@ -4118,6 +4125,7 @@ function bindChat(chatInfo) {
     const stopBtn = $('btn-stop')
     if (stopBtn) stopBtn.style.display = ''
     xyAborted = false
+    xyRunning.add(xyPaneMeta?.id ?? '?')
     addMsg('user', q) // #288：用户消息直接走气泡（不再经行分类）
     showThinking()
     // #269：工具（管家模式）归 MCP 分类——mcp.builtinEnabled 总闸；#282 chatId/workspaceId 随请求
@@ -4167,7 +4175,18 @@ function bindChat(chatInfo) {
       logEl().appendChild(errEl)
       scroll()
     }
+    xyRunning.delete(xyPaneMeta?.id ?? '?')
     flushCur()
+    // #317.MDI/M2：后台完成通知——发起时在对话 A，完成时用户已切到别的功能页 → 系统通知+列表徽标
+    if (currentNav !== 'xiaoyue') {
+      const okDone = r.event === 'done' && r.code === 0
+      void window.moonlybox.notify?.(
+        okDone ? '小月已完成回复' : '小月任务结束（出错或超时）',
+        `${(xyPaneMeta?.title ?? '对话').slice(0, 20)}：${q.slice(0, 60)}`
+      )
+      xyUnread.add(xyPaneMeta?.id ?? '?')
+      renderXiaoyueList()
+    }
     // 会话标题随首轮更新（列表刷新）
     if (meta && meta.title === '新对话') renderXiaoyueList()
   }

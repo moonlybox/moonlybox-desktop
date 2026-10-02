@@ -407,6 +407,15 @@ app.whenReady().then(() => {
       fs.appendFileSync(path.join(dir, 'mb-debug.log'), `[${new Date().toISOString()}] ${String(line ?? '')}\n`)
     } catch {}
   })
+  ipcMain.handle('shell:notify', (_e, payload) => {
+    // #317.MDI/M2：后台完成通知——小月 tab 非聚焦时任务完成提醒（点击唤起主窗）
+    try {
+      const n = new Notification({ title: String(payload?.title ?? '魔力宝盒'), body: String(payload?.body ?? '').slice(0, 200), silent: false })
+      n.on('click', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus() } })
+      n.show()
+      return { ok: true }
+    } catch (e) { return { ok: false, error: String(e?.message ?? e) } }
+  })
   ipcMain.handle('shell:openLogDir', async () => {
     try {
       const dir = app.getPath('userData')
