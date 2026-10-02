@@ -108,6 +108,27 @@ export function sanitizeJsonSchema(node: unknown, depth = 0): Record<string, unk
   return out
 }
 
+// ==================== #317.P3：只读工具并发执行 ====================
+
+/**
+ * 并发安全白名单（静态，只收紧不放宽——Hermes _PARALLEL_SAFE_TOOLS 同款纪律）：
+ * 纯只读、无共享可变状态、网络/本地 IO 慢工具（并发放大收益）。写操作/确认类/交互类一律不并发。
+ */
+const PARALLEL_SAFE_TOOLS = new Set([
+  'web_search', 'fetch_url', 'search_library', 'search_bookmarks', 'search_topics',
+  'search_memory', 'list_todos', 'list_stickies', 'list_goals', 'list_library_index',
+  'list_bookmarks', 'list_conflicts', 'skill_list', 'skill_view', 'skill_file',
+  'tool_result_read', 'local_task_status', 'fs_list', 'fs_read', 'doc_read',
+])
+
+/** 单工具是否可进并发桶：静态白名单 且 非确认（写）类 */
+function isParallelSafe(meta: { name: string; annotations?: { destructiveHint?: boolean; readOnlyHint?: boolean } } | undefined, name: string): boolean {
+  if (!PARALLEL_SAFE_TOOLS.has(name)) return false
+  if (!meta) return false
+  if (meta.annotations?.destructiveHint) return false
+  return true
+}
+
 /** Agent 主循环：chat → (tool_calls? → confirm → callTool → 回注 → chat)* → 最终回答 */
 export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   const { system, question, ready, chat, confirm, say } = deps
@@ -183,7 +204,10 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     // assistant(tool_calls) 必须原样回注
     messages.push({ role: 'assistant', content: res.text ?? null, tool_calls: res.toolCalls })
 
-    for (const tc of res.toolCalls) {
+    // #317.P3：分桶并发——连续的「并发安全」工具打包 Promise.all；其余（本地覆写/未知/确认类）保持原序串行。
+    // 输出顺序不变：执行完成后按 tc 原顺序回注 messages/used（tool_call_id 对齐）。
+    type ExecOutcome = { id: string; name: string; content: string; ok: boolean }
+    const execOne = async (tc: { id: string; function: { name: string; arguments?: string } }): Promise<ExecOutcome> => {
       const meta = tools.find((t) => t.name === tc.function.name)
       let args: Record<string, unknown> = {}
       try { args = JSON.parse(tc.function.arguments || '{}') } catch { /* 空/坏参按空对象 */ }
@@ -191,31 +215,20 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
 
       const localFn = deps.localTools?.[tc.function.name]
       if (localFn) {
-        // #278 本地覆写（builtin 记忆=本地文件层）：不经远程 tools/call
-        // #280.3：本地工具执行同样打活动流（原来静默——deepwiki 类自定义 MCP 执行零痕迹，排查盲区）
         say(`⚙ ${tc.function.name} ${argsJson.slice(0, 120)}`)
-        let out: string
-        out = await (async () => {
-          // #317.2：本地工具失败自动重试 1 次（与远程只读工具同语义；写确认类不重试）
-          for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-              if (attempt > 0) say(`  ↻ 重试一次…`)
-              return await localFn(args)
-            } catch (e: any) {
-              if (attempt === 1) return `本地执行失败：${String(e?.message ?? e)}`
-            }
+        let out = '本地执行失败'
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            if (attempt > 0) say(`  ↻ 重试一次…`)
+            out = await localFn(args)
+            break
+          } catch (e: any) {
+            if (attempt === 1) out = `本地执行失败：${String(e?.message ?? e)}`
           }
-          return '本地执行失败'
-        })()
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: injectToolResult(deps.vaultRoot ?? '', tc.function.name, out) })
-        used.push({ name: tc.function.name, ok: !out.startsWith('本地执行失败') })
-        continue
+        }
+        return { id: tc.id, name: tc.function.name, content: injectToolResult(deps.vaultRoot ?? '', tc.function.name, out), ok: !out.startsWith('本地执行失败') }
       }
-      if (!meta) {
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: `未知工具：${tc.function.name}` })
-        used.push({ name: tc.function.name, ok: false })
-        continue
-      }
+      if (!meta) return { id: tc.id, name: tc.function.name, content: `未知工具：${tc.function.name}`, ok: false }
 
       say(`⚙ ${meta.title ?? meta.name} ${argsJson.slice(0, 120)}`)
       if (needsConfirm(meta)) {
@@ -223,16 +236,12 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         const ok = await confirm(meta.name, argsJson)
         if (!ok) {
           say(`  ✗ 已跳过（用户取消）`)
-          messages.push({ role: 'tool', tool_call_id: tc.id, content: '用户取消了该操作' })
-          used.push({ name: meta.name, ok: false })
-          continue
+          return { id: tc.id, name: meta.name, content: '用户取消了该操作', ok: false }
         }
       }
-
       try {
         let lastErr: unknown = null
         let result: Awaited<ReturnType<typeof callTool>> | null = null
-        // #317.2：只读工具失败自动重试 1 次（写操作不重试——失败时执行状态不确定，重试可能双写）
         for (let attempt = 0; attempt < (needsConfirm(meta) ? 1 : 2); attempt++) {
           try {
             if (attempt > 0) say(`  ↻ 重试一次…`)
@@ -243,14 +252,45 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         if (!result) throw lastErr ?? new Error('工具执行失败')
         const text = toolResultText(result)
         say(`  → ${text.slice(0, 160)}`)
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: injectToolResult(deps.vaultRoot ?? '', meta.name, text) })
-        used.push({ name: meta.name, ok: true })
+        return { id: tc.id, name: meta.name, content: injectToolResult(deps.vaultRoot ?? '', meta.name, text), ok: true }
       } catch (e) {
         const err = String((e as Error).message ?? e)
         say(`  → 失败：${err.slice(0, 120)}`)
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: `工具执行失败：${err}` })
-        used.push({ name: meta.name, ok: false })
+        return { id: tc.id, name: meta.name, content: `工具执行失败：${err}`, ok: false }
       }
+    }
+    // 分桶：连续 safe 段并发，unsafe 单发（保持原顺序语义）
+    const tcs = res.toolCalls
+    const outcomes: ExecOutcome[] = new Array(tcs.length)
+    let i = 0
+    while (i < tcs.length) {
+      const tc = tcs[i]
+      const meta = tools.find((t) => t.name === tc.function.name)
+      const localHere = !!deps.localTools?.[tc.function.name]
+      if (localHere || !isParallelSafe(meta, tc.function.name)) {
+        outcomes[i] = await execOne(tc)
+        i++
+        continue
+      }
+      let j = i
+      while (j < tcs.length) {
+        const m2 = tools.find((t) => t.name === tcs[j].function.name)
+        if (!isParallelSafe(m2, tcs[j].function.name) || deps.localTools?.[tcs[j].function.name]) break
+        j++
+      }
+      const batch = tcs.slice(i, j)
+      if (batch.length === 1) {
+        outcomes[i] = await execOne(tc)
+      } else {
+        say(`（⚡ 并发执行 ${batch.length} 个只读工具）`)
+        const rs = await Promise.all(batch.map((t) => execOne(t).catch((e: any) => ({ id: t.id, name: t.function.name, content: `工具执行失败：${String(e?.message ?? e)}`, ok: false }))))
+        for (let k = 0; k < batch.length; k++) outcomes[i + k] = rs[k]
+      }
+      i = j
+    }
+    for (const oc of outcomes) {
+      messages.push({ role: 'tool', tool_call_id: oc.id, content: oc.content })
+      used.push({ name: oc.name, ok: oc.ok })
     }
   }
   // #317.2：预算/轮数判停——不再丢一句占位话，改为一次无工具 LLM 调用汇总已有结果
