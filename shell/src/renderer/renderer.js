@@ -1832,8 +1832,15 @@ async function renderWork(nav, arg, label2) {
         const profBox = $('sp-lm-profile'); const catBox = $('sp-lm-catalog')
         if (!profBox || !catBox) return
         let lm = null
-        try { lm = await window.moonlybox.rpc('localModels', {}, 10000) } catch {}
-        if (!lm || !lm.ok) { profBox.innerHTML = ''; catBox.innerHTML = ''; return }
+        try {
+          const r = await window.moonlybox.rpc('localModels', {}, 10000)
+          if (r && r.event === 'done' && r.code === 0) lm = JSON.parse(r.text)
+        } catch {}
+        if (!lm || !lm.ok) {
+          profBox.innerHTML = ''
+          catBox.innerHTML = `<div style="border:1px solid var(--err,#ef4444);border-radius:10px;padding:12px 16px;background:var(--bg2);font-size:12.5px;color:var(--err,#ef4444)">模型名单加载失败（${esc(lm?.error ?? 'daemon 无响应')}）——其余功能不受影响，可重进设置页重试。</div>`
+          return
+        }
         const hw = lm.hw
         const FIT_BADGE = {
           recommended: { txt: '推荐', color: 'var(--ok,#22c55e)' },
