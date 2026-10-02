@@ -32,7 +32,7 @@ import { initVault, syncReturnFile } from '../lib/sync'
 import { cmdSearch } from '../commands/search'
 import { cmdMemory } from '../commands/memory'
 // #316.5：本地任务基建（多入口单执行器）
-import { listJobs, getJob, cancelJob, recoverOnBoot, createJob, contentHash, TASK_TYPES } from '../lib/tasks'
+import { listJobs, getJob, cancelJob, deleteJob, recoverOnBoot, createJob, contentHash, TASK_TYPES } from '../lib/tasks'
 import type { TaskType } from '../lib/tasks'
 import { runJob } from '../lib/compile-runner'
 import { compileModelLabel } from '../lib/compile-model'

@@ -161,6 +161,20 @@ export function cancelJob(id: string): LocalJob | null {
   })
 }
 
+/**
+ * #317.7：删除任务记录本身（completed/failed/cancelled 可删；running/queued 须先取消）。
+ * 产物不删——outPath 文件留盘（产物是资产）；ledger 效应=该任务 items 的 srcHash 判定随之消失（源文档回到「未整理」，可重编）。
+ */
+export function deleteJob(id: string): { ok: boolean; reason?: string } {
+  const job = getJob(id)
+  if (!job) return { ok: false, reason: '任务不存在' }
+  if (job.status === 'running' || job.status === 'queued') return { ok: false, reason: '任务进行中，请先取消再删除' }
+  const store = readStore()
+  store.jobs = store.jobs.filter((j) => j.id !== id)
+  writeStore(store.jobs)
+  return { ok: true }
+}
+
 /** 启动恢复：daemon 重启后 running/queued → queued（items 保留断点——pending 从头，done 不重做） */
 export function recoverOnBoot(): number {
   const store = readStore()

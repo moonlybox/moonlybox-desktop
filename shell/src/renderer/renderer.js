@@ -375,6 +375,8 @@ const I18N_DICT = {
   'tk.delSelected': { zh: '删除所选', en: 'Delete selected' },
   'tk.delConfirm': { zh: '确认删除所选 {n} 个知识页文件？对应源文档将重新视为「未整理」（可再次整理）。', en: 'Delete {n} local knowledge page files? Their sources become uncompiled again (can be recompiled).' },
   'tk.delDone': { zh: '已删除 {d} 个文件，{r} 个源文档已重置为未整理。', en: 'Deleted {d} files; {r} sources reset to uncompiled.' },
+  'tk.jobDel': { zh: '删除任务', en: 'Delete Task' },
+  'tk.jobDelConfirm': { zh: '删除任务「{t}」？\n已生成的知识页产物会保留在书房，仅删除任务记录。', en: 'Delete task "{t}"?\nGenerated knowledge pages stay in the study; only the task record is removed.' },
   'tk.pgPending': { zh: '已回传待准入', en: 'pending review' },
   'tk.pgSynced': { zh: '已同步云端', en: 'Synced' },
   'tk.pgMissing': { zh: '文件已不在', en: 'file missing' },
@@ -984,9 +986,26 @@ async function renderList(nav) {
       for (const j of jobs) {
         const el = document.createElement('div')
         el.className = 'tree-item' + (currentTaskId === j.id ? ' active' : '')
+        const canDel = j.status !== 'running' && j.status !== 'queued'
         el.innerHTML = `<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${ICONS[j.status] ?? '•'} ${j.title}</span>
-          <span class="muted" style="font-size:10.5px;flex:none">${j.progress.done}/${j.progress.total}</span>`
+          <span class="muted" style="font-size:10.5px;flex:none">${j.progress.done}/${j.progress.total}</span>
+          ${canDel ? `<button class="tk-job-del btn ghost" data-jid="${esc(j.id)}" title="${t('tk.jobDel')}" style="flex:none;display:none;font-size:11px;padding:0 6px">✕</button>` : ''}`
         el.onclick = () => { currentTaskId = j.id; renderList('tasks'); renderWork('tasks', { id: j.id }) }
+        // #317.7：删除任务（hover 显形；mbConfirm 确认；只删记录产物保留）
+        const delBtn = el.querySelector('.tk-job-del')
+        if (delBtn) {
+          el.onmouseenter = () => { delBtn.style.display = '' }
+          el.onmouseleave = () => { delBtn.style.display = 'none' }
+          delBtn.onclick = async (ev) => {
+            ev.stopPropagation() // 不触发行点击（不进详情）
+            if (!(await mbConfirm(t('tk.jobDelConfirm').replace('{t}', j.title)))) return
+            const rd = await window.moonlybox.rpc('tasks', { op: 'delete', id: j.id }, 10_000)
+            if (rd.event !== 'done' || rd.code !== 0) { mbAlert(t('lib.delFail') + (rd.text || rd.message || '')); return }
+            if (currentTaskId === j.id) currentTaskId = null
+            renderList('tasks')
+            renderWork('tasks')
+          }
+        }
         body.appendChild(el)
       }
     } catch (e) {
