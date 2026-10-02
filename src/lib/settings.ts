@@ -31,6 +31,10 @@ export interface SettingsSchema {
     /** #317.4：思考模式档位（小月对话输入框下拉）——'off'=关思考（默认，#310.36 现状）；'on'=开启思考（不注入关思考指令/Ollama think:true） */
     thinking?: 'on' | 'off'
   }
+  agent: {
+    /** #317.⑥ 子任务隔离（sub_agent 工具）：默认关闭（D8 用户定案：仅设置里手动开启） */
+    subAgent?: boolean
+  }
   model: {
     /** #283 对话默认模型（历史名 default=chatDefault 语义）：'platform:<id>' | 'custom:<id>' | 'local:<id>' | ''（空=回落旧 byok.json 兼容） */
     default: string
@@ -91,6 +95,7 @@ export const DEFAULT_SETTINGS: SettingsSchema = {
   general: { launchAtLogin: false, launchMinimized: false, closeToTray: true, keepAwake: false, clipboardWatch: false },
   appearance: { theme: 'system', lang: 'zh-CN', zoom: 100 },
   chat: { contextEnabled: true, autoCompress: true, compressThreshold: 80, compressTarget: 20, maxRetries: 10 },
+  agent: { subAgent: false },
   model: { default: '', compileDefault: '', syncToMoon: true, providers: [], custom: [], local: [] },
   messaging: { providers: {} },
   mcp: { builtinEnabled: true, custom: [] },

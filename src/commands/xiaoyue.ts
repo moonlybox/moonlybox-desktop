@@ -418,7 +418,42 @@ export async function runAgentTools(
         },
       }
     : {}
-  const localTools = { ...baseLocalTools, ...localToolsW }
+  let localTools: Record<string, (args: Record<string, unknown>) => Promise<string>> = { ...baseLocalTools, ...localToolsW }
+  // #317.⑥ 子任务隔离（D8 用户定案：仅设置里手动开启——默认不装配）
+  if (loadSettings().agent?.subAgent === true) {
+    localTools = {
+      ...localTools,
+      sub_agent: async (args: Record<string, unknown>) => {
+        const goal = String(args.goal ?? '').trim()
+        if (!goal) return JSON.stringify({ ok: false, error: 'goal 不能为空' })
+        const context = String(args.context ?? '').trim()
+        console.log(`（小月派出子任务：${goal.slice(0, 40)}）`)
+        // D5：子过程静默——子 say 收集进缓冲（不进活动流），结束只回一行
+        const childBuf: string[] = []
+        // D6：精简 system——不带记忆/技能注入；D1：子 builtinTools 不含 sub_agent（禁套娃靠「子任务走本闭包外独立装配」实现——
+        // 子 agentLoop 的 localTools 不含 sub_agent、builtinTools 由本装配排除）
+        const childSys = `你是小月派出的专注子任务助理。只完成委托给你的任务，不要询问委托方以外的问题。完成或受阻时输出结论性回答（含关键事实/决定/未完成事项，500 字内）。`
+        try {
+          const r = await agentLoop({
+            system: childSys,
+            question: context ? `${goal}\n\n背景：${context}` : goal,
+            ready: true,
+            excludeTools: ['add_memory', 'search_memory', 'sub_agent'],
+            localTools: { ...localTools, sub_agent: undefined } as never,
+            builtinTools: subAgentBuiltinTools(),
+            vaultRoot: defaultVaultRoot(),
+            chat: childChat,
+            confirm, // D4：确认透传主会话
+            say: (l: string) => { childBuf.push(l) },
+          })
+          console.log(`（子任务完成：${r.answer.slice(0, 60)}…）`)
+          return JSON.stringify({ ok: true, answer: r.answer, toolCalls: r.toolCalls.length, log: childBuf.slice(-20) })
+        } catch (e: any) {
+          return JSON.stringify({ ok: false, error: String(e?.message ?? e) })
+        }
+      },
+    }
+  }
   // builtin 档：本地记忆上下文注入 system（Hermes 式 6000 字符护栏在 lib 内）
   // #285 技能索引渐进披露：只注入名称+描述清单；小月按需 skill_view 拉全文照做
   const skillIdx = skillsOn ? skillsIndex(defaultVaultRoot()) : ''
@@ -442,6 +477,41 @@ ${localMemoryContext(defaultVaultRoot(), 1200)}${memBlock ? `
 ${memBlock}` : ''}${skillBlock}`
       : system + skillBlock
   for (const f of customCat.failures) console.log(`（自定义 MCP ${f.name} 连接失败：${f.error}）`)
+  // #317.⑥ LLM 调用单源（主/子共用；子任务 withThinking=false——D6 精简）
+  const makeChatFn = (withThinking: boolean): typeof import('../lib/llm').byokChatMessages => async (messages, tools) => {
+    // #283：对话走模型注册表（设置-对话默认模型；空/失效回落旧 byok）
+    const { resolveActiveModel } = await import('../lib/model-registry')
+    const active = resolveActiveModel()
+    // #317.4：思考模式档位（主会话每次调用现读——切档即刻生效；子任务不读，D6 精简）
+    const thinking = withThinking && loadSettings().chat?.thinking === 'on' ? ('on' as const) : ('off' as const)
+    const r = await chatWithRetry(
+      // #310.19：max_tokens 16000——思考型模型 tools 协议下 reasoning 吃掉 4000 全额的余量
+      () => byokChatMessages(messages, tools as never, 90_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined, 16_000, thinking),
+      (attempt, total, err) => console.log(`（LLM 调用失败，重试 ${attempt}/${total}：${err.slice(0, 80)}）`),
+    )
+    // #280.3.2：【真根因修复】toolCalls 必须透传——原 `{ ok, text }` 把 tool_calls 静默丢弃，
+    // LLM 请求调工具被无视→循环空转 6 轮→空回答（deepwiki 三轮「无后续输出」的真正根因）
+    if (!r.ok) return { ok: false as const, error: r.error }
+    const rr = r as { text?: string; toolCalls?: import('../lib/llm').ToolCallRequest[] }
+    return { ok: true, text: rr.text, toolCalls: rr.toolCalls }
+  }
+  const mainChatFn = makeChatFn(true)
+  const childChat = makeChatFn(false)
+  // ⑥ 子任务工具装配单源：与主会话同款减 sub_agent 自身（D1 禁套娃由「子装配天然不含 sub_agent」保证）
+  const subAgentBuiltinTools = () => [
+    ...wDefs.map((d) => ({ ...d, annotations: { readOnlyHint: true } })),
+    ...customDefs.map((d) => ({ ...d })),
+    ...fsTools,
+    ...skillDefs,
+    ...ltDefs,
+    {
+      name: 'tool_result_read',
+      title: '读取工具结果全文',
+      description: '读取此前工具调用被截断保存的完整结果文件（传入引用路径）。',
+      annotations: { readOnlyHint: true },
+      inputSchema: { type: 'object', properties: { path: { type: 'string', description: '工具结果引用路径' } }, required: ['path'] },
+    },
+  ]
   const result = await agentLoop({
     system: systemWithMemory,
     question: built.messages.filter((m) => m.role === 'user').at(-1)?.content ?? question,
@@ -463,23 +533,7 @@ ${memBlock}` : ''}${skillBlock}`
       },
     ],
     vaultRoot: defaultVaultRoot(),
-    chat: async (messages, tools) => {
-      // #283：对话走模型注册表（设置-对话默认模型；空/失效回落旧 byok）
-      const { resolveActiveModel } = await import('../lib/model-registry')
-      const active = resolveActiveModel()
-      // #317.4：思考模式档位（输入框下拉写 settings.chat.thinking，每次调用现读——切档即刻生效）
-      const thinking = loadSettings().chat?.thinking === 'on' ? ('on' as const) : ('off' as const)
-      const r = await chatWithRetry(
-        // #310.19：max_tokens 16000——思考型模型 tools 协议下 reasoning 吃掉 4000 全额的余量
-        () => byokChatMessages(messages, tools as never, 90_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined, 16_000, thinking),
-        (attempt, total, err) => console.log(`（LLM 调用失败，重试 ${attempt}/${total}：${err.slice(0, 80)}）`),
-      )
-      // #280.3.2：【真根因修复】toolCalls 必须透传——原 `{ ok, text }` 把 tool_calls 静默丢弃，
-      // LLM 请求调工具被无视→循环空转 6 轮→空回答（deepwiki 三轮「无后续输出」的真正根因）
-      if (!r.ok) return { ok: false as const, error: r.error }
-      const rr = r as { text?: string; toolCalls?: import('../lib/llm').ToolCallRequest[] }
-      return { ok: true, text: rr.text, toolCalls: rr.toolCalls }
-    },
+    chat: mainChatFn,
     confirm,
     say: (line) => console.log(line),
   })

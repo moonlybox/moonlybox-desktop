@@ -616,6 +616,8 @@ const I18N_DICT = {
   'xy.model': { zh: '模型', en: 'Model' },
   'xy.thinking': { zh: '思考', en: 'Thinking' },
   'xy.thinkOn': { zh: '开', en: 'On' },
+  'xy.subAgent': { zh: '小月子任务（实验）', en: 'Xiaoyue subagent (experimental)' },
+  'xy.subAgentDesc': { zh: '允许小月在对话中派出独立子任务执行复杂多步研究（子任务过程静默，结论回主对话；写操作仍会向你确认）。默认关闭。', en: 'Let Xiaoyue dispatch isolated subagents for complex multi-step research in chat (silent run, summary returns to main chat; writes still ask you). Off by default.' },
   'xy.thinkOff': { zh: '关', en: 'Off' },
   'lg.openAuth': { zh: '打开授权页', en: 'Open Auth Page' },
   'ue.keyKept': { zh: 'API Key（只存钥匙串）', en: 'API Key (keychain only)' },
@@ -1523,6 +1525,8 @@ async function renderWork(nav, arg, label2) {
           <button type="button" class="toggle ${cv.autoCompress !== false ? 'on' : ''}" id="sp-compress" ${cv.contextEnabled === false ? 'disabled' : ''}></button></div>
         <div class="set-field"><label>${t('chat.ctLabel')}<span id="sp-ct-v">${cv.compressThreshold ?? 80}%</span></label>
           <input type="range" id="sp-ct" min="50" max="100" step="5" value="${cv.compressThreshold ?? 80}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('xy.subAgent')}</div><div class="sc-desc">${t('xy.subAgentDesc')}</div></div>
+          <button type="button" class="toggle ${(g.agent?.subAgent ?? false) ? 'on' : ''}" id="sp-subagent"></button></div>
         <div class="set-field"><label>${t('chat.cgLabel')}<span id="sp-cg-v">${cv.compressTarget ?? 20}%</span></label>
           <input type="range" id="sp-cg" min="10" max="30" step="5" value="${cv.compressTarget ?? 20}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
         <div class="set-field"><label>${t('chat.retryLabel')}</label>
@@ -1554,11 +1558,11 @@ async function renderWork(nav, arg, label2) {
           compressThreshold: Number($('sp-ct').value),
           compressTarget: Number($('sp-cg').value),
           maxRetries: Number($('sp-retry').value) || 10,
-        } })
+        }, agent: { subAgent: $('sp-subagent').classList.contains('on') } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? t('ui.saved') + t('ui.appliesInstant') : (r.error ?? t('ui.saveFail'))
       }
-      for (const id of ['sp-ctx', 'sp-compress', 'sp-ct', 'sp-cg', 'sp-retry']) $(id).onchange = saveChat
+      for (const id of ['sp-ctx', 'sp-compress', 'sp-ct', 'sp-cg', 'sp-retry', 'sp-subagent']) $(id).onchange = saveChat
     } else if (cat.id === 'library') {
       // #316.7：gset 先取（模板内 modelPickerOpts 求值需要）
       const gset = await loadAppSettings()
