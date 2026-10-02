@@ -163,7 +163,7 @@ export function cancelJob(id: string): LocalJob | null {
 
 /**
  * #317.7：删除任务记录本身（completed/failed/cancelled 可删；running/queued 须先取消）。
- * 产物不删——outPath 文件留盘（产物是资产）；ledger 效应=该任务 items 的 srcHash 判定随之消失（源文档回到「未整理」，可重编）。
+ * 产物不删——outPath 文件留盘（产物是资产）；#317.8 定案：ledger 独立于任务（ledger.json 按文档 hash 闭环）——删任务不影响「已整理」判定。
  */
 export function deleteJob(id: string): { ok: boolean; reason?: string } {
   const job = getJob(id)
@@ -190,9 +190,69 @@ export function recoverOnBoot(): number {
   return n
 }
 
-/** ledger 判定：源 hash 已在某 job 中 done → 已整理 */
+// ==================== ledger（#317.8 独立编译登记账——回归文档本身闭环） ====================
+// 此前 ledger 寄生在 jobs.items[].srcHash——但全链零写入点（判定恒 false），且删任务会连带「未整理」判定漂移。
+// 现独立 ledger.json：{ hash, srcPath, outPath, at, jobId? }——文档内容 hash 为键，任务删除不影响已整理判定。
+interface LedgerEntry { hash: string; srcPath: string; outPath?: string; at: string; jobId?: string }
+
+function ledgerFile(): string {
+  return path.join(configDir(), 'ledger.json')
+}
+
+function ledgerLoad(): LedgerEntry[] {
+  try {
+    const raw = fs.readFileSync(ledgerFile(), 'utf8')
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? arr : []
+  } catch {
+    return []
+  }
+}
+
+function ledgerSave(entries: LedgerEntry[]): void {
+  fs.mkdirSync(configDir(), { recursive: true })
+  fs.writeFileSync(ledgerFile(), JSON.stringify(entries, null, 2), { mode: 0o600 })
+}
+
+/** upsert：同 hash 更新（重编/产物更新）；同 hash 不同源路径=并存条目（内容相同的不同文件各自闭环） */
+/** #317.8：done 写入点调用（compile-runner）——独立账本 upsert */
+export function ledgerUpsert(entry: LedgerEntry): void {
+  const entries = ledgerLoad()
+  const idx = entries.findIndex((e) => e.hash === entry.hash && e.srcPath === entry.srcPath)
+  if (idx >= 0) entries[idx] = { ...entries[idx], ...entry }
+  else entries.push(entry)
+  ledgerSave(entries)
+}
+
+/** 按 hash 判定（含 in-flight 迁移：旧 jobs done items 有 srcHash 的灌入一次） */
 export function isCompiled(srcHash: string): boolean {
-  return readStore().jobs.some((j) => j.items.some((it) => it.srcHash === srcHash && it.status === 'done'))
+  if (ledgerLoad().some((e) => e.hash === srcHash)) return true
+  // #317.8 迁移：旧账（jobs.items 带 srcHash 的 done）一次性灌入独立账本
+  const store = readStore()
+  let migrated = false
+  for (const j of store.jobs) {
+    for (const it of j.items) {
+      if (it.status === 'done' && it.srcHash && it.srcHash === srcHash) {
+        ledgerUpsert({ hash: it.srcHash, srcPath: it.path, outPath: it.outPath, at: j.updatedAt, jobId: j.id })
+        migrated = true
+      }
+    }
+  }
+  if (migrated) return true
+  return store.jobs.some((j) => j.items.some((it) => it.srcHash === srcHash && it.status === 'done'))
+}
+
+/** 删产物时同步删 ledger 条目（源回「未整理」——按产物绝对路径定位） */
+function ledgerDeleteByOutPath(absOut: string, vaultRoot: string): number {
+  const entries = ledgerLoad()
+  const kept = entries.filter((e) => {
+    if (!e.outPath) return true
+    const abs = path.isAbsolute(e.outPath) ? e.outPath : path.join(vaultRoot, e.outPath)
+    return abs !== absOut
+  })
+  const n = entries.length - kept.length
+  if (n > 0) ledgerSave(kept)
+  return n
 }
 
 /** #316 骨架批配套：知识页产物聚合（任务页「知识页」tab 数据源——jobs items done 的 outPath，去重+存在性） */
@@ -236,6 +296,25 @@ export function listPages(vaultRoot: string): PageEntry[] {
     }
   }
 
+  // #317.8：ledger 合并——任务已删除但 ledger 记录的产物仍列出（产物是资产，不随任务记录消失）
+  const jobsById = new Map(readStore().jobs.map((j) => [j.id, j]))
+  for (const e of ledgerLoad()) {
+    if (!e.outPath) continue
+    const abs = path.isAbsolute(e.outPath) ? e.outPath : path.join(vaultRoot, e.outPath)
+    if (byPath.has(abs)) continue
+    const srcExists = fs.existsSync(e.srcPath)
+    if (!srcExists && !fs.existsSync(abs)) continue
+    byPath.set(abs, {
+      path: e.outPath,
+      abs,
+      exists: fs.existsSync(abs),
+      jobId: e.jobId ?? '',
+      jobTitle: (e.jobId && jobsById.get(e.jobId)?.title) ?? '（任务已删除）',
+      finishedAt: e.at,
+      srcPath: e.srcPath,
+    })
+  }
+
   return [...byPath.values()].sort((a, b) => (b.finishedAt ?? '').localeCompare(a.finishedAt ?? ''))
 }
 
@@ -256,9 +335,10 @@ export function deletePages(vaultRoot: string, absPaths: string[]): { deleted: n
       missing.push(abs)
     }
   }
-  // ledger 重置：产物被删的 item → status 'pending'（srcHash 保留——内容没变下次扫描即视为未整理）
+  // #317.8：ledger 重置=独立账本删条目（按产物路径）——源回「未整理」；任务 items 仍同步回退（展示层一致性）
   let resetLedger = 0
   if (deleted > 0) {
+    for (const abs of absPaths) resetLedger += ledgerDeleteByOutPath(abs, vaultRoot)
     const delSet = new Set(absPaths)
     const store = readStore()
     for (const job of store.jobs) {
@@ -271,7 +351,7 @@ export function deletePages(vaultRoot: string, absPaths: string[]): { deleted: n
         delete it.outPath
         delete it.cloudWikiId
         changed = true
-        resetLedger++
+        // resetLedger 计数以上面 ledger.json 删条目为准（同一份源不双计）
       }
       if (changed) {
         // 完成态任务回退为可续跑语义（done 计数同步收缩）

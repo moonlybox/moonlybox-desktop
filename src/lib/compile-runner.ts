@@ -10,7 +10,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { defaultVaultRoot } from './config'
-import { allJobs, getJob, updateJob, updateItem } from './tasks'
+import { allJobs, getJob, updateJob, updateItem, contentHash, ledgerUpsert } from './tasks'
 import { resolveCompileModel } from './compile-model'
 import { byokChatMessages } from './llm'
 import { loadSettings } from './settings'
@@ -356,8 +356,11 @@ export async function runJob(jobId: string): Promise<void> {
         md = await compileOneDoc(item.path, text)
       }
       const outPath = writeOut(item.path, md, sk ? { tags, genre: sk.genre, topics: titles ?? [] } : undefined)
-      updateItem(jobId, item.path, { status: 'done', outPath })
-      await pushToMoon(jobId, item.path, item.srcHash, md, sk ?? undefined, titles, tags)
+      // #317.8：ledger 回归文档本身——done 时算源内容 hash 写独立账本（+item.srcHash 补写，任务内可追溯；pushToMoon 从此拿到真 hash 双向云端）
+      const srcHashNow = contentHash(text)
+      updateItem(jobId, item.path, { status: 'done', outPath, srcHash: srcHashNow })
+      ledgerUpsert({ hash: srcHashNow, srcPath: item.path, outPath, at: new Date().toISOString(), jobId })
+      await pushToMoon(jobId, item.path, srcHashNow, md, sk ?? undefined, titles, tags)
     } catch (e: any) {
       updateItem(jobId, item.path, { status: 'failed', error: String(e?.message ?? e).slice(0, 300) })
     }
