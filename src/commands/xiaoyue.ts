@@ -495,7 +495,67 @@ ${memBlock}` : ''}${skillBlock}`
     const ok = result.toolCalls.filter((t) => t.ok).length
     console.log(`（工具调用 ${ok}/${result.toolCalls.length} 成功）`)
   }
+  // #317.⑤ 技能自沉淀：后台轻评估（fire-and-forget；节流=同会话距上次 ≥10 轮且每次会话最多触发 3 次）
+  void maybeSelfImprove(sessionId, built.messages, result).catch(() => {})
   return result
+}
+
+// --- #317.⑤ 自我改进（静默+回执，不询问——用户定案） ---
+const _siState = new Map<string, { turns: number; runs: number }>()
+
+async function maybeSelfImprove(sessionId: string, messages: Array<{ role: string; content?: unknown }>, result: { answer?: string }): Promise<void> {
+  const st = _siState.get(sessionId) ?? { turns: 0, runs: 0 }
+  st.turns++
+  // 节流：≥10 轮且每会话 ≤3 次；有最终回答才评估（纯工具轮无对话内容）
+  if (st.turns < 10 || st.runs >= 3 || !result.answer) { _siState.set(sessionId, st); return }
+  st.turns = 0
+  st.runs++
+  _siState.set(sessionId, st)
+  const vaultRoot = defaultVaultRoot()
+  const skillsOn = (loadSettings().skills ?? { enabled: true }).enabled !== false
+  const digest = messages
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .slice(-8)
+    .map((m) => `${m.role === 'user' ? '用户' : '小月'}：${String(m.content).slice(0, 200)}`)
+    .join('\n')
+    .slice(-6000)
+  const skillIdx = skillsOn ? (skillsIndex(vaultRoot) || '（暂无技能）') : '（技能系统关闭）'
+  const evalSystem =
+    `你是后台自我改进评估器。根据本轮对话摘要，判断是否值得沉淀为「技能」（可复用的流程/规范，而非事实）或「记忆」（用户长期事实/偏好）。\n` +
+    `对话多为一次性问答/闲聊/查询时必须输出 NO。宁可漏掉不可编造。\n` +
+    `已有技能索引（防重复）：\n${skillIdx}\n\n本轮对话摘要：\n${digest}\n\n` +
+    `输出严格 JSON（无其他文本）：\n` +
+    `{"skill":{"name":"简短中文名","description":"一句话用途","body":"SKILL.md 正文（步骤化，150 字内）"} 或 null,"memory":"一条记忆文本" 或 null}`
+  const { resolveActiveModel } = await import('../lib/model-registry')
+  const active = resolveActiveModel()
+  const er = await byokChatMessages([{ role: 'user', content: evalSystem }], undefined, 60_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey} : undefined, 2_000)
+  if (!er.ok || !er.text) return
+  const jm = er.text.match(/\{[\s\S]*\}/)
+  if (!jm) return
+  let verdict: { skill?: { name: string; description: string; body: string } | null; memory?: string | null } | null = null
+  try { verdict = JSON.parse(jm[0]) } catch { return }
+  const maxCount = loadSettings().skills?.maxCount ?? 20
+  if (skillsOn && verdict?.skill?.name && verdict.skill.body) {
+    const { skillAutoWrite, skillFingerprint } = await import('../lib/skills')
+    const wr = skillAutoWrite(vaultRoot, verdict.skill, { maxCount })
+    if (wr.ok) {
+      const fp = skillFingerprint(wr.name, verdict.skill.description)
+      // 回执模板（用户定案文案）：静默完成后报账
+      console.log(`（小月正在从历史对话中自我改进：技能「${wr.name}」·${wr.action === 'created' ? '新建' : '更新'}·${fp}）`)
+    } else if (wr.reason) {
+      console.log(`（自我改进跳过：${wr.reason}）`)
+    }
+  }
+  if (verdict?.memory) {
+    const { localMemoryAdd } = await import('../lib/memory-local')
+    const mr = localMemoryAdd(vaultRoot, String(verdict.memory).slice(0, 500))
+    if (mr.ok && !mr.duplicated) {
+      // 记忆标识=条目短指纹（memory-local 无 ID——用内容 hash 前 8 位）
+      const h = require('node:crypto') as typeof import('node:crypto')
+      const fp = h.createHash('sha256').update(String(verdict.memory)).digest('hex').slice(0, 8)
+      console.log(`（小月正在从历史对话中沉淀记忆：${fp}）`)
+    }
+  }
 }
 
 const CONFIRM_SET = new Set(['y', 'Y', 'yes', 'Yes', '是', '好'])

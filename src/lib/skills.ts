@@ -142,3 +142,69 @@ export function skillToolDefs(): Array<{ name: string; title?: string; descripti
     },
   ]
 }
+
+// ==================== #317.⑤ 技能自沉淀（写入侧） ====================
+
+function safeName(name: string): string {
+  const n = name.trim().replace(/[\\/:*?"<>|\s]+/g, '-').slice(0, 48)
+  return n || 'unnamed-skill'
+}
+
+/** 条目标识（回执用）：name+description 的短 hash */
+export function skillFingerprint(name: string, description: string): string {
+  const h = require('node:crypto') as typeof import('node:crypto')
+  return h.createHash('sha256').update(`${name}|${description}`).digest('hex').slice(0, 8)
+}
+
+/** 轻量相似度：分词重合率（0~1）——防同项目重复沉淀 */
+function textOverlap(a: string, b: string): number {
+  const tok = (s: string) => new Set((s.toLowerCase().match(/[a-z0-9]{2,}|[\u4e00-\u9fff]/g) ?? []))
+  const A = tok(a), B = tok(b)
+  if (!A.size || !B.size) return 0
+  let inter = 0
+  for (const w of A) if (B.has(w)) inter++
+  return inter / Math.min(A.size, B.size)
+}
+
+export interface SkillWriteResult { ok: boolean; action: 'created' | 'updated' | 'skipped'; name: string; reason?: string }
+
+/**
+ * 自沉淀写入（静默，不确认——#317.⑤ 用户定案）：
+ * - 同名技能已存在 → patch（更新 description/SKILL.md 正文）
+ * - description 与既有技能相似度 ≥0.6 → patch 最相近的（防同项目堆积）
+ * - 技能数达 maxCount 上限 → 强制 patch 模式（不新增；仍无相近对象则 skip）
+ */
+export function skillAutoWrite(
+  vaultRoot: string,
+  input: { name: string; description: string; body: string },
+  opts?: { maxCount?: number },
+): SkillWriteResult {
+  const name = safeName(input.name)
+  const desc = input.description.trim().slice(0, 200)
+  const body = input.body.trim()
+  if (!name || !body) return { ok: false, action: 'skipped', name, reason: '名称或正文为空' }
+  const root = skillsRoot(vaultRoot)
+  const existing = listSkills(vaultRoot)
+  // 同名 → 更新
+  const same = existing.find((s) => s.name === name)
+  if (same) return writeSkillDir(vaultRoot, name, desc, body, 'updated')
+  // 相似 → 更新最相近
+  let best: { skill: SkillMeta; score: number } | null = null
+  for (const s of existing) {
+    const score = textOverlap(desc, s.description)
+    if (score >= 0.6 && (!best || score > best.score)) best = { skill: s, score }
+  }
+  if (best) return writeSkillDir(vaultRoot, best.skill.name, desc, body, 'updated')
+  // 上限
+  const maxCount = opts?.maxCount ?? 20
+  if (existing.length >= maxCount) return { ok: false, action: 'skipped', name, reason: `已达技能数量上限 ${maxCount}（不新增；改进既有技能请用自然语言让小月更新对应技能）` }
+  return writeSkillDir(vaultRoot, name, desc, body, 'created')
+}
+
+function writeSkillDir(vaultRoot: string, name: string, desc: string, body: string, action: 'created' | 'updated'): SkillWriteResult {
+  const dir = path.join(skillsRoot(vaultRoot), name)
+  fs.mkdirSync(dir, { recursive: true })
+  const fm = `---\nname: ${name}\ndescription: ${desc.replace(/\n/g, ' ')}\n---\n\n`
+  fs.writeFileSync(path.join(dir, 'SKILL.md'), fm + body + '\n', 'utf8')
+  return { ok: true, action, name }
+}

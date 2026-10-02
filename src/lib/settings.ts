@@ -72,6 +72,8 @@ export interface SettingsSchema {
   }
   skills: {
     enabled: boolean // #285 技能系统总开关（书房 .moonlybox/skills/ 只读消费）
+    /** #317.⑤：技能数量上限（自沉淀写入前检查；超限转 patch 不新增——防 token 膨胀） */
+    maxCount?: number
   }
   memory: {
     enabled: boolean // 长期记忆开关
