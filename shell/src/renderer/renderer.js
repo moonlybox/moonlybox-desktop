@@ -1823,8 +1823,8 @@ async function renderWork(nav, arg, label2) {
       // #310.11：本地部署四态探测（公用不私用：检测已有 Ollama 直接复用，不重复安装；失效给修复入口）
       panel(t('panel.model.local'), t('panel.sub.model.local'), `
         <div id="sp-lm-profile"></div>
-        <div id="sp-lm-catalog" style="margin-top:10px"></div>
         <div id="sp-ol-state" class="set-card" style="margin-top:10px"><div class="sc-main"><div class="sc-title">${t('ol.detecting')}</div><div class="sc-desc">${t('ol.detectDesc')}</div></div></div>
+        <div id="sp-lm-catalog" style="margin-top:10px"></div>
         <div id="sp-ol-models"></div>
       `)
       // #317.F16/P1：硬件画像+模型名单卡（fit 分级）——主体是「模型本身」，Ollama 降权为状态条
@@ -1852,7 +1852,6 @@ async function renderWork(nav, arg, label2) {
           <span>💾 内存 <b style="color:var(--fg)">${hw.memTotalGB.toFixed(0)}GB</b>（可用 ${hw.memFreeGB.toFixed(0)}GB）</span>
           ${hw.gpuName ? `<span>🖥 GPU ${esc(hw.gpuName)}</span>` : '<span>🖥 无独显信息（按内存评估）</span>'}
           ${hw.diskFreeGB != null ? `<span>📀 磁盘余量 <b style="color:var(--fg)">${hw.diskFreeGB.toFixed(0)}GB</b></span>` : ''}
-          <span>⚙ Ollama ${lm.ollamaState === 'running' ? '运行中' : '未运行'}</span>
         </div>`
         // #317.F16/P2：GPU 预期说明（感知不配置——Ollama 自动 offload，客户端只管说清楚）
         const gpuHint = hw.gpuName ? '检测到独显：Ollama 将自动用 GPU 加速（快）' : '未检测到独显：纯 CPU 运行，大模型较慢，建议选小档'
@@ -1963,13 +1962,17 @@ async function renderWork(nav, arg, label2) {
             const ctxLine = typeof p.context === 'number' && p.context < 8192
               ? `<div class="sc-desc" style="color:var(--warn,#f59e0b)">⚠ 上下文窗口 ${p.context}（过小：工具清单会被截断）——退出 Ollama 后设置环境变量 OLLAMA_CONTEXT_LENGTH=32768 再启动，或点上方「启动」由本客户端按内存自动配置</div>`
               : (typeof p.context === 'number' ? `<div class="sc-desc">上下文窗口：${p.context}</div>` : '')
-            box.innerHTML = `<div class="sc-main"><div class="sc-title">✅ ${t('ol.runningTitle').replace('{v}', esc(p.version || '?'))}</div>
-              <div class="sc-desc">${t('ol.runningDesc')}</div>${ctxLine}</div>`
+            // #317.F16/P3e：依赖卡收敛——单行「✅ Ollama v0.35 · 上下文 N」；长说明只在异常时出现
+            const ctxTxt = typeof p.context === 'number' ? ` · 上下文 ${p.context}` : ''
+            const warnTxt = typeof p.context === 'number' && p.context < 8192
+              ? `<div class="sc-desc" style="color:var(--warn,#f59e0b)">⚠ 上下文 ${p.context} 过小（工具清单会被截断）——点下方「启动」由本客户端按内存自动重配</div>`
+              : ''
+            box.innerHTML = `<div class="sc-main"><div class="sc-title">✅ Ollama 运行中 ${p.version ? 'v' + esc(p.version) : ''}${ctxTxt}</div>${warnTxt}</div>`
             await renderOllamaModels()
           } else if (p.state === 'installed_stopped') {
-            box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.installedStoppedTitle').replace('{v}', p.version ? `（v${esc(p.version)}）` : '')}</div>
-              <div class="sc-desc">${t('ol.stoppedDesc')}</div>
-              <button type="button" class="btn ghost" id="sp-ol-start" style="margin-top:8px">${t('ol.startBtn')}</button></div>`
+            // #317.F16/P3e：单行「Ollama v0.32 · 未运行 [启动]」
+            box.innerHTML = `<div class="sc-main" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="sc-title">Ollama ${p.version ? 'v' + esc(p.version) : ''} · 未运行</div>
+              <button type="button" class="btn ghost" id="sp-ol-start" style="font-size:12px;padding:3px 12px">${t('ol.startBtn')}</button></div>`
             $('sp-ol-start').onclick = async () => {
               const b = $('sp-ol-start'); b.disabled = true; b.textContent = t('ol.starting')
               const r = await window.moonlybox.ollamaServe(p.cli)

@@ -477,7 +477,9 @@ app.whenReady().then(() => {
     if (!cli) return { state: 'not_found' }
     let version = null
     try {
-      version = require('child_process').execFileSync(cli, ['--version'], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).toString().trim()
+      // #317.F16/P3e：版本号提纯——新版 ollama CLI --version 会在 stdout 先打「Warning: could not connect...」
+      // 等诊断行（探活失败），直接 trim 会把警告一起带给 UI；只取 x.y.z
+      version = (require('child_process').execFileSync(cli, ['--version'], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).toString().match(/(\d+\.\d+\.\d+)/) ?? [''])[1] || '未知'
     } catch {}
     return { state: 'installed_stopped', cli, version }
   })
