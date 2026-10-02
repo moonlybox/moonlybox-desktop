@@ -2552,8 +2552,8 @@ async function renderWork(nav, arg, label2) {
       const dp = g.docproc ?? {}
       const DP_PROVIDERS = [
         { id: 'builtin', label: 'dp.prov.builtin', baseUrl: '', local: true, needsKey: false },
-        { id: 'winocr', label: 'dp.prov.winocr', baseUrl: '', local: true, needsKey: false },
-        { id: 'paddle', label: 'dp.prov.paddle', baseUrl: 'http://127.0.0.1:8866', local: true, needsKey: false },
+        { id: 'winocr', label: 'dp.prov.winocr', baseUrl: '', local: true, needsKey: false, disabled: true },
+        { id: 'paddle', label: 'dp.prov.paddle', baseUrl: 'http://127.0.0.1:8866', local: true, needsKey: false, disabled: true },
         { id: 'doc2x', label: 'Doc2X', baseUrl: 'https://v2.doc2x.noedgeai.com', local: false, needsKey: true },
         { id: 'mineru', label: 'MinerU', baseUrl: 'https://mineru.net/api/v4', local: false, needsKey: true },
         { id: 'mathpix', label: 'Mathpix', baseUrl: 'https://api.mathpix.com', local: false, needsKey: true },
@@ -2564,7 +2564,7 @@ async function renderWork(nav, arg, label2) {
       panel(t('panel.docproc'), t('panel.sub.docproc'), `
         <div class="set-field" style="max-width:400px"><label>${t('dp.pvLabel')}</label>
           <select id="sp-dp-prov" class="set-select">
-            <optgroup label="${t('dp.localGroup')}">${DP_PROVIDERS.filter((x) => x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${t(x.label)}</option>`).join('')}</optgroup>
+            <optgroup label="${t('dp.localGroup')}">${DP_PROVIDERS.filter((x) => x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''} ${x.disabled ? 'disabled title="即将支持——当前回落内置解析"' : ''}>${t(x.label)}${x.disabled ? '（即将支持）' : ''}</option>`).join('')}</optgroup>
             <optgroup label="${t('dp.cloudGroup')}">${DP_PROVIDERS.filter((x) => !x.local).map((x) => `<option value="${x.id}" ${cur.id === x.id ? 'selected' : ''}>${t(x.label)}</option>`).join('')}</optgroup>
           </select>
         </div>
