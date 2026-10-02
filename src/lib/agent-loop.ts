@@ -1,5 +1,6 @@
 import { injectToolResult } from './tool-result-store'
 import { listTools, callTool, McpTool } from './moonlink'
+import { ensureToolDescription } from './mcp-custom'
 
 /**
  * 小月 Agent 循环（D9 装配）：LLM + moonlink MCP 工具。
@@ -148,10 +149,17 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   const tools = [...remoteFiltered.filter((t) => !builtinNames.has(t.name)), ...(deps.builtinTools ?? [])]
   // #280.2：schema LLM 兼容清洗——部分 OpenAI 兼容端点（国产中转类）对 anyOf/oneOf/allOf、$schema 等进阶
   // JSON Schema 关键字支持差（请求 400/挂起，表现为小月首轮无响应）。装配层拍平为最大兼容形态。
-  const openaiTools = tools.map((t) => ({
-    type: 'function' as const,
-    function: { name: t.name, description: t.description ?? t.title ?? t.name, parameters: sanitizeJsonSchema(t.inputSchema) },
-  }))
+  const openaiTools = tools.map((t) => {
+    // #317.P2：自定义 MCP 工具描述质量门——劣质 description（空/零信息/超长）拼装兜底；内置/远程工具原样
+    const isCustom = 'server' in (t as unknown as Record<string, unknown>)
+    const desc = isCustom
+      ? ensureToolDescription(t as never)
+      : (t.description ?? t.title ?? t.name)
+    return {
+      type: 'function' as const,
+      function: { name: t.name, description: desc, parameters: sanitizeJsonSchema(t.inputSchema) },
+    }
+  })
   say(`（已接入工具 ${tools.length} 个${builtinNames.size ? `，含内置 ${builtinNames.size} 个` : ''}）`)
 
   // #317.9：工具感知引导（Hermes 同款 tool-aware）——按**实际装配**的工具生成能力清单追加为第二条 system。
@@ -168,8 +176,15 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   if (has('web_search')) caps.push(`联网：搜索 web_search、读网页 ${pick('fetch_url')}`)
   if (has('local_task_create_compile')) caps.push(`知识整理：local_task_list_uncompiled 扫描→确认→local_task_create_compile 后台任务；进度 local_task_status`)
   if (has('skill_list')) caps.push(`技能：skill_list 列出、skill_view 读全文`)
-  const customN = tools.filter((t) => t.name.startsWith('mcp_') || t.name.includes('__')).map((t) => t.name)
-  if (customN.length) caps.push(`自定义 MCP：${customN.slice(0, 8).join('、')}${customN.length > 8 ? ' 等' : ''}`)
+  const customs = tools.filter((t) => t.name.startsWith('mcp_') || t.name.includes('__')) as unknown as Array<{ name: string; description?: string; title?: string; server?: string }>
+  if (customs.length) {
+    // #317.P2：引导行带短描述（与 openaiTools 同源兜底）——路由链双层有信息
+    const items = customs.map((t) => {
+      const d = (t.description ?? t.title ?? '').trim()
+      return d ? `${t.name}（${d.slice(0, 40)}）` : t.name
+    })
+    caps.push(`自定义 MCP：${items.slice(0, 6).join('、')}${items.length > 6 ? ` 等 ${items.length} 个` : ''}`)
+  }
   const toolGuide = caps.length
     ? `\n【当前可用工具】\n${caps.map((c) => '- ' + c).join('\n')}\n用户问题只要可能由上述某工具回答（尤其是「列出/查看/有多少/我的…」类查询），先调工具再回答；不确定就选最接近的一个试，不要凭空说「没有该功能」。`
     : ''

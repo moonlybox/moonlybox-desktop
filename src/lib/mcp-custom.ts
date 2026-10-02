@@ -255,3 +255,52 @@ export function resetServerSession(serverName: string): void {
   sessions.delete(serverName)
   void fs
 }
+
+// ==================== #317.P2：自定义 MCP 工具描述质量门 ====================
+
+/** 去 stopword 后的词集（相似度/零信息判定用） */
+function _descTokens(s: string): Set<string> {
+  return new Set((s.toLowerCase().match(/[a-z0-9]{2,}|[\u4e00-\u9fff]/g) ?? []))
+}
+
+/**
+ * 劣质 description 检测+语义兜底（#317.P2，零 LLM）：
+ * - 空 / 与 name 词集完全重合（零信息）/ 超长（>1500 字符）→ 视为劣质
+ * - 兜底=拼装可用信号：`title（服务器：X）参数：a, b, c——原描述截段`；无任何信号→title/name 原样
+ * - 超长截 head 1200（保 schema 预算）
+ * 只在装配层调用（openaiTools 生成前）——原始 description 保留在 McpCustomTool 不动。
+ */
+export function ensureToolDescription(tool: {
+  name: string
+  title?: string
+  description?: string
+  server: string
+  inputSchema: unknown
+}): string {
+  const raw = (tool.description ?? '').trim()
+  const head = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…(截断)' : s)
+  // 参数名提取（顶层 properties 键——比 description 更能暴露用途的信号）
+  let params: string[] = []
+  try {
+    const sch = typeof tool.inputSchema === 'object' && tool.inputSchema !== null ? (tool.inputSchema as Record<string, any>) : {}
+    params = Object.keys(sch.properties ?? {}).slice(0, 8)
+  } catch { /* schema 非 object——忽略 */ }
+  const fallback = (() => {
+    const parts: string[] = []
+    if (tool.title && tool.title !== tool.name) parts.push(tool.title)
+    if (tool.server) parts.push(`（服务器：${tool.server}）`)
+    if (params.length) parts.push(`参数：${params.join(', ')}`)
+    return parts.join(' ') || tool.name
+  })()
+  // ①空/缺 → 兜底
+  if (!raw) return head(fallback, 300)
+  // ②超长 → 截断（描述本身有效，只是长）
+  if (raw.length > 1500) return head(raw, 1200)
+  // ③零信息（与 name 词集完全重合，且自身 <8 词）→ 兜底+原名
+  const nameT = _descTokens(tool.name)
+  const rawT = _descTokens(raw)
+  if (rawT.size > 0 && rawT.size < 8 && [...rawT].every((w) => nameT.has(w))) {
+    return head(`${raw}——${fallback}`, 300)
+  }
+  return raw
+}
