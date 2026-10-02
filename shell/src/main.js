@@ -558,13 +558,18 @@ app.whenReady().then(() => {
       const gb = (os.totalmem?.() ?? 0) / 2 ** 30
       const ctxLen = gb >= 14 ? 32768 : gb >= 7 ? 16384 : gb >= 3.5 ? 8192 : null
       const serveEnv = { ...process.env, ...(ctxLen ? { OLLAMA_CONTEXT_LENGTH: String(ctxLen) } : {}) }
+      // #317.F16/P3d：serve 失败可见化——stdio:ignore 下启动失败无任何线索（真机：用户启动失败无日志可查）。
+      // 输出重定向到日志文件，失败时把尾部读给用户。
+      const logFile = path.join(os.tmpdir(), 'moonlybox-ollama-serve.log')
       if (isWin) {
         // start 的第一个引号参数会被当窗口标题——先放 '' 占位；整体单串走 shell 避免 cmd 二次解析分裂参数
-        const line = `start /b "" "${cli}" serve`
+        // 2>&1 落日志（start /b 的输出走 cmd 管道）
+        const line = `start /b "" "${cli}" serve > "${logFile}" 2>&1`
         const child = require('child_process').spawn('cmd.exe', ['/c', line], { stdio: 'ignore', windowsHide: true, shell: false, env: serveEnv })
         child.unref()
       } else {
-        const child = require('child_process').spawn(cli, ['serve'], { detached: true, stdio: 'ignore', env: serveEnv })
+        const out = fs.openSync(logFile, 'a')
+        const child = require('child_process').spawn(cli, ['serve'], { detached: true, stdio: ['ignore', out, out], env: serveEnv })
         child.unref()
       }
       // 等 HTTP 就绪（最多 8s）
@@ -573,7 +578,10 @@ app.whenReady().then(() => {
         const v = await probeOllamaHttp().catch(() => null)
         if (v && v.version) return { ok: true, version: v.version, contextLength: ctxLen ?? null }
       }
-      return { ok: false, error: '启动超时（服务未响应）' }
+      // 失败：带日志尾部（用户能立刻看到「address already in use」/「invalid context length」等真因）
+      let tail = ''
+      try { tail = fs.readFileSync(logFile, 'utf-8').slice(-400) } catch {}
+      return { ok: false, error: `启动超时（服务未响应）${tail ? '——日志：' + tail.replace(/\s+/g, ' ').slice(-260) : ''}` }
     } catch (e) {
       return { ok: false, error: String(e && e.message ? e.message : e) }
     }
