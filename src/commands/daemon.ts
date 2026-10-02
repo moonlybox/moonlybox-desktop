@@ -759,6 +759,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         } catch { /* 未运行 */ }
         const s = loadSettings()
         const localInstances = s.model?.local ?? []
+        const defaultId = String(s.model?.default ?? '')
         const models = LOCAL_MODEL_CATALOG.map((spec) => {
           const instSize = installed[spec.id]
           const fit = fitFor(spec, hw, instSize)
@@ -776,7 +777,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
           }
         })
         code = 0
-        text = JSON.stringify({ ok: true, hw, ollamaState, models })
+        text = JSON.stringify({ ok: true, hw, ollamaState, defaultModel: defaultId.startsWith('local:') ? defaultId.slice(6) : null, models })
       } catch (e: any) {
         code = 1
         text = String(e?.message ?? e)

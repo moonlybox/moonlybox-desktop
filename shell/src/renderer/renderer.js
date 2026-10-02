@@ -1847,9 +1847,24 @@ async function renderWork(nav, arg, label2) {
           ${hw.diskFreeGB != null ? `<span>📀 磁盘余量 <b style="color:var(--fg)">${hw.diskFreeGB.toFixed(0)}GB</b></span>` : ''}
           <span>⚙ Ollama ${lm.ollamaState === 'running' ? '运行中' : '未运行'}</span>
         </div>`
-        catBox.innerHTML = lm.models.map((m) => {
+        // #317.F16/P2：GPU 预期说明（感知不配置——Ollama 自动 offload，客户端只管说清楚）
+        const gpuHint = hw.gpuName ? '检测到独显：Ollama 将自动用 GPU 加速（快）' : '未检测到独显：纯 CPU 运行，大模型较慢，建议选小档'
+        catBox.innerHTML = `<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">${gpuHint}</div>` + lm.models.map((m) => {
           const b = FIT_BADGE[m.fit] || FIT_BADGE.ok
           const stateTxt = m.installed ? (lm.ollamaState === 'running' ? '✅ 就绪' : '已安装（Ollama 未运行）') : '未安装'
+          const canAct = lm.ollamaState === 'running' && m.fit !== 'blocked'
+          let actions = ''
+          if (m.fit === 'blocked') {
+            actions = `<button type="button" class="btn ghost" disabled style="font-size:12px;opacity:.5">不建议安装</button>`
+          } else if (!m.installed) {
+            actions = `<button type="button" class="btn ghost" data-lmpull="${esc(m.id)}" ${lm.ollamaState === 'running' ? '' : 'disabled title="先启动 Ollama（下方）"'} style="font-size:12px">安装</button>`
+          } else if (!m.configured) {
+            actions = `<button type="button" class="btn ghost" data-lmadd="${esc(m.id)}" ${lm.ollamaState === 'running' ? '' : 'disabled'} style="font-size:12px">接入</button>`
+          } else if (lm.defaultModel === m.instanceId) {
+            actions = `<span style="font-size:11.5px;color:var(--ok,#22c55e)">✓ 对话默认</span>`
+          } else {
+            actions = `<button type="button" class="btn ghost" data-lmdefault="${esc(m.instanceId)}" style="font-size:12px">设为对话默认</button>`
+          }
           return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px 16px;background:var(--bg2)">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <b style="font-size:13.5px">${esc(m.title)}</b>
@@ -1857,6 +1872,7 @@ async function renderWork(nav, arg, label2) {
               <span style="font-size:11px;color:var(--muted)">${stateTxt}</span>
               <span style="flex:1"></span>
               <span style="font-size:11px;color:var(--muted)">${m.sizeGB.toFixed(1)}GB · 上下文 ${m.ctxSuggest}</span>
+              ${actions}
             </div>
             <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5">${esc(m.tagline)}</div>
             ${m.fitReason ? `<div style="font-size:11.5px;color:${b.color};margin-top:4px">${esc(m.fitReason)}</div>` : ''}
@@ -1864,6 +1880,27 @@ async function renderWork(nav, arg, label2) {
             ${m.caps && m.caps.length ? `<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${m.caps.map((c) => `<span style="font-size:10.5px;padding:1px 7px;border-radius:5px;background:var(--bg3,#1e293b);color:var(--muted)">${c === 'tools' ? '工具调用' : c === 'thinking' ? '思考' : c === 'embed' ? '嵌入检索' : c}</span>`).join('')}</div>` : ''}
           </div>`
         }).join('<div style="height:8px"></div>')
+        // P2 动作接线
+        catBox.querySelectorAll('[data-lmpull]').forEach((el) => { el.onclick = async () => {
+          const name = el.dataset.lmpull; el.disabled = true; el.textContent = '安装中…'
+          const g = await loadAppSettings(); const cli = ((g.general ?? {}).ollamaCli) || null
+          const r = await window.moonlybox.ollamaPullTerm({ cli, model: name })
+          if (r && r.ok) { el.textContent = '终端已拉起，完成后自动点亮'; setTimeout(() => renderWork('settings'), 2500) }
+          else { el.disabled = false; el.textContent = '安装' }
+        } })
+        catBox.querySelectorAll('[data-lmadd]').forEach((el) => { el.onclick = async () => {
+          const name = el.dataset.lmadd; el.disabled = true
+          const g = await loadAppSettings(); const mcfg = g.model ?? {}
+          const arr = [...(mcfg.local ?? [])]
+          if (!arr.some((x) => x.model === name)) arr.push({ id: `ol-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: `Ollama · ${name}`, model: name, enabled: true, baseUrl: 'http://127.0.0.1:11434/v1' })
+          const r = await saveAppSettings({ model: { local: arr, ...(arr.length && !mcfg.default ? { default: `local:${arr[0].id}` } : {}) } })
+          if (r.ok) renderWork('settings')
+        } })
+        catBox.querySelectorAll('[data-lmdefault]').forEach((el) => { el.onclick = async () => {
+          const id = el.dataset.lmdefault; el.disabled = true
+          const r = await saveAppSettings({ model: { default: `local:${id}` } })
+          if (r.ok) renderWork('settings')
+        } })
       })()
       {
         const box = $('sp-ol-state')
