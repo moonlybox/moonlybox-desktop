@@ -86,6 +86,7 @@ export function isLocalEndpoint(baseUrl: string): boolean {
   return /\/\/?(127\.0\.0\.1|localhost|\[::1\])[:/]/.test(baseUrl) || baseUrl.startsWith('http://[::1]')
 }
 
+
 /** 单轮对话（非流式，CLI 场景 300 字纪律内无需流式渲染） */
 export async function byokChat(
   system: string,

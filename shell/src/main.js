@@ -462,7 +462,16 @@ app.whenReady().then(() => {
   // #310.11：Ollama 四态探测（服务在跑/装了没跑/没装/失效修复由 renderer 侧对话失败触发）
   ipcMain.handle('ollama:probe', async (_e, cliOverride) => {
     const running = await probeOllamaHttp().catch(() => null)
-    if (running && running.version) return { state: 'running', version: running.version }
+    if (running && running.version) {
+      // #317.F15：running 态顺带读运行时 context（/api/ps 首个已加载模型；未加载=null——renderer 据此提示）
+      let context = null
+      try {
+        const base = process.env.MOONLYBOX_OLLAMA_URL || 'http://127.0.0.1:11434'
+        const ps = await fetch(base + '/api/ps', { signal: AbortSignal.timeout(1500) }).then((r) => r.json())
+        context = ps?.models?.[0]?.context ?? null
+      } catch {}
+      return { state: 'running', version: running.version, context }
+    }
     // #310.12：手工定位的 cli 优先（renderer 从 settings.general.ollamaCli 读出传入）
     const cli = (cliOverride && fs.existsSync(cliOverride)) ? cliOverride : findOllamaCli()
     if (!cli) return { state: 'not_found' }
@@ -542,13 +551,17 @@ app.whenReady().then(() => {
       // #317.F4：脱离客户端生命周期独立存活（否则客户端退出连带杀掉 ollama serve，每次重启都「服务未运行」）
       // Windows：detached=true 会以 DETACHED_PROCESS 启动——ollama.exe（console 程序）自行 AllocConsole 弹黑窗，
       // windowsHide 对 detached 无效（libuv 行为）。改走 `cmd /c start /b`：无窗口+父退出不回收；引号路径安全由 cmd start 处理。
+      // #317.F15：启动即带大上下文默认值——Ollama 默认 num_ctx=4096 静默截断超长 prompt（29 工具 schema
+      // ≈4.2k token + system 必超），/v1 端点又不接受 options.num_ctx（运行时无救）→ 只能在 serve 层解决。
+      // 32768 对 16GB 内存机安全（qwen3:4b 权重 2.5G+KV≈4.7G）；由本客户端拉起的实例全程闭环。
+      const serveEnv = { ...process.env, OLLAMA_CONTEXT_LENGTH: '32768' }
       if (isWin) {
         // start 的第一个引号参数会被当窗口标题——先放 '' 占位；整体单串走 shell 避免 cmd 二次解析分裂参数
         const line = `start /b "" "${cli}" serve`
-        const child = require('child_process').spawn('cmd.exe', ['/c', line], { stdio: 'ignore', windowsHide: true, shell: false })
+        const child = require('child_process').spawn('cmd.exe', ['/c', line], { stdio: 'ignore', windowsHide: true, shell: false, env: serveEnv })
         child.unref()
       } else {
-        const child = require('child_process').spawn(cli, ['serve'], { detached: true, stdio: 'ignore' })
+        const child = require('child_process').spawn(cli, ['serve'], { detached: true, stdio: 'ignore', env: serveEnv })
         child.unref()
       }
       // 等 HTTP 就绪（最多 8s）

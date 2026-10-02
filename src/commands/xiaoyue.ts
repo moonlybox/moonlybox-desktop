@@ -3,7 +3,7 @@ import { loadCredentials } from '../lib/auth'
 import { defaultBaseUrl } from '../lib/config'
 import { apiCall } from '../lib/api'
 import { searchLocalAsync } from '../lib/indexer'
-import { byokReady, byokChat, loadByokMeta, saveByokMeta, saveByokKey, ByokConfig } from '../lib/llm'
+import { byokReady, byokChat, loadByokMeta, saveByokMeta, saveByokKey, ByokConfig, isLocalEndpoint } from '../lib/llm'
 import { appendDialog, recentDialogs } from '../lib/dialogs'
 import { loadConfig } from '../lib/config'
 import * as readline from 'node:readline'
@@ -524,6 +524,26 @@ ${memBlock}` : ''}${skillBlock}`
   // 云端优化开：memTail 注入本轮问题尾部（agentLoop deps.question）；关：空
   const questionFinal = cacheOptimizeOn ? `${built.messages.filter((m) => m.role === 'user').at(-1)?.content ?? question}${memTail}` : (built.messages.filter((m) => m.role === 'user').at(-1)?.content ?? question)
   for (const f of customCat.failures) console.log(`（自定义 MCP ${f.name} 连接失败：${f.error}）`)
+  // #317.F15：本地 Ollama 运行时上下文探测（进程内 memo 一次）——默认 4096 会静默截断工具表（4.2k token 必超），
+  // /v1 又不接受 num_ctx。模型已加载时 /api/ps.context 唯一可信；过小即提示（救济=环境变量或客户端拉起）。
+  {
+    const { resolveActiveModel } = await import('../lib/model-registry')
+    const act = resolveActiveModel()
+    if (act && isLocalEndpoint(act.baseUrl) && /:11434|\/ollama/i.test(act.baseUrl)) {
+      const g = globalThis as unknown as { __mbCtxWarned?: boolean }
+      if (!g.__mbCtxWarned) {
+        try {
+          const psBase = new URL(act.baseUrl).origin
+          const ps = await fetch(psBase + '/api/ps', { signal: AbortSignal.timeout(1500) }).then((r) => r.json())
+          const ctx = ps?.models?.[0]?.context
+          if (typeof ctx === 'number' && ctx < 8192) {
+            g.__mbCtxWarned = true
+            console.log(`（提示：Ollama 上下文窗口 ${ctx} 过小，工具清单会被截断（表现为「没有某工具」/答非所问）。建议退出 Ollama 后设置环境变量 OLLAMA_CONTEXT_LENGTH=32768 再启动，或改用客户端「启动本地服务」（已内置该默认值）。）`)
+          }
+        } catch { /* 静默 */ }
+      }
+    }
+  }
   // #317.⑥ LLM 调用单源（主/子共用；子任务 withThinking=false——D6 精简）
   const makeChatFn = (withThinking: boolean): typeof import('../lib/llm').byokChatMessages => async (messages, tools) => {
     // #283：对话走模型注册表（设置-对话默认模型；空/失效回落旧 byok）
