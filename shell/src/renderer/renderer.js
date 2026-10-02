@@ -1404,8 +1404,13 @@ async function renderXiaoyuePane(arg) {
       const sb = document.getElementById('btn-stop')
       if (ab && sb && ab.disabled) sb.style.display = ''
     }
-    if (xyPaneMeta) bindChat({ meta: xyPaneMeta })
-    else w.insertAdjacentHTML('afterbegin', '<div class="muted" style="padding:16px">左侧新建工作空间或对话开始。</div>')
+    if (xyPaneMeta) {
+      bindChat({ meta: xyPaneMeta })
+      // #317.MDI：重放后台缓冲行（该会话跑过的过程流）——bindChat 的 log 分类管道现成可用
+      const buf = xyBufById.get(xyPaneMeta.id) ?? []
+      xyBufById.delete(xyPaneMeta.id)
+      window.__xyReplay?.(buf)
+    } else w.insertAdjacentHTML('afterbegin', '<div class="muted" style="padding:16px">左侧新建工作空间或对话开始。</div>')
     xyPane.dataset.ready = '1'
     setFrameTabCtx('xiaoyue', xyActiveChatTitle())
     return
@@ -3941,6 +3946,9 @@ function showWorkspaceDialog() {
 let kernelEventBound = false
 let activeXyId = null // #317.F2：当前活跃 xiaoyue RPC id（模块级——bindChat 重入不丢）
 const rpcCmdById = new Map() // #317.F2：rpc id→cmd（行门控只针对 xiaoyue）
+// #317.MDI：行归属路由——rpcId→chatId；每会话行缓冲（非聚焦会话的行暂存，切回重放清空）
+const xyRpcChat = new Map()
+const xyBufById = new Map()
 function bindChat(chatInfo) {
   const meta = chatInfo?.meta
   // #288 对话 UI：log() 升级为结构化消息渲染——行前缀分类（用户气泡/AI 气泡 Markdown/工具折叠条/思考折叠条/活动小字）。
@@ -4088,9 +4096,25 @@ function bindChat(chatInfo) {
     window.moonlybox.subscribe()
     window.moonlybox.onKernelEvent((msg) => {
       // #317.F2：会话行门控——xiaoyue RPC 的行只上屏当前活跃会话（旧 RPC 迟到行不串扰）；其他 cmd 行不受影响
-      if (msg.event === 'rpc-start') { rpcCmdById.set(msg.id, String(msg.payload ?? '')); if (msg.payload === 'xiaoyue') activeXyId = msg.id; return }
+      if (msg.event === 'rpc-start') {
+        rpcCmdById.set(msg.id, String(msg.payload ?? ''))
+        if (msg.payload === 'xiaoyue') {
+          // #317.MDI：rpcId→chatId 归属（发起时刻的会话）——后台行进各自缓冲，聚焦会话实时上屏
+          if (window.__xyPendingChat) { xyRpcChat.set(msg.id, window.__xyPendingChat); window.__xyPendingChat = null }
+          else if (!xyRpcChat.has(msg.id)) xyRpcChat.set(msg.id, xyPaneMeta?.id ?? '?')
+          activeXyId = msg.id
+        }
+        return
+      }
       if (msg.event === 'log' || msg.event === 'stderr') {
-        if (rpcCmdById.get(msg.id) === 'xiaoyue' && msg.id !== activeXyId) return
+        if (rpcCmdById.get(msg.id) !== 'xiaoyue') return
+        // #317.MDI：行按 rpcId→chatId 归属——聚焦会话实时上屏；后台会话进缓冲（切回重放）
+        const chatId = xyRpcChat.get(msg.id) ?? '?'
+        if (msg.id !== activeXyId || chatId !== (xyPaneMeta?.id ?? '?')) {
+          if (!xyBufById.has(chatId)) xyBufById.set(chatId, [])
+          xyBufById.get(chatId).push(msg.event === 'stderr' ? '[stderr] ' + msg.payload : msg.payload)
+          return
+        }
       }
       if (xyAborted && (msg.event === 'log' || msg.event === 'stderr')) return // #310.14：停止后不上屏
       if (msg.event === 'log') { log(msg.payload) }
@@ -4138,6 +4162,7 @@ function bindChat(chatInfo) {
     if (stopBtn) stopBtn.style.display = ''
     xyAborted = false
     xyRunning.add(xyPaneMeta?.id ?? '?')
+    window.__xyPendingChat = xyPaneMeta?.id ?? '?' // #317.MDI：rpc-start 时建归属映射
     addMsg('user', q) // #288：用户消息直接走气泡（不再经行分类）
     showThinking()
     // #269：工具（管家模式）归 MCP 分类——mcp.builtinEnabled 总闸；#282 chatId/workspaceId 随请求
@@ -4188,6 +4213,7 @@ function bindChat(chatInfo) {
       scroll()
     }
     xyRunning.delete(xyPaneMeta?.id ?? '?')
+    xyRpcChat.delete(activeXyId)
     flushCur()
     // #317.MDI/M2：后台完成通知——发起时在对话 A，完成时用户已切到别的功能页 → 系统通知+列表徽标
     if (currentNav !== 'xiaoyue') {
@@ -4307,6 +4333,8 @@ function bindChat(chatInfo) {
     logEl().appendChild(sep2)
     scroll()
   }
+  // #317.MDI：暴露重放句柄（renderXiaoyuePane 切回会话时重放后台缓冲行）
+  window.__xyReplay = (lines) => { for (const line of lines) log(line); scroll() }
 }
 
 function renderConfirmBar(rpcId, payload) {
