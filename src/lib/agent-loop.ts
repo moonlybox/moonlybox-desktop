@@ -176,6 +176,13 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   if (has('web_search')) caps.push(`联网：搜索 web_search、读网页 ${pick('fetch_url')}`)
   if (has('local_task_create_compile')) caps.push(`知识整理：local_task_list_uncompiled 扫描→确认→local_task_create_compile 后台任务；进度 local_task_status`)
   if (has('skill_list')) caps.push(`技能：skill_list 列出、skill_view 读全文`)
+  // #317.P2b：易混工具对分工表（小模型路由高频混淆点——一行分工，只有对应工具在装配里才注入）
+  if (has('search_library') && has('search_topics') && has('search_memory'))
+    caps.push(`检索分工：search_library=查文档原文、search_topics=查主题跨文档关联、search_memory=查你的画像/已知事实`)
+  if (has('add_sticky') && has('save_note') && has('extract_archive'))
+    caps.push(`保存分工：add_sticky=记一条短想法、save_note=存成段内容为文档、extract_archive=把网页存进书房`)
+  if (has('search_library') && has('raw_get'))
+    caps.push(`溯源：search_library 命中后要看某篇全文/历史版本用 raw_get`)
   const customs = tools.filter((t) => t.name.startsWith('mcp_') || t.name.includes('__')) as unknown as Array<{ name: string; description?: string; title?: string; server?: string }>
   if (customs.length) {
     // #317.P2：引导行带短描述（与 openaiTools 同源兜底）——路由链双层有信息
