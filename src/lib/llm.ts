@@ -214,8 +214,11 @@ export async function byokChatMessages(
         console.log(`（LLM 空正文 finish=length：max_tokens ${maxTokens}→${maxTokens * 2} 重试一次）`)
         return byokChatMessages(messages, tools, timeoutMs, modelOverride, Math.min(maxTokens * 2, 32_000))
       }
-      const hint = (msg as Record<string, unknown>).reasoning_content
-        ? '模型只输出思考未输出正文（思考型模型在 tools 协议下可能吃掉全部 max_tokens）'
+      // #317.F8：Ollama /v1 think:true 的思考落 message.thinking（非 reasoning_content）——
+      // content=null+thinking 有值=模型把全部输出花在思考（qwen 小模型 tools 协议下已知行为，重试大概率同样空）
+      const thinkField = (msg as Record<string, unknown>).thinking ?? (msg as Record<string, unknown>).reasoning_content
+      const hint = thinkField
+        ? '模型只输出了思考未输出正文——qwen 小模型在思考开启+tools 协议下的已知行为；建议关闭思考档重试'
         : '端点可能不兼容 tools 协议或返回格式异常'
       return { ok: false, error: `模型返回空内容（finish_reason=${choice?.finish_reason ?? '未知'}；${hint}）` }
     }

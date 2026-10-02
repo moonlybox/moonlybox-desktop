@@ -3049,6 +3049,12 @@ async function renderWork(nav, arg, label2) {
           <button class="btn" id="btn-ask" ${meta ? '' : 'disabled'}>${t('xy.send')}</button>
         </div>
       </div>`
+        // #317.F8c：重渲后恢复运行态——上一次 askWith 仍在 await（切页切回），停止按钮不能被模板 display:none 吞掉
+    {
+      const ab = document.getElementById('btn-ask')
+      const sb = document.getElementById('btn-stop')
+      if (ab && sb && ab.disabled) sb.style.display = ''
+    }
     if (meta) bindChat({ meta })
     else w.insertAdjacentHTML('afterbegin', '<div class="muted" style="padding:16px">左侧新建工作空间或对话开始。</div>')
     return
