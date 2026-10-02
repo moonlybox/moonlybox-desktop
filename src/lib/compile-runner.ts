@@ -43,6 +43,8 @@ interface Skeleton {
 async function fetchSkeletons(cloudIds: string[]): Promise<Map<string, Skeleton> | null> {
   try {
     const { loadCredentials } = await import('./auth')
+    // #317.5b：续期后取 token（整理任务回传/拉骨架同样 1h 过期 401「未登录或登录已过期」）
+    try { const { ensureFreshToken } = await import('./device-flow'); await ensureFreshToken() } catch {}
     if (!loadCredentials()?.accessToken) return null
     if (cloudIds.length === 0) return null
     const res = await apiCall<{ ok: boolean; data?: { skeletons?: Skeleton[] }; message?: string }>(
@@ -214,6 +216,8 @@ async function pushToMoon(jobId: string, itemPath: string, srcHash: string | und
     if (!cloudId) { updateItem(jobId, itemPath, { error: '本地完成；源文档未同步到云端（纯本地文档），不回传' }); return } // 源未在云端书房（本地新建未上行）
     // #310.60：source_version 对账——manifest 带版本（编译时点的源版本），补传/非骨架路径不再恒 0
     const srcVersionAtCompile = manifest[cloudId]?.version ?? 0
+    // #317.5b：续期后取 token（回传 401「未登录或登录已过期」根因同 #317.5——本处裸用 accessToken 零续期）
+    try { const { ensureFreshToken } = await import('./device-flow'); await ensureFreshToken() } catch {}
     const { loadCredentials: lc } = await import('./auth')
     const res = await apiCall<{ ok: boolean; message?: string; code?: string; data?: { wikiId?: string } }>(
       'POST',
