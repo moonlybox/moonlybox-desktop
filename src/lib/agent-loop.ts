@@ -256,8 +256,11 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     ? `\n【当前可用工具】\n${caps.map((c) => '- ' + c).join('\n')}\n用户问题只要可能由上述某工具回答（尤其是「列出/查看/有多少/我的…」类查询），先调工具再回答；不确定就选最接近的一个试，不要凭空说「没有该功能」。上述工具同时通过 API 的 tools 参数提供——一律可用，禁止向用户复述工具清单、禁止声称「某工具未在工具列表中定义/不存在」。工具返回空结果（0 条/空列表）就如实回答没有，不要转为创建/修改等写操作——用户没要求新建就不要新建。`
     : ''
 
+  // #317.F12：回复纪律常驻——4B 级模型关思考后会把内部分析/草稿直接写进回复（真机：自我介绍输出整段
+  // 「好的，用户让我…首先我需要…可能的回复是…」）——system 层先压一遍
+  const answerDiscipline = `\n【回复纪律】你的回复会原样展示给用户：只输出给用户看的最终中文回答本身。禁止把内部分析、计划、草稿对照（如「首先我需要…」「可能的回复是…」「Wait…」）、英文思考写进回复。`
   const messages: import('../lib/llm').ChatMessage[] = [
-    { role: 'system', content: system + toolGuide },
+    { role: 'system', content: system + toolGuide + answerDiscipline },
     { role: 'user', content: question },
   ]
   const used: Array<{ name: string; ok: boolean }> = []
@@ -280,7 +283,14 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     if (!res.ok) throw new Error(res.error ?? 'LLM 调用失败')
 
     if (!res.toolCalls || res.toolCalls.length === 0) {
-      return { answer: res.text ?? '', toolCalls: used }
+      let text = res.text ?? ''
+      // #317.F12：推理泄漏检测+一次自纠——system 纪律失守时兜底（判窄不判宽，避免误伤正常长答）
+      if (isLeakyAnswer(text)) {
+        say('（检测到回复夹带分析过程，正在要求模型重写…）')
+        const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: '你的上一条回复夹带了内部分析过程/英文思考，没有直接回答问题。请重新输出：只给面向用户的最终中文回答本身，一两句话或一个简洁清单，不要任何分析、计划、草稿对照。' }], undefined)
+        if (fix.ok && fix.text && !isLeakyAnswer(fix.text)) text = fix.text
+      }
+      return { answer: text, toolCalls: used }
     }
 
     // assistant(tool_calls) 必须原样回注
@@ -406,4 +416,18 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     if (fin.ok && fin.text) return { answer: fin.text, toolCalls: used }
   } catch { /* 汇总失败回落占位 */ }
   return { answer: '（工具调用轮次达到上限，以上是已执行的结果）', toolCalls: used }
+}
+
+/** #317.F12：终答推理泄漏判定——4B 级模型关思考后内部分析/英文思维链泄进正文（自纠重试用，判窄不判宽） */
+function isLeakyAnswer(text: string): boolean {
+  const t = (text ?? '').trim()
+  if (!t) return false
+  // 泄漏开头特征（真机样本：「好的，用户让我…」「首先，我需要…」「Wait, let's see…」）
+  const heads = ['好的，用户', '首先，我需要', '首先我需要', 'Wait,', "Wait '", '让我分析', '我需要看看', '我需要检查', '可能的回复是', "Okay, let's", 'Okay, the user']
+  if (heads.some((h) => t.startsWith(h))) return true
+  // 中文语境里成段英文思维链（≥2 段 40+ 连续英文字符）
+  const englishRuns = t.match(/[A-Za-z][A-Za-z',. ]{39,}/g)
+  const cjk = (t.match(/[\u4e00-\u9fff]/g) ?? []).length
+  if (englishRuns && englishRuns.length >= 2 && cjk < englishRuns.join('').length) return true
+  return false
 }
