@@ -82,7 +82,7 @@ export interface ChatResult {
 }
 
 /** #310.14：本地端点判定（Ollama/LM Studio 等 127.0.0.1|localhost——无需 key） */
-function isLocalEndpoint(baseUrl: string): boolean {
+export function isLocalEndpoint(baseUrl: string): boolean {
   return /\/\/?(127\.0\.0\.1|localhost|\[::1\])[:/]/.test(baseUrl) || baseUrl.startsWith('http://[::1]')
 }
 

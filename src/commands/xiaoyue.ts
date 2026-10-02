@@ -531,9 +531,13 @@ ${memBlock}` : ''}${skillBlock}`
     const active = resolveActiveModel()
     // #317.4：思考模式档位（主会话每次调用现读——切档即刻生效；子任务不读，D6 精简）
     const thinking = withThinking && loadSettings().chat?.thinking === 'on' ? ('on' as const) : ('off' as const)
+    // #317.F7：本地小模型降档——qwen3:4b 级 ~8 tok/s，16000 上限=最长 32 分钟生成窗口（假死根源）；
+    // 对话场景 4096 封顶（300 字回答纪律+工具循环短决策；编译链路独立不受影响），云端维持 16000
+    const { isLocalEndpoint } = await import('../lib/llm')
+    const localCap = active && isLocalEndpoint(active.baseUrl) ? 4_096 : 16_000
     const r = await chatWithRetry(
       // #310.19：max_tokens 16000——思考型模型 tools 协议下 reasoning 吃掉 4000 全额的余量
-      () => byokChatMessages(messages, tools as never, 90_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined, 16_000, thinking),
+      () => byokChatMessages(messages, tools as never, 90_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined, localCap, thinking),
       (attempt, total, err) => console.log(`（LLM 调用失败，重试 ${attempt}/${total}：${err.slice(0, 80)}）`),
     )
     // #280.3.2：【真根因修复】toolCalls 必须透传——原 `{ ok, text }` 把 tool_calls 静默丢弃，
