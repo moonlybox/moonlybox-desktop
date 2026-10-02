@@ -3928,6 +3928,9 @@ function bindChat(chatInfo) {
     const line = String(t)
     // #310.17：静默行=不表示输出开始的过程注记——thinking 保持并更新阶段文案
     if (/^（已接入工具 /.test(line)) { showThinking(t('xy.phaseTools')); return }
+    // #317.F16/P3o：工具回执行=上一轮的回答已出、本轮回执到达——此时 cur 常是上轮 AI 气泡→误并进气泡（真机：附加在回复中）。
+    // 归 thinking 静默行：阶段文案短暂可见，不落常驻 DOM。
+    if (/^（工具调用 \d+\/\d+ 成功）$/.test(line)) { showThinking(t('xy.phaseToolRun')); return }
     if (/^（本地|^（云端|^（上下文|^（记忆/.test(line)) { showThinking(t('xy.phasePrep')); return }
     // #317.F3：LLM 重试行=模型慢/瞬态错——thinking 持续并把轮次写进文案（用户知道没死机；本地大模型首 token 慢是常态）
     const mRetry = line.match(/^（LLM 调用失败，重试 (\d+)\/(\d+)：(.*)）$/)
@@ -3955,8 +3958,12 @@ function bindChat(chatInfo) {
     }
     if (line.startsWith('⚙ ')) {
       // #310.18：⚙=动作开始非结束——thinking 持续换「正在执行工具…」（慢工具如 local_task 扫描 10s+ 有状态）；结果行到达才收
+      // #317.F16/P3o：summary 只留工具名（截首空格段）；参数进折叠体首行（裸 args 不再挂 summary 上屏）
       flushCur()
-      const body = addFold(line, '', 'tool')
+      const sp1 = line.indexOf(' ')
+      const tName = sp1 > 0 ? line.slice(1, sp1) : line.slice(1)
+      const tArgs = sp1 > 0 ? line.slice(sp1 + 1) : ''
+      const body = addFold('⚙ ' + tName, tArgs, 'tool')
       cur = { type: 'tool', el: body, text: '' }
       showThinking(t('xy.phaseToolRun'))
       return
@@ -4060,7 +4067,10 @@ function bindChat(chatInfo) {
     const tools = APP_SETTINGS?.mcp?.builtinEnabled !== false
     const payload = { q, chatId: meta?.id, workspaceId: meta ? (meta.workspaceId ?? null) : undefined }
     if (tools) payload.tools = true
-    const r = await window.moonlybox.rpc('xiaoyue', payload, 300_000)
+    // #317.F16/P3o：本地默认模型放宽 RPC 等待——8 tok/s 下思考+工具轮常超 300s（真机 113.6s/轮×多轮），
+    // 300s 硬超时=误判（模型仍在跑、任务仍会创建成功）。本地 600s，云端维持 300s。
+    const isLocalDefault = String(APP_SETTINGS?.model?.default ?? '').startsWith('local:')
+    const r = await window.moonlybox.rpc('xiaoyue', payload, isLocalDefault ? 600_000 : 300_000)
     askBtn.disabled = false
     if (stopBtn) stopBtn.style.display = 'none'
     hideThinking()
@@ -4077,13 +4087,26 @@ function bindChat(chatInfo) {
       flushCur()
       const errEl = document.createElement('div')
       errEl.className = 'chat-err'
-      errEl.textContent = '⚠ ' + (r.message ?? r.text ?? t('ui.reqFail'))
-      const retry = document.createElement('button')
-      retry.className = 'btn ghost'
-      retry.textContent = t('xy.retry')
-      retry.style.marginLeft = '8px'
-      retry.onclick = () => { errEl.remove(); askWith(q) }
-      errEl.appendChild(retry)
+      const isTimeout = /timeout|timed out|超时/i.test(String(r.message ?? r.text ?? ''))
+      if (isTimeout && isLocalDefault) {
+        // #317.F16/P3o：本地慢模型 RPC 超时≠失败——kernel 那轮仍在跑（GPU 在转、任务仍会创建），
+        // 「重试」会造成重复执行。文案如实+按钮改名。
+        errEl.textContent = '⚠ 等待超时（本轮已超过 10 分钟断开显示，但模型可能仍在后台运行并完成任务）——建议稍等片刻直接提问查看结果，不要立即重发以免重复执行。'
+        const keep = document.createElement('button')
+        keep.className = 'btn ghost'
+        keep.textContent = '仍要重发'
+        keep.style.marginLeft = '8px'
+        keep.onclick = () => { errEl.remove(); askWith(q) }
+        errEl.appendChild(keep)
+      } else {
+        errEl.textContent = '⚠ ' + (r.message ?? r.text ?? t('ui.reqFail'))
+        const retry = document.createElement('button')
+        retry.className = 'btn ghost'
+        retry.textContent = t('xy.retry')
+        retry.style.marginLeft = '8px'
+        retry.onclick = () => { errEl.remove(); askWith(q) }
+        errEl.appendChild(retry)
+      }
       logEl().appendChild(errEl)
       scroll()
     }
