@@ -760,6 +760,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         const s = loadSettings()
         const localInstances = s.model?.local ?? []
         const defaultId = String(s.model?.default ?? '')
+        const { defaultParams } = require('../lib/local-models') as typeof import('../lib/local-models')
         const models = LOCAL_MODEL_CATALOG.map((spec) => {
           const instSize = installed[spec.id]
           const fit = fitFor(spec, hw, instSize)
@@ -774,6 +775,8 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
             configured: !!inst,
             enabled: !!inst?.enabled,
             instanceId: inst?.id ?? null,
+            // #317.F16/P3：参数=用户已存值（settings.model.local[].params）优先，否则模型默认模板
+            params: { ...(defaultParams(spec)), ...((inst as unknown as { params?: { temperature: number; maxTokens: number } })?.params ?? {}) },
           }
         })
         code = 0

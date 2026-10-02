@@ -1865,6 +1865,18 @@ async function renderWork(nav, arg, label2) {
           } else {
             actions = `<button type="button" class="btn ghost" data-lmdefault="${esc(m.instanceId)}" style="font-size:12px">设为对话默认</button>`
           }
+          // #317.F16/P3：调优折叠区（已接入卡；temperature/max_tokens 用户可改+恢复默认）
+          const tuneId = `sp-lm-tune-${esc(m.id).replace(/[^a-z0-9]/gi, '-')}`
+          const tuneBlock = m.configured ? `
+            <div style="margin-top:6px"><button type="button" class="btn ghost" data-lmtune="${tuneId}" style="font-size:11px;padding:2px 8px">调优 ▸</button></div>
+            <div id="${tuneId}" style="display:none;margin-top:6px;padding:8px 10px;border:1px dashed var(--border);border-radius:8px;font-size:12px">
+              <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px">温度
+                <input type="number" step="0.1" min="0" max="2" value="${m.params?.temperature ?? 0.3}" data-lmtemp="${esc(m.id)}" class="set-input" style="width:70px;padding:2px 6px;font-size:12px"></label>
+              <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px">max_tokens
+                <input type="number" step="256" min="256" max="16384" value="${m.params?.maxTokens ?? 4096}" data-lmmaxtok="${esc(m.id)}" class="set-input" style="width:90px;padding:2px 6px;font-size:12px"></label>
+              <button type="button" class="btn ghost" data-lmreset="${esc(m.id)}" style="font-size:11px;padding:2px 8px">恢复默认</button>
+              <span style="font-size:10.5px;color:var(--muted)">修改即时生效（对话请求层）</span>
+            </div>` : ''
           return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px 16px;background:var(--bg2)">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <b style="font-size:13.5px">${esc(m.title)}</b>
@@ -1878,6 +1890,7 @@ async function renderWork(nav, arg, label2) {
             ${m.fitReason ? `<div style="font-size:11.5px;color:${b.color};margin-top:4px">${esc(m.fitReason)}</div>` : ''}
             ${m.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:3px;opacity:.85">ℹ ${esc(m.notes)}</div>` : ''}
             ${m.caps && m.caps.length ? `<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${m.caps.map((c) => `<span style="font-size:10.5px;padding:1px 7px;border-radius:5px;background:var(--bg3,#1e293b);color:var(--muted)">${c === 'tools' ? '工具调用' : c === 'thinking' ? '思考' : c === 'embed' ? '嵌入检索' : c}</span>`).join('')}</div>` : ''}
+            ${tuneBlock}
           </div>`
         }).join('<div style="height:8px"></div>')
         // P2 动作接线
@@ -1900,6 +1913,35 @@ async function renderWork(nav, arg, label2) {
           const id = el.dataset.lmdefault; el.disabled = true
           const r = await saveAppSettings({ model: { default: `local:${id}` } })
           if (r.ok) renderWork('settings')
+        } })
+        // #317.F16/P3：调优折叠+保存（temperature/max_tokens 即时生效；恢复默认=删 params 键）
+        catBox.querySelectorAll('[data-lmtune]').forEach((el) => { el.onclick = () => {
+          const box = document.getElementById(el.dataset.lmtune)
+          if (box) { const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; el.textContent = open ? '调优 ▾' : '调优 ▸' }
+        } })
+        const saveParam = async (modelTag, key, value) => {
+          const g = await loadAppSettings()
+          const arr = (g.model?.local ?? []).map((x) => (x.model === modelTag ? { ...x, params: { ...(x.params ?? {}), [key]: value } } : x))
+          return saveAppSettings({ model: { local: arr } })
+        }
+        catBox.querySelectorAll('input[data-lmtemp]').forEach((el) => { el.onchange = async () => {
+          const v = Math.max(0, Math.min(2, Number(el.value) || 0.3))
+          el.value = v
+          const r = await saveParam(el.dataset.lmtemp, 'temperature', v)
+          if (!r.ok) el.style.borderColor = 'var(--err,#ef4444)'
+        } })
+        catBox.querySelectorAll('input[data-lmmaxtok]').forEach((el) => { el.onchange = async () => {
+          const v = Math.max(256, Math.min(16384, Number(el.value) || 4096))
+          el.value = v
+          const r = await saveParam(el.dataset.lmmaxtok, 'maxTokens', v)
+          if (!r.ok) el.style.borderColor = 'var(--err,#ef4444)'
+        } })
+        catBox.querySelectorAll('[data-lmreset]').forEach((el) => { el.onclick = async () => {
+          const tag = el.dataset.lmreset
+          const g = await loadAppSettings()
+          const arr = (g.model?.local ?? []).map((x) => (x.model === tag ? { ...x, params: undefined } : x))
+          await saveAppSettings({ model: { local: arr } })
+          renderWork('settings')
         } })
       })()
       {

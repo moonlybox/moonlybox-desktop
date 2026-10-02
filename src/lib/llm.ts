@@ -158,6 +158,8 @@ export async function byokChatMessages(
   maxTokens = 4000,
   /** #317.4：思考模式档位（小月对话输入框）——'on'=不注入关思考指令（GLM 回归默认思考/Ollama think:true）；缺省 off=现状 */
   thinkingMode?: 'on' | 'off',
+  /** #317.F16/P3：采样温度（本地实例参数模板；缺省 0.3 现状） */
+  chatTemperature?: number,
 ): Promise<ChatWithToolsResult> {
   const meta = modelOverride ? { baseUrl: modelOverride.baseUrl, model: modelOverride.model } : loadByokMeta()
   const apiKey = modelOverride ? modelOverride.apiKey : loadByokKey()
@@ -177,7 +179,7 @@ export async function byokChatMessages(
         messages,
         ...(tools && tools.length ? { tools } : {}),
         max_tokens: maxTokens, // #310.19：可变上限（默认 4000）
-        temperature: 0.3,
+        temperature: chatTemperature ?? 0.3, // #317.F16/P3：本地实例参数模板
         // #310.36：思考型模型关思考（编译/分析类任务无需 reasoning；思考吃满 max_tokens=空正文主因）
         // 按端点家族注入（严格校验端点对未知字段 400，不能全量注入）：
         // - Ollama 本地 /v1：reasoning_effort:'none'——#317.F9：/v1 不认原生 think 字段（静默忽略→思考照开→空内容循环），

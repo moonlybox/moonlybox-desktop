@@ -16,6 +16,15 @@ export interface LocalModelSpec {
   ctxDefault: number // 推荐上下文（与 F15b 档位表同源逻辑）
   caps: Array<'tools' | 'thinking' | 'vision' | 'embed'>
   notes?: string // 已知坑（如实展示）
+  /** #317.F16/P3：推荐默认参数（用户可见可改；只含 OpenAI /v1 标准字段——top_k/repeat_penalty 是
+   *  Ollama 原生 options，/v1 对未知字段会 400（#17499 同因），不发） */
+  params?: { temperature: number; maxTokens: number }
+}
+
+/** 默认参数基线（对话场景；F7 本地降档同源） */
+export function defaultParams(spec: LocalModelSpec): { temperature: number; maxTokens: number } {
+  if (spec.family === 'embed') return { temperature: 0, maxTokens: 32 }
+  return { temperature: 0.3, maxTokens: 4096 } // F7：本地 4096 封顶（qwen3:4b 8tok/s → 生成窗口 ≤8.5 分钟）
 }
 
 /** 首发名单（用户审定 2026-10-02：qwen3 三档+llama 对照+嵌入模型；扩展位待 P4 云端热更） */
