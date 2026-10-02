@@ -142,6 +142,17 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
       text = parts.join('\n')
       break
     }
+    case 'syncNow': {
+      // #317.8c：书房「立即同步」——跑一轮周期闭环（补传+下行对账+✓打标+索引重建），与 5min 周期同源
+      try {
+        await syncCycle()
+        text = JSON.stringify({ ok: true })
+      } catch (e: any) {
+        code = 1
+        text = JSON.stringify({ ok: false, message: String(e?.message ?? e) })
+      }
+      break
+    }
     case 'syncreturn': {
       // #253.49：书房镜像区文件「保存即回传」——复用 /library/import/files 版本管道（与收集箱回传同源）
       try {

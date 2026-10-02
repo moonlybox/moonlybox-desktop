@@ -156,6 +156,10 @@ const I18N_DICT = {
   'help.kernel': { zh: '🧠 内核状态', en: '🧠 Kernel' },
   'help.about': { zh: 'ℹ️ 关于', en: 'ℹ️ About' },
   'tree.expandAll': { zh: '全部展开', en: 'Expand all' },
+  'tree.syncNow': { zh: '立即同步', en: 'Sync now' },
+  'tree.syncing': { zh: '同步中…', en: 'Syncing…' },
+  'tree.syncDone': { zh: '同步完成（补传/下行/索引已跑一轮）。', en: 'Sync complete (backfill / download / index refreshed).' },
+  'tree.syncFail': { zh: '同步失败：', en: 'Sync failed: ' },
   'ui.saveFail': { zh: '保存失败', en: 'Save failed' },
   'ui.saving': { zh: '保存中…', en: 'Saving…' },
   'ui.saved': { zh: '✓ 已保存', en: '✓ Saved' },
@@ -934,8 +938,22 @@ async function renderList(nav) {
       body.innerHTML = `<div class="muted" style="padding:10px">${t('list.vaultNotChosen')}</div>`
       return
     }
-    // 全展开/全收起（#253.29）
-    head.innerHTML = `${t(NAVS[nav].label)} <span id="tree-exp" style="float:right;font-weight:400;font-size:11px;color:var(--muted);cursor:pointer">${t('tree.expandAll')}</span>`
+    // 全展开/全收起（#253.29）+ #317.8c 立即同步（跑一轮周期闭环：补传+下行+打标+索引）
+    head.innerHTML = `${t(NAVS[nav].label)} <span id="tree-sync" style="float:right;font-weight:400;font-size:11px;color:var(--muted);cursor:pointer;margin-left:12px">${t('tree.syncNow')}</span><span id="tree-exp" style="float:right;font-weight:400;font-size:11px;color:var(--muted);cursor:pointer">${t('tree.expandAll')}</span>`
+    const syncEl = $('tree-sync')
+    if (syncEl) syncEl.onclick = async () => {
+      if (syncEl.dataset.busy === '1') return
+      syncEl.dataset.busy = '1'
+      syncEl.textContent = t('tree.syncing')
+      try {
+        const r = await window.moonlybox.rpc('syncNow', {}, 120_000)
+        const ok = r.event === 'done' && r.code === 0
+        mbAlert(ok ? t('tree.syncDone') : (t('tree.syncFail') + (r.message ?? '')))
+      } catch (e) { mbAlert(t('tree.syncFail') + String(e)) }
+      syncEl.dataset.busy = '0'
+      syncEl.textContent = t('tree.syncNow')
+      await renderList('vault')
+    }
     $('tree-exp').onclick = async () => {
       const expanding = $('tree-exp').textContent === t('tree.isExpanded')
       if (expanding) treeCollapsed.clear()
