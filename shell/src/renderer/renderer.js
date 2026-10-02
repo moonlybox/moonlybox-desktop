@@ -1821,10 +1821,14 @@ async function renderWork(nav, arg, label2) {
       }
     } else if (cat.id === 'model' && currentSetSub === 'local') {
       // #310.11：本地部署四态探测（公用不私用：检测已有 Ollama 直接复用，不重复安装；失效给修复入口）
+      // #317.F16/P3f：骨架占位——rpc 返回前布局固定（硬件检测中动效+名单等待语），避免打开时空窗后跳变
+      const lmSkel = (inner) => `<div style="border:1px solid var(--border);border-radius:10px;padding:11px 16px;background:var(--bg2);font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px">
+        <span class="lm-spin" style="width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--fg,#e2e8f0);border-radius:50%;display:inline-block;animation:lmSpin 0.8s linear infinite;flex:none"></span>${inner}</div>`
       panel(t('panel.model.local'), t('panel.sub.model.local'), `
-        <div id="sp-lm-profile"></div>
+        <style>@keyframes lmSpin{to{transform:rotate(360deg)}}</style>
+        <div id="sp-lm-profile">${lmSkel('正在检测本机硬件（内存/显卡/磁盘）…')}</div>
         <div id="sp-ol-state" class="set-card" style="margin-top:10px"><div class="sc-main"><div class="sc-title">${t('ol.detecting')}</div><div class="sc-desc">${t('ol.detectDesc')}</div></div></div>
-        <div id="sp-lm-catalog" style="margin-top:10px"></div>
+        <div id="sp-lm-catalog" style="margin-top:10px">${lmSkel('等待硬件检测结果后查询推荐模型清单…')}</div>
         <div id="sp-ol-models"></div>
       `)
       // #317.F16/P1：硬件画像+模型名单卡（fit 分级）——主体是「模型本身」，Ollama 降权为状态条

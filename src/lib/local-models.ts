@@ -99,6 +99,10 @@ export interface HardwareProfile {
 export async function hardwareProfile(vaultRoot?: string): Promise<HardwareProfile> {
   const memTotalGB = os.totalmem() / 2 ** 30
   const memFreeGB = os.freemem() / 2 ** 30
+  // 进程级缓存 60s——设置页反复进出不再重复 powershell/statfs（P3f 体感：骨架后秒出）
+  const cacheKey = vaultRoot || '~'
+  const g = globalThis as unknown as { __mbHwCache?: { at: number; key: string; v: HardwareProfile } }
+  if (g.__mbHwCache && g.__mbHwCache.key === cacheKey && Date.now() - g.__mbHwCache.at < 60_000) return g.__mbHwCache.v
   let gpuName: string | null = null
   let gpuMemGB: number | null = null
   try {
@@ -129,7 +133,9 @@ export async function hardwareProfile(vaultRoot?: string): Promise<HardwareProfi
     const st = await (fs.promises as unknown as { statfs?: (p: string) => Promise<{ bsize: number; bavail: number }> }).statfs?.(checkRoot)
     if (st) diskFreeGB = (st.bavail * st.bsize) / 2 ** 30
   } catch { /* 磁盘检测失败不阻断 */ }
-  return { memTotalGB, memFreeGB, gpuName, gpuMemGB, diskFreeGB }
+  const v: HardwareProfile = { memTotalGB, memFreeGB, gpuName, gpuMemGB, diskFreeGB }
+  g.__mbHwCache = { at: Date.now(), key: cacheKey, v }
+  return v
 }
 
 export type FitLevel = 'recommended' | 'ok' | 'warn' | 'blocked'
