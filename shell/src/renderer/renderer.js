@@ -292,6 +292,7 @@ const I18N_DICT = {
   'dg.untitled': { zh: '未命名图示', en: 'Untitled diagram' },
   'xy.historySep': { zh: '—— 以上为历史 ——', en: '—— history above ——' },
   'xy.thinking': { zh: '小月思考中…', en: 'Xiaoyue is thinking…' },
+  'xy.retrying': { zh: '模型响应慢，重试 {n}/{total}（{err}）…', en: 'Model slow, retry {n}/{total} ({err})…' },
   'xy.phaseTools': { zh: '工具就绪，正在思考…', en: 'Tools ready — thinking…' },
   'xy.phaseToolRun': { zh: '正在执行工具…', en: 'Running tool…' },
   'xy.phaseModel': { zh: '模型已响应，继续处理…', en: 'Model responded — continuing…' },
@@ -3778,6 +3779,8 @@ function showWorkspaceDialog() {
 
 // ---------- 小月对话绑定（从旧 renderer 迁移） ----------
 let kernelEventBound = false
+let activeXyId = null // #317.F2：当前活跃 xiaoyue RPC id（模块级——bindChat 重入不丢）
+const rpcCmdById = new Map() // #317.F2：rpc id→cmd（行门控只针对 xiaoyue）
 function bindChat(chatInfo) {
   const meta = chatInfo?.meta
   // #288 对话 UI：log() 升级为结构化消息渲染——行前缀分类（用户气泡/AI 气泡 Markdown/工具折叠条/思考折叠条/活动小字）。
@@ -3834,6 +3837,9 @@ function bindChat(chatInfo) {
     // #310.17：静默行=不表示输出开始的过程注记——thinking 保持并更新阶段文案
     if (/^（已接入工具 /.test(line)) { showThinking(t('xy.phaseTools')); return }
     if (/^（本地|^（云端|^（上下文|^（记忆/.test(line)) { showThinking(t('xy.phasePrep')); return }
+    // #317.F3：LLM 重试行=模型慢/瞬态错——thinking 持续并把轮次写进文案（用户知道没死机；本地大模型首 token 慢是常态）
+    const mRetry = line.match(/^（LLM 调用失败，重试 (\d+)\/(\d+)：(.*)）$/)
+    if (mRetry) { showThinking(t('xy.retrying').replace('{n}', mRetry[1]).replace('{total}', mRetry[2]).replace('{err}', mRetry[3].slice(0, 40))); return }
     // 分类规则（与 kernel 行形态一一对应）：
     hideThinking()
     if (line.startsWith('你> ')) {
@@ -3909,6 +3915,11 @@ function bindChat(chatInfo) {
   if (!kernelEventBound) {
     window.moonlybox.subscribe()
     window.moonlybox.onKernelEvent((msg) => {
+      // #317.F2：会话行门控——xiaoyue RPC 的行只上屏当前活跃会话（旧 RPC 迟到行不串扰）；其他 cmd 行不受影响
+      if (msg.event === 'rpc-start') { rpcCmdById.set(msg.id, String(msg.payload ?? '')); if (msg.payload === 'xiaoyue') activeXyId = msg.id; return }
+      if (msg.event === 'log' || msg.event === 'stderr') {
+        if (rpcCmdById.get(msg.id) === 'xiaoyue' && msg.id !== activeXyId) return
+      }
       if (xyAborted && (msg.event === 'log' || msg.event === 'stderr')) return // #310.14：停止后不上屏
       if (msg.event === 'log') { log(msg.payload) }
       else if (msg.event === 'stderr') { hideThinking(); log('[stderr] ' + msg.payload) }

@@ -214,6 +214,8 @@ function ensureDaemon() {
 function kernelRpc(cmd, args = {}, timeoutMs = 120_000) {
   ensureDaemon()
   const id = nextId++
+  // #317.F2：广播 rpc-start（带 id+cmd）——renderer 门控 xiaoyue 活动流行（旧 RPC 的迟到行不再串扰新会话视图）
+  try { if (win && !win.isDestroyed()) win.webContents.send('kernel:event', { id, event: 'rpc-start', payload: cmd }) } catch {}
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       pending.delete(id)

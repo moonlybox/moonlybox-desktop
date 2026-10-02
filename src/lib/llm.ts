@@ -163,6 +163,9 @@ export async function byokChatMessages(
   if (!meta) return { ok: false, error: 'BYOK 未配置' }
   // #310.14：本地端点无需 key（Ollama 等）；远端缺 key 仍报 BYOK
   if (!apiKey && !isLocalEndpoint(meta.baseUrl)) return { ok: false, error: 'BYOK 未配置（API Key 缺失）' }
+  // #317.F1：本地端点超时放宽——Ollama 小模型大上下文首 token 常超 90s（低配机更甚），
+  // 云端 API 维持调用方超时；本地统一 300s（P5a 后上下文更大，90s 判死刑=反复超时假死）
+  const effectiveTimeout = isLocalEndpoint(meta.baseUrl) ? Math.max(timeoutMs, 300_000) : timeoutMs
   try {
     const t0 = Date.now() // #310.15：耗时/token 速度诊断
     const res = await fetch(`${meta.baseUrl.replace(/\/$/, '')}/chat/completions`, {
@@ -181,7 +184,7 @@ export async function byokChatMessages(
         ...(isLocalEndpoint(meta.baseUrl) && /:11434|\/ollama/i.test(meta.baseUrl) ? { think: thinkingMode === 'on' } : {}),
         ...(thinkingMode !== 'on' && /bigmodel\.cn|\/glm/i.test(meta.baseUrl) ? { thinking: { type: 'disabled' } } : {}),
       }),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(effectiveTimeout),
     })
     if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
     const body = (await res.json()) as { choices?: Array<{ message?: { content?: string; tool_calls?: ToolCallRequest[] }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number } }
