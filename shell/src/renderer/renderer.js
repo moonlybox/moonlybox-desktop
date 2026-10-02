@@ -1903,6 +1903,10 @@ async function renderWork(nav, arg, label2) {
                 <input type="number" step="0.1" min="0" max="2" value="${m.params?.temperature ?? 0.3}" data-lmtemp="${esc(m.id)}" class="set-input" style="width:70px;padding:2px 6px;font-size:12px"></label>
               <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px">max_tokens
                 <input type="number" step="256" min="256" max="16384" value="${m.params?.maxTokens ?? 4096}" data-lmmaxtok="${esc(m.id)}" class="set-input" style="width:90px;padding:2px 6px;font-size:12px"></label>
+              <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px">子任务调用
+                <select class="set-select set-select-sm" data-olsubov="${esc(m.id)}" style="padding:2px 6px;font-size:11px;width:auto">
+                  <option value="auto">跟随默认</option><option value="on">允许</option><option value="off">禁止</option>
+                </select></label>
               <button type="button" class="btn ghost" data-lmreset="${esc(m.id)}" style="font-size:11px;padding:2px 8px">恢复默认</button>
               <span style="font-size:10.5px;color:var(--muted)">修改即时生效（对话请求层）</span>
             </div>` : ''
