@@ -220,7 +220,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       function: { name: t.name, description: desc, parameters: sanitizeJsonSchema(t.inputSchema) },
     }
   })
-  say(`（已接入工具 ${tools.length} 个${builtinNames.size ? `，含内置 ${builtinNames.size} 个` : ''}）`)
+  say(`（已接入工具 ${tools.length} 个${builtinNames.size ? `，含内置 ${builtinNames.size} 个` : ''}：${tools.map((t) => t.name).slice(0, 12).join('、')}${tools.length > 12 ? ` 等` : ''}）`)
 
   // #317.9：工具感知引导（Hermes 同款 tool-aware）——按**实际装配**的工具生成能力清单追加为第二条 system。
   // 根治：xiaoyue.ts 旧 system 硬编码工具清单（漏 list_todos 等）误导小模型「没有列出待办的功能」。
@@ -253,7 +253,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     caps.push(`自定义 MCP：${items.slice(0, 6).join('、')}${items.length > 6 ? ` 等 ${items.length} 个` : ''}`)
   }
   const toolGuide = caps.length
-    ? `\n【当前可用工具】\n${caps.map((c) => '- ' + c).join('\n')}\n用户问题只要可能由上述某工具回答（尤其是「列出/查看/有多少/我的…」类查询），先调工具再回答；不确定就选最接近的一个试，不要凭空说「没有该功能」。工具返回空结果（0 条/空列表）就如实回答没有，不要转为创建/修改等写操作——用户没要求新建就不要新建。`
+    ? `\n【当前可用工具】\n${caps.map((c) => '- ' + c).join('\n')}\n用户问题只要可能由上述某工具回答（尤其是「列出/查看/有多少/我的…」类查询），先调工具再回答；不确定就选最接近的一个试，不要凭空说「没有该功能」。上述工具同时通过 API 的 tools 参数提供——一律可用，禁止向用户复述工具清单、禁止声称「某工具未在工具列表中定义/不存在」。工具返回空结果（0 条/空列表）就如实回答没有，不要转为创建/修改等写操作——用户没要求新建就不要新建。`
     : ''
 
   const messages: import('../lib/llm').ChatMessage[] = [
