@@ -539,12 +539,18 @@ app.whenReady().then(() => {
   ipcMain.handle('ollama:serve', async (_e, cli) => {
     try {
       const isWin = process.platform === 'win32'
-      // #317.F4：Windows 同样 detached+unref——否则客户端退出（更新重启）时连带杀掉 ollama serve，
-      // 用户每次重启都看到「已安装但服务未运行」（detached 在 Windows=独立进程组，父退出不回收）
-      const child = require('child_process').spawn(cli, ['serve'], isWin
-        ? { detached: true, stdio: 'ignore', windowsHide: true }
-        : { detached: true, stdio: 'ignore' })
-      child.unref()
+      // #317.F4：脱离客户端生命周期独立存活（否则客户端退出连带杀掉 ollama serve，每次重启都「服务未运行」）
+      // Windows：detached=true 会以 DETACHED_PROCESS 启动——ollama.exe（console 程序）自行 AllocConsole 弹黑窗，
+      // windowsHide 对 detached 无效（libuv 行为）。改走 `cmd /c start /b`：无窗口+父退出不回收；引号路径安全由 cmd start 处理。
+      if (isWin) {
+        // start 的第一个引号参数会被当窗口标题——先放 '' 占位；整体单串走 shell 避免 cmd 二次解析分裂参数
+        const line = `start /b "" "${cli}" serve`
+        const child = require('child_process').spawn('cmd.exe', ['/c', line], { stdio: 'ignore', windowsHide: true, shell: false })
+        child.unref()
+      } else {
+        const child = require('child_process').spawn(cli, ['serve'], { detached: true, stdio: 'ignore' })
+        child.unref()
+      }
       // 等 HTTP 就绪（最多 8s）
       for (let i = 0; i < 16; i++) {
         await new Promise((r) => setTimeout(r, 500))
