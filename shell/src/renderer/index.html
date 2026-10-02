@@ -343,8 +343,10 @@
     <!-- 列宽拖柄 -->
     <div id="col-resizer" data-tip="拖动调整列宽"></div>
 
-    <!-- 第三列：工作台（各页帧共用容器，JS 按 nav+selection 渲染） -->
+    <!-- 第三列：工作台（#317.MDI：双容器——默认 MDI=销毁式重建（书房/图示/云端/备份/任务/帮助/设置）；
+         小月=持久容器（不销毁，切走隐藏切回恢复，状态保持）） -->
     <section id="work"></section>
+    <section id="work-xiaoyue" style="display:none"></section>
   </div>
 
   <script src="vendor/mermaid.min.js"></script>

@@ -66,6 +66,19 @@ const NAVS = {
   settings: { label: 'nav.settings' },
 };  // 对象字面量后接 IIFE 必须分号（ASI 陷阱 #253.20）
 let currentNav = null
+// #317.MDI：小月持久面板当前会话（模块级——切功能页不销毁）
+let xyPaneMeta = null
+function xyActiveChatTitle() {
+  return xyPaneMeta?.title ?? ''
+}
+// #317.MDI：页帧上下文名——默认 MDI 各功能销毁式重建时更新 tab 文案（「功能名 · 上下文」；无上下文=纯功能名）
+const FRAME_CTX = {}
+function setFrameTabCtx(nav, text) {
+  const t0 = String(text ?? '').trim()
+  if (t0) FRAME_CTX[nav] = t0
+  else delete FRAME_CTX[nav]
+  renderFrameTabs()
+}
 const openFrames = new Set();  // 下一 IIFE 以 ( 开头，无分号会被解析为跨行调用（ASI 陷阱 #253.20）
 // 设置中心（#253.48）：设置走 3 列 UI（第二列=分类，第三列=面板），不用弹窗。
 // 分类=用户定稿 11 项；v1 实现面板：通用/文档库/模型（平台API=BYOK 表单、本地模型）/外观；其余占位空态（后续迭代逐个点亮）。
@@ -871,7 +884,8 @@ function renderFrameTabs() {
   for (const nav of openFrames) {
     const b = document.createElement('button')
     b.className = 'frame-tab' + (nav === currentNav ? ' active' : '')
-    b.innerHTML = `${navIconSvg(nav, 13)}<span style="vertical-align:middle;margin-left:5px">${t(NAVS[nav].label)}</span>`
+    const ctx = FRAME_CTX[nav]
+    b.innerHTML = `${navIconSvg(nav, 13)}<span style="vertical-align:middle;margin-left:5px">${t(NAVS[nav].label)}${ctx ? `<span style="opacity:.65;font-weight:400"> · ${ctx}</span>` : ''}</span>`
     b.onclick = () => switchNav(nav)
     box.appendChild(b)
   }
@@ -1043,6 +1057,7 @@ async function renderList(nav) {
     return
   } else if (nav === 'cloud') {
     // #254：云端功能=服务端下发 manifest（功能升级/新增零客户端发版）
+    setFrameTabCtx('cloud', arg?.label ?? '')
     const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
     if (r.event !== 'done' || r.code !== 0) {
       body.innerHTML = `<div class="muted" style="padding:10px">${t('list.navLoadFail')}` + (r.text || r.message) + '</div>'
@@ -1338,9 +1353,69 @@ async function renderTree(container, rel, depth) {
 // #299：渲染世代令牌——快速切换功能时旧 renderWork 协程作废（await 期间 DOM 已被新渲染重写，
 // 旧协程继续执行会 null 报错或把新页面覆盖成旧页面）。cloud 长链路每步 await 后检查。
 let renderGen = 0
+/** #317.MDI：小月持久面板（容器 #work-xiaoyue；渲染一次后不销毁） */
+async function renderXiaoyuePane(arg) {
+  const xyPane = $('work-xiaoyue')
+  const w = xyPane
+    // #282：arg.chat=打开指定对话（恢复历史+绑定 chatId/workspaceId）；无参=占位
+    xyPaneMeta = null
+    if (arg?.chat) {
+      const r = await window.moonlybox.rpc('workspace', { op: 'chat', id: arg.chat }, 15_000)
+      if (r.event === 'done' && r.code === 0) xyPaneMeta = JSON.parse(r.text).chat
+    }
+    // #283.4：标签带工作空间名——用户能一眼确认当前对话是否真的挂在工作空间下（fs 工具只在此时装配）
+    let wsName = ''
+    if (meta?.workspaceId) {
+      try {
+        const rw = await window.moonlybox.rpc('workspace', { op: 'list' }, 10_000)
+        wsName = (JSON.parse(rw.text).workspaces ?? []).find((x) => x.id === meta.workspaceId)?.name ?? ''
+      } catch {}
+    }
+    const wsLabel = meta ? (meta.workspaceId ? `📁 工作空间${wsName ? `「${wsName}」` : ''}对话（可读写挂载目录）` : '💬 无工作空间（无本地文件访问，仅文档库/MCP）') : ''
+    w.innerHTML = `
+      ${xyPaneMeta ? `<div class="muted" style="padding:8px 16px 0;font-size:12px">${meta.title} · ${wsLabel}</div>` : ''}
+      <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:16px;white-space:pre-wrap;user-select:text"></div>
+      <div style="padding:8px 16px 12px;border-top:1px solid var(--border)">
+        <textarea id="q" rows="1" placeholder="${xyPaneMeta ? (meta.workspaceId ? t('xy.qPlaceholder') : t('xy.docOnly')) : t('xy.pickFirst')}" style="display:block;width:100%;resize:none;box-sizing:border-box;line-height:1.5;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg,#0f172a);color:var(--fg,#e2e8f0);font:inherit;max-height:160px;overflow-y:auto" ${xyPaneMeta ? '' : 'disabled'}></textarea>
+        <div class="row" style="margin-top:6px;align-items:center;gap:8px">
+          <button class="btn ghost" id="xy-model-btn" style="font-size:12px" ${xyPaneMeta ? '' : 'disabled'}>⚙ <span id="xy-model-label"></span></button>
+          <button class="btn ghost" id="xy-think-btn" style="font-size:12px" ${xyPaneMeta ? '' : 'disabled'}>🧠 <span id="xy-think-label"></span></button>
+          <div style="flex:1"></div>
+          <button class="btn ghost" id="btn-stop" style="display:none">${t('xy.stop')}</button>
+          <button class="btn" id="btn-ask" ${xyPaneMeta ? '' : 'disabled'}>${t('xy.send')}</button>
+        </div>
+      </div>`
+        // #317.F8c：重渲后恢复运行态——上一次 askWith 仍在 await（切页切回），停止按钮不能被模板 display:none 吞掉
+    {
+      const ab = document.getElementById('btn-ask')
+      const sb = document.getElementById('btn-stop')
+      if (ab && sb && ab.disabled) sb.style.display = ''
+    }
+    if (xyPaneMeta) bindChat({ meta: xyPaneMeta })
+    else w.insertAdjacentHTML('afterbegin', '<div class="muted" style="padding:16px">左侧新建工作空间或对话开始。</div>')
+    xyPane.dataset.ready = '1'
+    setFrameTabCtx('xiaoyue', xyActiveChatTitle())
+    return
+}
+
 async function renderWork(nav, arg, label2) {
   ensureFocusAlive() // #307：删除/confirm 后焦点断链自愈
-  const w = $('work')
+  // #317.MDI：双容器路由——小月=持久容器（首次渲染后切走只隐藏，切回恢复；换会话由 arg.chat 显式 reset）；
+  // 其余功能=默认容器销毁式重建（现状不变）。两容器互斥显示。
+  const xyPane = $('work-xiaoyue')
+  const defPane = $('work')
+  const isXy = nav === 'xiaoyue'
+  xyPane.style.display = isXy ? '' : 'none'
+  defPane.style.display = isXy ? 'none' : ''
+  if (isXy) {
+    // 持久容器短路：已渲染且非「打开指定对话」→ 只刷新列表选中，不重建（状态保持）
+    if (xyPane.dataset.ready === '1' && !arg?.chat) {
+      setFrameTabCtx('xiaoyue', xyActiveChatTitle())
+      return
+    }
+    return renderXiaoyuePane(arg)
+  }
+  const w = defPane
   if (nav === 'vault' && arg && !arg.dir) {
     // 文件工作台：阅读（默认，md 渲染+mermaid 出图）⇄ 编辑 双态切换（#253.49 用户：预览为默认，不固定分栏）
     const r = await window.moonlybox.fsRead(arg.rel)
@@ -1421,6 +1496,7 @@ async function renderWork(nav, arg, label2) {
     }
     state.after(btnToggle, btnSave)
     applyMode()
+    setFrameTabCtx('vault', arg.rel)
     return
   }
   if (nav === 'vault' && arg?.dir) {
@@ -1446,6 +1522,7 @@ async function renderWork(nav, arg, label2) {
   if (nav === 'settings') {
     const cat = SETTINGS_CATS.find((c) => c.id === currentSetCat) ?? SETTINGS_CATS[0]
     if (cat.subs && !currentSetSub) currentSetSub = cat.subs[0] // 有二级分类默认进第一个（模型→平台 API）
+    setFrameTabCtx('settings', currentSetSub ? `${t(cat.label)} / ${t(SET_SUB_LABELS[currentSetSub] ?? currentSetSub)}` : t(cat.label))
     const panel = (title, desc, inner) => {
       const tabs = cat.subs
         ? `<div class="set-row" style="gap:6px;margin:0 0 18px">${cat.subs.map((s) => `<button type="button" class="btn ${s === currentSetSub ? '' : 'ghost'}" data-setsub="${s}">${t(SET_SUB_LABELS[s] ?? s)}</button>`).join('')}</div>`
@@ -2613,6 +2690,7 @@ async function renderWork(nav, arg, label2) {
       </div>`
     }
     const fill = (j) => {
+      setFrameTabCtx('tasks', j.title ?? '')
       const pct = j.progress.total ? Math.round((j.progress.done / j.progress.total) * 100) : 0
       const st = $('tk-st'); if (st) st.textContent = ST[j.status] ?? j.status
       const bar = $('tk-bar'); if (bar) bar.style.width = pct + '%'
@@ -2901,6 +2979,7 @@ async function renderWork(nav, arg, label2) {
       const d = JSON.parse(r.text)
       const e = d.entries.find((x) => x.id === arg.id)
       if (!e) { w.innerHTML = `<div class="set-panel"><p class="set-desc">${t('bk.notExist')}</p></div>`; return }
+      setFrameTabCtx('backup', e.localPath.split(/[\\/]/).pop())
       w.innerHTML = `
         <div class="set-panel">
           <h3>${e.localPath.split(/[\\/]/).pop()}</h3>
@@ -3105,47 +3184,11 @@ async function renderWork(nav, arg, label2) {
     }
     return
   }
-  if (nav === 'xiaoyue') {
-    // #282：arg.chat=打开指定对话（恢复历史+绑定 chatId/workspaceId）；无参=占位
-    let meta = null
-    if (arg?.chat) {
-      const r = await window.moonlybox.rpc('workspace', { op: 'chat', id: arg.chat }, 15_000)
-      if (r.event === 'done' && r.code === 0) meta = JSON.parse(r.text).chat
-    }
-    // #283.4：标签带工作空间名——用户能一眼确认当前对话是否真的挂在工作空间下（fs 工具只在此时装配）
-    let wsName = ''
-    if (meta?.workspaceId) {
-      try {
-        const rw = await window.moonlybox.rpc('workspace', { op: 'list' }, 10_000)
-        wsName = (JSON.parse(rw.text).workspaces ?? []).find((x) => x.id === meta.workspaceId)?.name ?? ''
-      } catch {}
-    }
-    const wsLabel = meta ? (meta.workspaceId ? `📁 工作空间${wsName ? `「${wsName}」` : ''}对话（可读写挂载目录）` : '💬 无工作空间（无本地文件访问，仅文档库/MCP）') : ''
-    w.innerHTML = `
-      ${meta ? `<div class="muted" style="padding:8px 16px 0;font-size:12px">${meta.title} · ${wsLabel}</div>` : ''}
-      <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:16px;white-space:pre-wrap;user-select:text"></div>
-      <div style="padding:8px 16px 12px;border-top:1px solid var(--border)">
-        <textarea id="q" rows="1" placeholder="${meta ? (meta.workspaceId ? t('xy.qPlaceholder') : t('xy.docOnly')) : t('xy.pickFirst')}" style="display:block;width:100%;resize:none;box-sizing:border-box;line-height:1.5;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg,#0f172a);color:var(--fg,#e2e8f0);font:inherit;max-height:160px;overflow-y:auto" ${meta ? '' : 'disabled'}></textarea>
-        <div class="row" style="margin-top:6px;align-items:center;gap:8px">
-          <button class="btn ghost" id="xy-model-btn" style="font-size:12px" ${meta ? '' : 'disabled'}>⚙ <span id="xy-model-label"></span></button>
-          <button class="btn ghost" id="xy-think-btn" style="font-size:12px" ${meta ? '' : 'disabled'}>🧠 <span id="xy-think-label"></span></button>
-          <div style="flex:1"></div>
-          <button class="btn ghost" id="btn-stop" style="display:none">${t('xy.stop')}</button>
-          <button class="btn" id="btn-ask" ${meta ? '' : 'disabled'}>${t('xy.send')}</button>
-        </div>
-      </div>`
-        // #317.F8c：重渲后恢复运行态——上一次 askWith 仍在 await（切页切回），停止按钮不能被模板 display:none 吞掉
-    {
-      const ab = document.getElementById('btn-ask')
-      const sb = document.getElementById('btn-stop')
-      if (ab && sb && ab.disabled) sb.style.display = ''
-    }
-    if (meta) bindChat({ meta })
-    else w.insertAdjacentHTML('afterbegin', '<div class="muted" style="padding:16px">左侧新建工作空间或对话开始。</div>')
-    return
-  }
+  // #317.MDI：小月分支迁出→renderXiaoyuePane（持久容器）
+
   if (nav === 'help' && !arg) return renderWork('help', currentHelpArg || 'about') // #310.5：进帮助默认打开上次/关于
   if (nav === 'help' && arg === 'debug') {
+    setFrameTabCtx('help', t('help.debug'))
     // #310.7：调试模式（dev 默认开/安装包默认关，可手动改）+日志导出；开启时内核 log/stderr 全量镜像 userData/mb-debug.log
     const env = await window.moonlybox.envInfo().catch(() => null)
     const gs = await loadAppSettings()
@@ -3185,6 +3228,7 @@ async function renderWork(nav, arg, label2) {
     return
   }
   if (nav === 'help' && arg === 'cloudaddr') {
+    setFrameTabCtx('help', t('help.cloudaddr'))
     // #310.7：云端地址（只读展示+复制）
     let webBase = 'https://moonlybox.cn'
     try {
@@ -3211,11 +3255,13 @@ async function renderWork(nav, arg, label2) {
     return
   }
   if (nav === 'help' && arg === 'kernel') {
+    setFrameTabCtx('help', '内核状态')
     const r = await window.moonlybox.rpc('ping', {}, 10_000)
     w.innerHTML = `<div style="padding:20px" class="mono">内核：${r.event === 'done' ? t('help.kernelOk') : '✗ ' + (r.message ?? t('help.kernelDown'))}<br/>vault：${await window.moonlybox.vaultGet() ?? '未选择'}</div>`
     return
   }
   if (nav === 'help' && (arg === 'feedback' || arg === 'terms')) {
+    setFrameTabCtx('help', arg === 'feedback' ? t('help.feedback') : t('help.terms'))
     // #310.3/.6：问题反馈/条款=内嵌云端页（embed=1 隐藏云端主菜单；登录态注入同 cloud 模式）
     const gen = ++renderGen
     const genValid = () => gen === renderGen && $('fb-wv') !== null
@@ -3268,6 +3314,7 @@ async function renderWork(nav, arg, label2) {
     return
   }
   if (nav === 'help' && arg === 'about') {
+    setFrameTabCtx('help', t('help.about'))
     // #310.7：关于页卡片化——LOGO/名称/口号/版本徽章/更新区（自动更新开关+立即更新）/版本说明/发现新版本章节
     const v = await window.moonlybox.versions()
     const env = await window.moonlybox.envInfo().catch(() => null)
@@ -3568,6 +3615,7 @@ function bindDiagramWorkbench(existing, pick) {
   // #290：pick=模板弹窗选择结果——填充名称+示例代码，新草稿从这一刻开始
   $('dg-code').value = pick ? (pick.code ?? '') : (existing?.content ?? '')
   $('dg-title').value = pick ? pick.title : (existing?.title ?? '')
+  setFrameTabCtx('diagram', $('dg-title').value || '')
   // 从空态新建：显示标题框与保存/存书房/AI 按钮（打开已有图示时本就显示）
   const show = ['dg-save', 'dg-activate', 'dg-ai', 'dg-title']
   for (const id of show) { const el = $(id); if (el) el.style.display = '' }
@@ -3603,6 +3651,7 @@ function bindDiagramWorkbench(existing, pick) {
       const isNew = !dgCurrentId
       dgCurrentId = d.id
       $('dg-state').textContent = `✓ 已保存草稿 v${d.version}`
+      setFrameTabCtx('diagram', title)
       // #291：保存后立刻刷新侧栏列表（新建首存/改名都不用再切功能回来）
       void renderList('diagram')
       if (isNew) $('dg-state').textContent += t('lib.addedTip')
@@ -4042,6 +4091,8 @@ function bindChat(chatInfo) {
   // #310.17：思考态=持续状态——静默行（装配/诊断/上下文注入）不摘除只更新文案；
   // 活动行（工具调用/终答/普通过程行）才收。元素始终置底（插队行上屏后 thinking 移到末尾）。
   const showThinking = (phase) => {
+    // #317.MDI：占位页（无 #log）时行无处挂——静默跳过（kernel 行继续，进对话后自然恢复）
+    if (!logEl()) return
     if (!thinkingEl) {
       const el = document.createElement('div')
       el.className = 'chat-act-line xy-thinking'
