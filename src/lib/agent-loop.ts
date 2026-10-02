@@ -130,6 +130,66 @@ function isParallelSafe(meta: { name: string; annotations?: { destructiveHint?: 
   return true
 }
 
+/** #317.P5a 工具名自愈（Hermes 式）：大小写/分隔符归一→剥 _tool 后缀→前缀/包含匹配→编辑距离模糊匹配 */
+function repairToolName(bad: string, valid: string[]): string | null {
+  if (!bad) return null
+  const norm = (s: string) => s.toLowerCase().replace(/-/g, '_').replace(/\s+/g, '_')
+  const camel = (s: string) => s.replace(/(?<!^)(?=[A-Z])/g, '_').toLowerCase()
+  const stripSuffix = (s: string): string | null => {
+    const lc = s.toLowerCase()
+    for (const sfx of ['_tool', '-tool', 'tool']) {
+      if (lc.endsWith(sfx)) return s.slice(0, -sfx.length).replace(/[_-]+$/, '')
+    }
+    return null
+  }
+  // 快路径：
+  if (valid.includes(bad)) return bad
+  const cands = new Set<string>([bad, bad.toLowerCase(), norm(bad), camel(bad)])
+  for (let i = 0; i < 2; i++) {
+    for (const c of [...cands]) {
+      const st = stripSuffix(c)
+      if (st) { cands.add(st); cands.add(norm(st)); cands.add(camel(st)) }
+    }
+  }
+  for (const c of cands) if (c && valid.includes(c)) return c
+  // 前缀/包含（小模型常见漏字/复数错：list_todo→list_todos）：
+  const lb = bad.toLowerCase()
+  const pref = valid.find((v) => v.toLowerCase().startsWith(lb) || lb.startsWith(v.toLowerCase()) || v.toLowerCase().includes(lb) && lb.length >= 4)
+  if (pref) return pref
+  // 编辑距离 ≤2 模糊（levenshtein 简版）：
+  const dist = (a: string, b: string): number => {
+    const m = a.length, n = b.length
+    const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]) as number[][]
+    for (let j = 0; j <= n; j++) dp[0][j] = j
+    for (let i2 = 1; i2 <= m; i2++) for (let j = 1; j <= n; j++)
+      dp[i2][j] = Math.min(dp[i2 - 1][j] + 1, dp[i2][j - 1] + 1, dp[i2 - 1][j - 1] + (a[i2 - 1] === b[j - 1] ? 0 : 1))
+    return dp[m][n]
+  }
+  let best: { v: string; d: number } | null = null
+  for (const v of valid) {
+    const d = dist(lb, v.toLowerCase())
+    if (d <= 2 && (!best || d < best.d)) best = { v, d }
+  }
+  return best?.v ?? null
+}
+
+/** #317.P5a 坏参 JSON 自愈（Hermes 式）：控制字符/尾逗号/未闭合结构/Python None */
+function repairArgsJson(raw: string): string {
+  const s0 = (raw ?? '').trim()
+  if (!s0) return '{}'
+  if (s0 === 'None' || s0 === 'null') return '{}'
+  // Pass0：宽松 parse（控制字符内嵌——本地模型最常见）重序列化：
+  try { return JSON.stringify(JSON.parse(s0)) } catch { /* 继续 */ }
+  let fixed = s0.replace(/[\u0000-\u001f]+/g, ' ')
+  try { return JSON.stringify(JSON.parse(fixed)) } catch { /* 继续 */ }
+  // Pass1-3：尾逗号/闭合括号补齐：
+  fixed = fixed.replace(/,\s*([}\]])/g, '$1')
+  const opens = (fixed.match(/\{/g) ?? []).length - (fixed.match(/\}/g) ?? []).length
+  const brackets = (fixed.match(/\[/g) ?? []).length - (fixed.match(/\]/g) ?? []).length
+  fixed += '}'.repeat(Math.max(0, opens)) + ']'.repeat(Math.max(0, brackets))
+  try { return JSON.stringify(JSON.parse(fixed)) } catch { return '{}' }
+}
+
 /** Agent 主循环：chat → (tool_calls? → confirm → callTool → 回注 → chat)* → 最终回答 */
 export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   const { system, question, ready, chat, confirm, say } = deps
@@ -229,10 +289,23 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     // #317.P3：分桶并发——连续的「并发安全」工具打包 Promise.all；其余（本地覆写/未知/确认类）保持原序串行。
     // 输出顺序不变：执行完成后按 tc 原顺序回注 messages/used（tool_call_id 对齐）。
     type ExecOutcome = { id: string; name: string; content: string; ok: boolean }
-    const execOne = async (tc: { id: string; function: { name: string; arguments?: string } }): Promise<ExecOutcome> => {
-      const meta = tools.find((t) => t.name === tc.function.name)
+    const execOne = async (tc0: { id: string; function: { name: string; arguments?: string } }): Promise<ExecOutcome> => {
+      // #317.P5a 工具名自愈：编造/变形名先修复再找 meta（修好当轮成功，不留失败）
+      const tc = { ...tc0, function: { ...tc0.function } }
+      let meta = tools.find((t) => t.name === tc.function.name)
+      const validNames = [...tools.map((t) => t.name), ...Object.keys(deps.localTools ?? {})]
+      if (!meta && !deps.localTools?.[tc.function.name] && tc.function.name) {
+        const repaired = repairToolName(tc.function.name, validNames)
+        if (repaired) {
+          say(`  🔧 工具名自愈：${tc.function.name} → ${repaired}`)
+          tc.function.name = repaired
+          meta = tools.find((t) => t.name === repaired)
+        }
+      }
+      // #317.P5a 坏参自愈：控制字符/尾逗号/未闭合/None 修复后再 parse
+      const argsFixed = repairArgsJson(tc.function.arguments || '{}')
       let args: Record<string, unknown> = {}
-      try { args = JSON.parse(tc.function.arguments || '{}') } catch { /* 空/坏参按空对象 */ }
+      try { args = JSON.parse(argsFixed) } catch { args = {} }
       const argsJson = JSON.stringify(args)
 
       const localFn = deps.localTools?.[tc.function.name]
@@ -287,6 +360,14 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     let i = 0
     while (i < tcs.length) {
       const tc = tcs[i]
+      // #317.P5a：分桶前同样自愈（修好的只读工具可进并发桶；execOne 内会再次自愈=幂等）
+      if (!tools.some((t) => t.name === tc.function.name) && !deps.localTools?.[tc.function.name] && tc.function.name) {
+        const rep = repairToolName(tc.function.name, [...tools.map((t) => t.name), ...Object.keys(deps.localTools ?? {})])
+        if (rep) {
+          say(`  🔧 工具名自愈：${tc.function.name} → ${rep}`)
+          tc.function.name = rep
+        }
+      }
       const meta = tools.find((t) => t.name === tc.function.name)
       const localHere = !!deps.localTools?.[tc.function.name]
       if (localHere || !isParallelSafe(meta, tc.function.name)) {
