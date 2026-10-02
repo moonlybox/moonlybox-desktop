@@ -539,10 +539,12 @@ app.whenReady().then(() => {
   ipcMain.handle('ollama:serve', async (_e, cli) => {
     try {
       const isWin = process.platform === 'win32'
-      const child = isWin
-        ? require('child_process').spawn(cli, ['serve'], { stdio: 'ignore', windowsHide: true })
-        : require('child_process').spawn(cli, ['serve'], { detached: true, stdio: 'ignore' })
-      if (!isWin) child.unref()
+      // #317.F4：Windows 同样 detached+unref——否则客户端退出（更新重启）时连带杀掉 ollama serve，
+      // 用户每次重启都看到「已安装但服务未运行」（detached 在 Windows=独立进程组，父退出不回收）
+      const child = require('child_process').spawn(cli, ['serve'], isWin
+        ? { detached: true, stdio: 'ignore', windowsHide: true }
+        : { detached: true, stdio: 'ignore' })
+      child.unref()
       // 等 HTTP 就绪（最多 8s）
       for (let i = 0; i < 16; i++) {
         await new Promise((r) => setTimeout(r, 500))
