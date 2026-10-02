@@ -1901,14 +1901,14 @@ async function renderWork(nav, arg, label2) {
             <div id="${tuneId}" style="display:none;margin-top:6px;padding:8px 10px;border:1px dashed var(--border);border-radius:8px;font-size:12px">
               <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px">温度
                 <input type="number" step="0.1" min="0" max="2" value="${m.params?.temperature ?? 0.3}" data-lmtemp="${esc(m.id)}" class="set-input" style="width:70px;padding:2px 6px;font-size:12px"></label>
-              <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px">max_tokens
+              <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px" title="单次回复最多生成多少 token——防止慢模型长时间占用；与上下文窗口（能读多少）是两回事">生成上限 max_tokens
                 <input type="number" step="256" min="256" max="16384" value="${m.params?.maxTokens ?? 4096}" data-lmmaxtok="${esc(m.id)}" class="set-input" style="width:90px;padding:2px 6px;font-size:12px"></label>
               <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px">子任务调用
                 <select class="set-select set-select-sm" data-olsubov="${esc(m.id)}" style="padding:2px 6px;font-size:11px;width:auto">
                   <option value="auto">跟随默认</option><option value="on">允许</option><option value="off">禁止</option>
                 </select></label>
               <button type="button" class="btn ghost" data-lmreset="${esc(m.id)}" style="font-size:11px;padding:2px 8px">恢复默认</button>
-              <span style="font-size:10.5px;color:var(--muted)">修改即时生效（对话请求层）</span>
+              <span style="font-size:10.5px;color:var(--muted)">修改即时生效（对话请求层）；上下文窗口 ${m.ctxSuggest ?? 8192} 已按本机内存自动配置（Ollama 服务层）</span>
             </div>` : ''
           return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px 16px;background:var(--bg2)">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
