@@ -293,6 +293,7 @@ const I18N_DICT = {
   'xy.historySep': { zh: '—— 以上为历史 ——', en: '—— history above ——' },
   'xy.thinking': { zh: '小月思考中…', en: 'Xiaoyue is thinking…' },
   'xy.retrying': { zh: '模型响应慢，重试 {n}/{total}（{err}）…', en: 'Model slow, retry {n}/{total} ({err})…' },
+  'xy.phaseDigest': { zh: '正在整理工具结果…', en: 'Digesting tool results…' },
   'xy.phaseTools': { zh: '工具就绪，正在思考…', en: 'Tools ready — thinking…' },
   'xy.phaseToolRun': { zh: '正在执行工具…', en: 'Running tool…' },
   'xy.phaseModel': { zh: '模型已响应，继续处理…', en: 'Model responded — continuing…' },
@@ -3849,6 +3850,7 @@ function bindChat(chatInfo) {
     }
     if (line.startsWith('小月：')) {
       flushCur()
+      hideThinking() // #317.F5：终答已出——thinking 立即收（不等 done；done 只是兜底）
       // 终答（可能多行——payload 单条含 \n）
       addMsg('ai', line.slice(3))
       return
@@ -3877,8 +3879,12 @@ function bindChat(chatInfo) {
       return
     }
     if (/^  → |^  ✗ |^  （/.test(line) && (cur.type === 'tool' || cur.type === 'think')) {
-      // #310.18：结果行=动作完成（或确认请求=等待用户）——thinking 收；文本并入折叠体（#308.3：空行不并入）
-      hideThinking()
+      // #310.18：结果行并入折叠体（#308.3：空行不并入）
+      // #317.F5：→/✗=工具结果——Agent 循环可能还有下一轮 LLM（结果回注后模型继续），thinking 恢复而非收
+      //   （旧行为 hideThinking 假设「结果行=完成」——多工具轮场景 GPU 在跑 UI 却假死观感）；
+      //   （ 开头=确认请求/等待用户——thinking 收（确认条是主交互）
+      if (/^  （/.test(line)) hideThinking()
+      else showThinking(t('xy.phaseDigest'))
       if (line.trim()) {
         cur.text += (cur.text ? '\n' : '') + line
         cur.el.textContent = cur.text
