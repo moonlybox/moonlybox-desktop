@@ -105,3 +105,65 @@ export function localMemoryStats(vaultRoot: string): { memoryEntries: number; pr
   const count = (f: string) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split('\n').filter((l) => l.trim().startsWith('-')).length : 0)
   return { memoryEntries: count(memFile), profileEntries: count(userFile) }
 }
+
+// ==================== #317.④ 记忆检索化（轻量评分，D7 零依赖） ====================
+
+/** 简易分词： latin 词元（≥2 字符）+ CJK 2-gram——检索锚足够，无分词库依赖 */
+function tokenize(q: string): string[] {
+  const out: string[] = []
+  for (const w of q.toLowerCase().match(/[a-z0-9][a-z0-9-_.]*/g) ?? []) if (w.length >= 2) out.push(w)
+  const cjk = q.match(/[\u4e00-\u9fff]/g) ?? []
+  for (let i = 0; i + 1 < cjk.length; i++) out.push(cjk[i] + cjk[i + 1])
+  return [...new Set(out)]
+}
+
+export interface MemoryHit { source: 'memory' | 'profile'; text: string; score: number }
+
+/**
+ * 按问题检索记忆（#317.④）：分词×行命中评分 + 新近微加权；top-N 注入替代全文灌窗。
+ * query=用户问题（调用方拼入最近一轮对话要点更佳）。零命中返回 []（调用方省略该段）。
+ */
+export function localMemoryRetrieve(vaultRoot: string, query: string, opts?: { topN?: number; maxChars?: number }): MemoryHit[] {
+  const topN = opts?.topN ?? 8
+  const maxChars = opts?.maxChars ?? 1200
+  const toks = tokenize(query)
+  if (!toks.length) return []
+  const { memFile, userFile } = ensureFiles(vaultRoot)
+  const hits: MemoryHit[] = []
+  const scan = (file: string, source: 'memory' | 'profile', weight: number) => {
+    if (!fs.existsSync(file)) return
+    for (const raw of fs.readFileSync(file, 'utf8').split('\n')) {
+      const line = raw.trim()
+      if (!line.startsWith('-')) continue
+      const text = line.replace(/^[-*\s]+/, '').replace(/<!--.*?-->\s*$/, '').trim()
+      if (!text) continue
+      const low = text.toLowerCase()
+      let score = 0
+      for (const tk of toks) if (low.includes(tk)) score += tk.length >= 3 ? 2 : 1
+      if (score <= 0) continue
+      score *= weight
+      // 新近微加权（同分新条目靠前——注释日期 2026-09-30 越大加成越多）
+      const dm = line.match(/(\d{4}-\d{2}-\d{2})/)
+      if (dm) score += Math.min(1, Math.max(0, (Date.now() - new Date(dm[1]).getTime()) / (86400_000 * 90)) * -0.5 + 0.5) * 0.3
+      hits.push({ source, text, score })
+    }
+  }
+  scan(memFile, 'memory', 1)
+  scan(userFile, 'profile', 1.5) // 画像=身份层，同分优先
+  hits.sort((a, b) => b.score - a.score)
+  // top-N + 字符护栏（从高分往后装，装不下截断该条）
+  const out: MemoryHit[] = []
+  let used = 0
+  for (const h of hits) {
+    if (out.length >= topN || used + h.text.length > maxChars) break
+    out.push(h); used += h.text.length
+  }
+  return out
+}
+
+/** 检索结果→注入段（空命中返回 ''——调用方省略「长期记忆」小节） */
+export function localMemoryRetrieveBlock(vaultRoot: string, query: string, opts?: { topN?: number; maxChars?: number }): string {
+  const hits = localMemoryRetrieve(vaultRoot, query, opts)
+  if (!hits.length) return ''
+  return hits.map((h) => `- ${h.text}${h.source === 'profile' ? '（画像）' : ''}`).join('\n')
+}

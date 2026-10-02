@@ -201,7 +201,7 @@ import { agentLoop } from '../lib/agent-loop'
 import { byokChatMessages, byokReady as byokReady2 } from '../lib/llm'
 import { buildMessages, appendTurn, summarizeDropped, chatWithRetry } from '../lib/chat-context'
 import { loadSettings } from '../lib/settings'
-import { localMemoryAdd, localMemorySearch, localMemoryContext } from '../lib/memory-local'
+import { localMemoryAdd, localMemorySearch, localMemoryContext, localMemoryRetrieveBlock } from '../lib/memory-local'
 import { skillToolDefs, skillsIndex, viewSkill } from '../lib/skills'
 import { webToolDefs, runWebTool } from '../lib/web-tools'
 import { docToolDefs, runDocTool } from '../lib/doc-tools'
@@ -428,12 +428,18 @@ export async function runAgentTools(
 可用技能（用户书房自定义，回答前先对照是否有适用技能；有则先 skill_view 拉全文、照其中的流程执行）：
 ${skillIdx}`
     : ''
+  // #317.④ 记忆检索化：画像（USER.md）常驻+长期记忆（MEMORY.md）按问题检索 top-N——替代全文灌窗+截断
+  const memQuery = [question, ...built.messages.filter((m) => m.role === 'user').slice(-2).map((m) => String(m.content))].join(' ')
+  const memBlock = memOn && memLocal ? localMemoryRetrieveBlock(defaultVaultRoot(), memQuery, { topN: 8, maxChars: Math.min(1200, memCfg.injectLimit ?? 5000) }) : ''
   const systemWithMemory =
     memOn && memLocal
       ? `${system}
 
-以下是已知的用户画像与长期记忆（本机记忆层），回答时自然运用，不要逐条复述：
-${localMemoryContext(defaultVaultRoot(), memCfg.injectLimit ?? 5000)}${skillBlock}`
+以下是已知的用户画像（本机记忆层，常驻），回答时自然运用，不要逐条复述：
+${localMemoryContext(defaultVaultRoot(), 1200)}${memBlock ? `
+
+以下是与你当前问题相关的长期记忆（检索命中，按需引用）：
+${memBlock}` : ''}${skillBlock}`
       : system + skillBlock
   for (const f of customCat.failures) console.log(`（自定义 MCP ${f.name} 连接失败：${f.error}）`)
   const result = await agentLoop({
