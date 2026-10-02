@@ -551,10 +551,13 @@ app.whenReady().then(() => {
       // #317.F4：脱离客户端生命周期独立存活（否则客户端退出连带杀掉 ollama serve，每次重启都「服务未运行」）
       // Windows：detached=true 会以 DETACHED_PROCESS 启动——ollama.exe（console 程序）自行 AllocConsole 弹黑窗，
       // windowsHide 对 detached 无效（libuv 行为）。改走 `cmd /c start /b`：无窗口+父退出不回收；引号路径安全由 cmd start 处理。
-      // #317.F15：启动即带大上下文默认值——Ollama 默认 num_ctx=4096 静默截断超长 prompt（29 工具 schema
+      // #317.F15：启动即带上下文默认值——Ollama 默认 num_ctx=4096 静默截断超长 prompt（29 工具 schema
       // ≈4.2k token + system 必超），/v1 端点又不接受 options.num_ctx（运行时无救）→ 只能在 serve 层解决。
-      // 32768 对 16GB 内存机安全（qwen3:4b 权重 2.5G+KV≈4.7G）；由本客户端拉起的实例全程闭环。
-      const serveEnv = { ...process.env, OLLAMA_CONTEXT_LENGTH: '32768' }
+      // 档位按物理内存自适应（F15b 用户定案：不硬编码）——KV 缓存≈147KB/token(qwen3:4b fp16)：
+      //   ≥14G→32768(KV≈4.7G) / ≥7G→16384(≈2.4G) / ≥3.5G→8192(≈1.2G，工具表 4.2k+system 刚好放下) / 否则不覆盖
+      const gb = (os.totalmem?.() ?? 0) / 2 ** 30
+      const ctxLen = gb >= 14 ? 32768 : gb >= 7 ? 16384 : gb >= 3.5 ? 8192 : null
+      const serveEnv = { ...process.env, ...(ctxLen ? { OLLAMA_CONTEXT_LENGTH: String(ctxLen) } : {}) }
       if (isWin) {
         // start 的第一个引号参数会被当窗口标题——先放 '' 占位；整体单串走 shell 避免 cmd 二次解析分裂参数
         const line = `start /b "" "${cli}" serve`
@@ -568,7 +571,7 @@ app.whenReady().then(() => {
       for (let i = 0; i < 16; i++) {
         await new Promise((r) => setTimeout(r, 500))
         const v = await probeOllamaHttp().catch(() => null)
-        if (v && v.version) return { ok: true, version: v.version }
+        if (v && v.version) return { ok: true, version: v.version, contextLength: ctxLen ?? null }
       }
       return { ok: false, error: '启动超时（服务未响应）' }
     } catch (e) {

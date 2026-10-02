@@ -538,7 +538,11 @@ ${memBlock}` : ''}${skillBlock}`
           const ctx = ps?.models?.[0]?.context
           if (typeof ctx === 'number' && ctx < 8192) {
             g.__mbCtxWarned = true
-            console.log(`（提示：Ollama 上下文窗口 ${ctx} 过小，工具清单会被截断（表现为「没有某工具」/答非所问）。建议退出 Ollama 后设置环境变量 OLLAMA_CONTEXT_LENGTH=32768 再启动，或改用客户端「启动本地服务」（已内置该默认值）。）`)
+            // 推荐档位按本机内存自适应（与 main.js serve 档位表同源）：KV≈147KB/token(4B fp16)
+            const os = await import('node:os')
+            const gb = (os.totalmem?.() ?? 0) / 2 ** 30
+            const rec = gb >= 14 ? 32768 : gb >= 7 ? 16384 : 8192
+            console.log(`（提示：Ollama 上下文窗口 ${ctx} 过小，工具清单约 4.2k token 会被截断（表现为「没有某工具」/答非所问）。本机 ${gb.toFixed(0)}GB 内存推荐 ${rec}：退出 Ollama 后设置环境变量 OLLAMA_CONTEXT_LENGTH=${rec} 再启动，或改用客户端「启动本地服务」（已按内存自动配置）。）`)
           }
         } catch { /* 静默 */ }
       }

@@ -1833,8 +1833,12 @@ async function renderWork(nav, arg, label2) {
           const p = await window.moonlybox.ollamaProbe(savedCli)
           if (!p) { box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.detectFail')}</div><div class="sc-desc">${t('ol.retryHint')}</div></div>`; return }
           if (p.state === 'running') {
+            // #317.F15b：运行时上下文可见化——4096 默认值会静默截断工具表，在配置页就告诉用户（不用等对话失败）
+            const ctxLine = typeof p.context === 'number' && p.context < 8192
+              ? `<div class="sc-desc" style="color:var(--warn,#f59e0b)">⚠ 上下文窗口 ${p.context}（过小：工具清单会被截断）——退出 Ollama 后设置环境变量 OLLAMA_CONTEXT_LENGTH=32768 再启动，或点上方「启动」由本客户端按内存自动配置</div>`
+              : (typeof p.context === 'number' ? `<div class="sc-desc">上下文窗口：${p.context}</div>` : '')
             box.innerHTML = `<div class="sc-main"><div class="sc-title">✅ ${t('ol.runningTitle').replace('{v}', esc(p.version || '?'))}</div>
-              <div class="sc-desc">${t('ol.runningDesc')}</div></div>`
+              <div class="sc-desc">${t('ol.runningDesc')}</div>${ctxLine}</div>`
             await renderOllamaModels()
           } else if (p.state === 'installed_stopped') {
             box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.installedStoppedTitle').replace('{v}', p.version ? `（v${esc(p.version)}）` : '')}</div>
@@ -1843,7 +1847,11 @@ async function renderWork(nav, arg, label2) {
             $('sp-ol-start').onclick = async () => {
               const b = $('sp-ol-start'); b.disabled = true; b.textContent = t('ol.starting')
               const r = await window.moonlybox.ollamaServe(p.cli)
-              if (r && r.ok) { await renderState() } else { b.disabled = false; b.textContent = t('ol.startRetry'); }
+              if (r && r.ok) {
+                // #317.F15b：启动即按内存配好上下文（≥14G→32768/≥7G→16384/≥3.5G→8192）——安装全程无需用户手配
+                if (r.contextLength) { b.textContent = `${t('ol.startBtn')} ✓（上下文 ${r.contextLength}）` } 
+                await renderState()
+              } else { b.disabled = false; b.textContent = t('ol.startRetry'); }
             }
           } else {
             box.innerHTML = `<div class="sc-main"><div class="sc-title">${t('ol.notFoundTitle')}</div>
