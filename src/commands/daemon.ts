@@ -888,6 +888,12 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         } else if (op === 'cancel') {
           const job = cancelJob(String((args as Record<string, unknown>).id ?? ''))
           if (!job) { code = 1; text = '任务不存在' } else { text = JSON.stringify({ ok: true, job }) }
+        } else if (op === 'delete') {
+          // #317.7 接线补全：renderer 任务卡删除钮早就在发 op:'delete'，daemon 漏接（真机：未知 tasks op：delete）。
+          // deleteJob 自带守卫：running/queued 拒删须先取消；产物留盘；ledger 独立不受影响。
+          const { deleteJob } = await import('../lib/tasks')
+          const r = deleteJob(String((args as Record<string, unknown>).id ?? ''))
+          if (!r.ok) { code = 1; text = r.reason ?? '删除失败' } else { text = JSON.stringify({ ok: true }) }
         } else if (op === 'create_compile') {
           // #310.21：paths 可选——不传=自动全量未整理（listUncompiled−ledger）；传=指定清单。上限 500
           // #310.61b：rel 形态（树右键「文档/xx.md」）归一 abs——执行器 readSource/pathToCloud 全按 abs（listUncompiled 产出即 abs）
