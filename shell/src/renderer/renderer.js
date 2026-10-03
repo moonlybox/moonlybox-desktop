@@ -3317,18 +3317,20 @@ async function renderWork(nav, arg, label2) {
     const kernelOk = r.event === 'done'
     w.innerHTML = `
       <div style="padding:24px 28px;overflow-y:auto;height:100%;box-sizing:border-box">
-        <div class="set-card" style="display:flex;align-items:center;gap:16px;padding:18px 20px">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:15px;font-weight:700">${t('help.kernelCard')}</div>
-            <div class="set-desc" style="margin-top:2px">${t('help.kernelCard.desc')}</div>
-            <div style="margin-top:10px;font-size:13px;font-weight:600;color:${kernelOk ? 'var(--ok)' : 'var(--bad, #d64545)'}">${kernelOk ? t('help.kernelOk') : '✗ ' + (r.message ?? t('help.kernelDown'))}</div>
+        <div class="set-card" style="display:flex;align-items:center;gap:16px;padding:14px 20px">
+          <div class="sc-main">
+            <div class="sc-title">${t('help.kernelCard')}</div>
+            <div class="sc-desc">${t('help.kernelCard.desc')}</div>
+            <div style="margin-top:8px;font-size:12.5px;font-weight:600;color:${kernelOk ? 'var(--ok)' : 'var(--bad, #d64545)'}">${kernelOk ? t('help.kernelOk') : '✗ ' + (r.message ?? t('help.kernelDown'))}</div>
           </div>
           <span style="width:10px;height:10px;border-radius:999px;background:${kernelOk ? 'var(--ok)' : 'var(--bad, #d64545)'};flex:none"></span>
         </div>
-        <div class="set-card" style="margin-top:12px;padding:16px 20px">
-          <div style="font-size:13px;font-weight:600">${t('help.vaultCard')}</div>
-          <div class="set-desc" style="margin-top:2px">${t('help.vaultCard.desc')}</div>
-          <div style="margin-top:8px;font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;user-select:text">${vault ? vault : t('help.vaultNone')}</div>
+        <div class="set-card" style="margin-top:12px;padding:14px 20px">
+          <div class="sc-main">
+            <div class="sc-title">${t('help.vaultCard')}</div>
+            <div class="sc-desc">${t('help.vaultCard.desc')}</div>
+            <div style="margin-top:8px;font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;user-select:text;color:var(--fg)">${vault ? vault : t('help.vaultNone')}</div>
+          </div>
         </div>
       </div>`
     return
