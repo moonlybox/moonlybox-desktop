@@ -430,10 +430,12 @@ app.whenReady().then(() => {
         if (!fs.existsSync(log)) {
           let on = false
           try {
-            // debug 状态读 daemon settings 单源（~/.config/moonlybox/settings.json，与 daemon configDir 同径）
+            // debug 状态读 daemon settings 单源（~/.config/moonlybox/settings.json，与 daemon configDir 同径）；
+            // 缺省态与 renderer 同式：dev（未打包）=开、打包=关（#319.8 与 UI/debugMirror 三处同源）
             const cfg = path.join(os.homedir(), '.config', 'moonlybox', 'settings.json')
-            on = JSON.parse(fs.readFileSync(cfg, 'utf8'))?.debug?.enabled === true
-          } catch {}
+            const explicit = JSON.parse(fs.readFileSync(cfg, 'utf8'))?.debug?.enabled
+            on = explicit === true || (explicit == null && !app.isPackaged)
+          } catch { on = !app.isPackaged }
           fs.writeFileSync(log, [
             `# mb-debug.log — ${new Date().toISOString()}`,
             ``,

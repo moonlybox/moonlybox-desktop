@@ -117,9 +117,13 @@ const SETTINGS_CATS = [
 const SET_SUB_LABELS = { platform: 'set.sub.platform', local: 'set.sub.local', custom: 'set.sub.custom', builtin: 'set.sub.builtin', market: 'set.sub.market' }
 let currentHelpArg = 'about' // #310.5：帮助侧栏选中态跟踪（默认=关于）
 let _dbgOn = null; let _dbgAt = 0
-async function debugMirror() { // #310.7：调试开关缓存查询
+async function debugMirror() { // #310.7：调试开关缓存查询（#319.8：与调试页 UI 同源——settings 缺省时 dev=开/打包=关）
   if (_dbgOn !== null && Date.now() - _dbgAt < 10_000) return _dbgOn
-  try { const gs = await loadAppSettings(); _dbgOn = (gs.debug ?? {}).enabled === true } catch { _dbgOn = false }
+  try {
+    const [gs, env] = [await loadAppSettings(), await window.moonlybox.envInfo().catch(() => null)]
+    const defOn = env ? !env.packaged : false
+    _dbgOn = (gs.debug ?? {}).enabled === true || (gs.debug == null && defOn)
+  } catch { _dbgOn = false }
   _dbgAt = Date.now()
   return _dbgOn
 }
