@@ -362,6 +362,12 @@ const I18N_DICT = {
   'help.kernelOk': { zh: '✓ 已连接（daemon pong）', en: '✓ Connected (daemon pong)' },
   'help.kernelDown': { zh: '未连接', en: 'Not connected' },
   'help.kernelPick': { zh: '选择左侧项目开始', en: 'Select an item to begin' },
+  'help.kernelFrame': { zh: '内核状态', en: 'Kernel' },
+  'help.kernelCard': { zh: '同步内核', en: 'Sync Kernel' },
+  'help.kernelCard.desc': { zh: '本地书房的同步/检索/小月服务进程', en: 'Service process for study sync, search and Moonie' },
+  'help.vaultCard': { zh: '书房目录', en: 'Study Folder' },
+  'help.vaultCard.desc': { zh: '同步、检索与小月的单一数据源', en: 'Single source of truth for sync, search and Moonie' },
+  'help.vaultNone': { zh: '未选择', en: 'Not selected' },
   'about.name': { zh: '魔力宝盒', en: 'MoonlyBox' },
   'about.slogan': { zh: '你的智能信息管家 · 收藏、便签、待办、书房与小月，一盒皆收', en: 'Your smart info butler · bookmarks, notes, todos, study and Moonie in one box' },
   'about.autoUpdate': { zh: '自动更新', en: 'Auto Update' },
@@ -3288,14 +3294,32 @@ async function renderWork(nav, arg, label2) {
         </div>
       </div>`
     $('cld-copy').onclick = async () => {
-      try { await navigator.clipboard.writeText($('cld-addr').value); $('cld-copy').textContent = t('help.copied'); setTimeout(() => { const b = $('cld-copy'); if (b) b.textContent = '复制' }, 1500) } catch {}
+      try { await navigator.clipboard.writeText($('cld-addr').value); $('cld-copy').textContent = t('help.copied'); setTimeout(() => { const b = $('cld-copy'); if (b) b.textContent = t('help.copy') }, 1500) } catch {}
     }
     return
   }
   if (nav === 'help' && arg === 'kernel') {
-    setFrameTabCtx('help', '内核状态')
+    // #319.4：帧名词条化+状态卡片化（与关于页 set-card 风格一致；原单行 mono 写死中文）
+    setFrameTabCtx('help', t('help.kernelFrame'))
     const r = await window.moonlybox.rpc('ping', {}, 10_000)
-    w.innerHTML = `<div style="padding:20px" class="mono">内核：${r.event === 'done' ? t('help.kernelOk') : '✗ ' + (r.message ?? t('help.kernelDown'))}<br/>vault：${await window.moonlybox.vaultGet() ?? '未选择'}</div>`
+    const vault = await window.moonlybox.vaultGet()
+    const kernelOk = r.event === 'done'
+    w.innerHTML = `
+      <div style="padding:24px 28px;overflow-y:auto;height:100%;box-sizing:border-box">
+        <div class="set-card" style="display:flex;align-items:center;gap:16px;padding:18px 20px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px;font-weight:700">${t('help.kernelCard')}</div>
+            <div class="set-desc" style="margin-top:2px">${t('help.kernelCard.desc')}</div>
+            <div style="margin-top:10px;font-size:13px;font-weight:600;color:${kernelOk ? 'var(--ok)' : 'var(--bad, #d64545)'}">${kernelOk ? t('help.kernelOk') : '✗ ' + (r.message ?? t('help.kernelDown'))}</div>
+          </div>
+          <span style="width:10px;height:10px;border-radius:999px;background:${kernelOk ? 'var(--ok)' : 'var(--bad, #d64545)'};flex:none"></span>
+        </div>
+        <div class="set-card" style="margin-top:12px;padding:16px 20px">
+          <div style="font-size:13px;font-weight:600">${t('help.vaultCard')}</div>
+          <div class="set-desc" style="margin-top:2px">${t('help.vaultCard.desc')}</div>
+          <div style="margin-top:8px;font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;user-select:text">${vault ? vault : t('help.vaultNone')}</div>
+        </div>
+      </div>`
     return
   }
   if (nav === 'help' && (arg === 'feedback' || arg === 'terms')) {
