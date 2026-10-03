@@ -3106,13 +3106,18 @@ async function renderWork(nav, arg, label2) {
       const cur = wv.getURL() || ''
       if (!cur.startsWith(webBase)) return
       injected = true
+      // #319.2：语言跟随客户端（appearance.lang）——云端工作台与 terms/feedback 同款注入；
+      // 时序成立的前提：注入发生在 loadURL 目标页之前，目标页 React 首渲染读 localStorage 已命中
+      const clLang = (APP_SETTINGS?.appearance?.lang === 'en') ? 'en' : 'zh'
       try {
         if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`)
+        await wv.executeJavaScript(`localStorage.setItem('mf_lang', ${JSON.stringify(clLang)}); 'ok'`)
       } catch {
         // 注入失败重试一次（guest 页偶发未就绪）
         await new Promise((r2) => setTimeout(r2, 600))
         if (!genValid()) return // #299：重试等待期间切走=作废
         try { if (token) await wv.executeJavaScript(`localStorage.setItem('mf_token', ${JSON.stringify(token)}); 'ok'`) } catch {}
+        try { await wv.executeJavaScript(`localStorage.setItem('mf_lang', ${JSON.stringify(clLang)}); 'ok'`) } catch {}
       }
       // 路由跳转（#253.35）：web=BrowserRouter（path 路由）——manifest url 归一化去 '#'
       const path = arg.url.replace(/^\/#/, '/')
