@@ -358,9 +358,8 @@ const I18N_DICT = {
   'help.site': { zh: '魔力宝盒官网', en: 'MoonlyBox Website' },
   'help.copy': { zh: '复制', en: 'Copy' },
   'help.copied': { zh: '已复制', en: 'Copied' },
-  'help.site.desc': { zh: '用系统默认浏览器打开官方网站——了解产品、查看帮助与更新日志。', en: 'Open the official website in your default browser — for product info, help and release notes.' },
   'help.site.open': { zh: '打开官网', en: 'Open Website' },
-  'help.site.addr': { zh: '网址', en: 'Address' },
+  'help.site.copyAddr': { zh: '复制网址', en: 'Copy URL' },
   'help.kernelOk': { zh: '✓ 已连接（daemon pong）', en: '✓ Connected (daemon pong)' },
   'help.kernelDown': { zh: '未连接', en: 'Not connected' },
   'help.kernelPick': { zh: '选择左侧项目开始', en: 'Select an item to begin' },
@@ -3284,23 +3283,20 @@ async function renderWork(nav, arg, label2) {
         webBase = parsed.data?.webBase ?? parsed.webBase ?? webBase
       }
     } catch {}
-    // #319.5：功能重定位——「官方网址」=真打开官网（系统默认浏览器），不是展示云端功能出自哪个域名
+    // #319.6：版面简化（用户定稿）——单行：卡名 + 网址 + [打开官网] [复制网址]；desc/label 删
     w.innerHTML = `
-      <div style="padding:24px 28px;overflow-y:auto;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:12px">
-        <div class="set-card" style="padding:18px 20px">
-          <div style="font-size:15px;font-weight:700">${t('help.site')}</div>
-          <div class="set-desc" style="margin-top:2px">${t('help.site.desc')}</div>
-          <button class="btn" id="cld-open" style="margin-top:12px;background:var(--accent)">${t('help.site.open')} ↗</button>
-          <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
-            <span class="set-desc" style="flex:none">${t('help.site.addr')}</span>
-            <input readonly value="${webBase}" style="flex:1" id="cld-addr" />
-            <button class="btn ghost" id="cld-copy">${t('help.copy')}</button>
-          </div>
+      <div style="padding:24px 28px;overflow-y:auto;height:100%;box-sizing:border-box">
+        <div class="set-card" style="padding:14px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="font-size:13px;font-weight:600;flex:none">${t('help.site')}</div>
+          <a href="${webBase}" id="cld-link" style="flex:1;min-width:160px;color:var(--accent);text-decoration:none;font-family:ui-monospace,monospace;font-size:12px" title="${webBase}">${webBase}</a>
+          <button class="btn" id="cld-open" style="flex:none">${t('help.site.open')}</button>
+          <button class="btn ghost" id="cld-copy" style="flex:none">${t('help.site.copyAddr')}</button>
         </div>
       </div>`
     $('cld-open').onclick = () => window.moonlybox.openExternal(webBase)
+    $('cld-link').onclick = (e) => { e.preventDefault(); window.moonlybox.openExternal(webBase) }
     $('cld-copy').onclick = async () => {
-      try { await navigator.clipboard.writeText($('cld-addr').value); $('cld-copy').textContent = t('help.copied'); setTimeout(() => { const b = $('cld-copy'); if (b) b.textContent = t('help.copy') }, 1500) } catch {}
+      try { await navigator.clipboard.writeText(webBase); $('cld-copy').textContent = t('help.copied'); setTimeout(() => { const b = $('cld-copy'); if (b) b.textContent = t('help.site.copyAddr') }, 1500) } catch {}
     }
     return
   }
