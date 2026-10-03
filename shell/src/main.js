@@ -18,6 +18,10 @@ const fs = require('fs')
 // - renderer V8 老生代限堆 256MB（UI 场景足够，防单窗膨胀拖累待命基线）
 // - 关 GPU shader disk cache（省磁盘写入；GPU 进程常驻为 Chromium 基线，砍掉需关硬件加速=显示性能代价，不做）
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256')
+
+// #319.7：应用名钉死——dev（electron src/main.js 不经 builder 注入 productName）时 app.name 兜底 'Electron'，
+// userData=%APPDATA%/Electron，与打包态 %APPDATA%/MoonlyBox 分裂；显式 setName 统一两态。
+app.setName('MoonlyBox')
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 
 let tray = null
@@ -419,6 +423,27 @@ app.whenReady().then(() => {
   ipcMain.handle('shell:openLogDir', async () => {
     try {
       const dir = app.getPath('userData')
+      const log = path.join(dir, 'mb-debug.log')
+      // #319.7：日志文件缺位兜底——镜像仅在小月对话运行+调试开+窗口存续时产生；文件不存在时
+      // 落一个说明头（含当前调试状态与产生条件），目录打开即有实物可看，不再「目录是空的」困惑
+      try {
+        if (!fs.existsSync(log)) {
+          let on = false
+          try {
+            // debug 状态读 daemon settings 单源（~/.config/moonlybox/settings.json，与 daemon configDir 同径）
+            const cfg = path.join(os.homedir(), '.config', 'moonlybox', 'settings.json')
+            on = JSON.parse(fs.readFileSync(cfg, 'utf8'))?.debug?.enabled === true
+          } catch {}
+          fs.writeFileSync(log, [
+            `# mb-debug.log — ${new Date().toISOString()}`,
+            ``,
+            `调试状态：${on ? '已开启' : '未开启'}（帮助 → 调试 → 调试模式 开关）`,
+            `产生条件：调试开启后，小月对话的内核输出会实时镜像到这里（需应用窗口处于运行状态）。`,
+            `反馈问题：把本目录整体打包附上即可（本文件 + 系统信息见 调试 页）。`,
+            ``,
+          ].join('\n'), 'utf8')
+        }
+      } catch {}
       await shell.openPath(dir)
       return ''
     } catch (e) { return String(e?.message ?? e) }

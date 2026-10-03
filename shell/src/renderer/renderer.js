@@ -352,6 +352,11 @@ const I18N_DICT = {
   'help.debugLog.desc': { zh: '打开日志目录：mb-debug.log（调试日志）与系统信息；反馈问题时可整目录打包附上', en: 'Open log folder: mb-debug.log (debug log) and system info; attach the whole folder when reporting issues' },
   'help.openLogs': { zh: '打开日志目录', en: 'Open Log Folder' },
   'help.envInfo': { zh: '环境信息', en: 'Environment' },
+  'help.envPlatform': { zh: '平台', en: 'Platform' },
+  'help.envPkg': { zh: '安装包', en: 'Packaged' },
+  'help.envLocale': { zh: '语言', en: 'Language' },
+  'help.yes': { zh: '是', en: 'Yes' },
+  'help.noDevMode': { zh: '否（开发模式）', en: 'No (dev mode)' },
   'help.openFail': { zh: '打开失败：', en: 'Open failed: ' },
   'help.devDefault': { zh: '开发模式默认开启', en: 'on by default in dev' },
   'help.pkgDefault': { zh: '安装包默认关闭', en: 'off by default in packaged builds' },
@@ -3269,7 +3274,7 @@ async function renderWork(nav, arg, label2) {
       const err = await window.moonlybox.openLogDir()
       if (err) $('dbg-export').textContent = t('help.openFail') + err
     }
-    if (env) $('dbg-env').innerHTML = `平台：${env.platform}<br/>Electron：${env.electron} · Node：${env.node}<br/>安装包：${env.packaged ? '是' : '否（开发模式）'}<br/>语言：${env.locale}`
+    if (env) $('dbg-env').innerHTML = `${t('help.envPlatform')}：${env.platform}<br/>Electron：${env.electron} · Node：${env.node}<br/>${t('help.envPkg')}：${env.packaged ? t('help.yes') : t('help.noDevMode')}<br/>${t('help.envLocale')}：${env.locale}`
     return
   }
   if (nav === 'help' && arg === 'cloudaddr') {
