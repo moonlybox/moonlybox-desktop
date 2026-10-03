@@ -161,6 +161,14 @@ const I18N_DICT = {
   'set.cat.websearch': { zh: '网络搜索', en: 'Web Search' },
   'set.cat.docproc': { zh: '文档处理', en: 'Doc Processing' },
   'set.cat.memory': { zh: '记忆', en: 'Memory' },
+  'cloud.nav.bookmarks': { zh: '收藏', en: 'Bookmarks' },
+  'cloud.nav.tags': { zh: '标签', en: 'Tags' },
+  'cloud.nav.stickies': { zh: '便签墙', en: 'Sticky Wall' },
+  'cloud.nav.todos': { zh: '待办', en: 'Todos' },
+  'cloud.nav.docs': { zh: '书房（云端）', en: 'Library (Cloud)' },
+  'cloud.nav.entities': { zh: '记忆实体', en: 'Memory Entities' },
+  'cloud.nav.moments': { zh: '动态', en: 'Moments' },
+  'cloud.nav.square': { zh: '广场', en: 'Square' },
   'set.sub.platform': { zh: '平台 API', en: 'Platform API' },
   'set.sub.local': { zh: '本地部署', en: 'Local' },
   'set.sub.custom': { zh: '自定义', en: 'Custom' },
@@ -1083,7 +1091,9 @@ async function renderList(nav) {
         const el = document.createElement('div')
         el.className = 'tree-item' + (currentCloudId === it.id ? ' active' : '')
         el.dataset.cid = it.id
-        el.innerHTML = `${cloudIconSvg(it.icon)}<span>${it.label}</span>`
+        // #319.3：侧栏 label 客户端本地化——manifest id 命中字典走 t()，未命中回落服务端 label
+        const navLabel = t(`cloud.nav.${it.id}`)
+        el.innerHTML = `${cloudIconSvg(it.icon)}<span>${navLabel === `cloud.nav.${it.id}` ? it.label : navLabel}</span>`
         el.onclick = () => {
           body.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
           el.classList.add('active')
@@ -3081,7 +3091,9 @@ async function renderWork(nav, arg, label2) {
   }
   if (nav === 'cloud' && arg && typeof arg === 'object') {
     // #254：云端功能页=WebView 承载 web SPA（布局/交互/多视图=web 端现成；升级零客户端发版）
-    setFrameTabCtx('cloud', arg.label ?? '')
+    // #319.3：页帧标题与侧栏同源本地化（arg.label=服务端中文兜底，字典命中走 t()）
+    const frameNavLabel = (() => { const v = t(`cloud.nav.${arg.id}`); return v === `cloud.nav.${arg.id}` ? (arg.label ?? '') : v })()
+    setFrameTabCtx('cloud', frameNavLabel)
     const gen = ++renderGen // #299：本协程世代号——期间用户切走则后续步骤全部作废
     const genValid = () => gen === renderGen && $('cloud-wv') !== null
     // #253.41/#253.42：防闪烁+加载动画——webview 初始透明+spinner 覆盖层，目标页 did-finish-load 后淡入并移除 spinner（无调试文字）
