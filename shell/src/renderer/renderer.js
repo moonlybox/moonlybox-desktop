@@ -3394,11 +3394,14 @@ async function renderWork(nav, arg, label2) {
       await window.moonlybox.setAutoUpdate(on)
     }
     $('btn-check2').onclick = async (e) => {
-      e.currentTarget.textContent = t('ui.checking')
+      // #319.1：e.currentTarget 在 await 让出事件循环后已被事件派发重置为 null——先存引用再用
+      // （分支1/2 走 renderWork 重建整个关于页，按钮无需再改文字；仅「已是最新」分支用存引用改文字）
+      const btn = e.currentTarget
+      btn.textContent = t('ui.checking')
       const st2 = await window.moonlybox.updateCheck()
       if (st2?.downloaded) renderWork('help', 'about')
-      else if (st2?.available) { e.currentTarget.textContent = t('ui.updateNow'); renderWork('help', 'about') }
-      else e.currentTarget.textContent = t('ui.latest')
+      else if (st2?.available) renderWork('help', 'about')
+      else btn.textContent = t('ui.latest')
     }
     const inst = $('abt-install')
     if (inst) inst.onclick = () => window.moonlybox.updateInstall()
