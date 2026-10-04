@@ -1739,11 +1739,9 @@ async function renderWork(nav, arg, label2) {
       // #316.7：gset 先取（模板内 modelPickerOpts 求值需要）
       const gset = await loadAppSettings()
       panel(t('panel.library'), t('panel.sub.library'), `
-        <div class="set-field">
-          <label>${t('lib.vault')}</label>
-          <div class="set-row" style="margin:0"><input id="sp-vault" readonly placeholder=\"${t('lib.notChosen')}\" style="flex:1" /><button type="button" class="btn ghost" id="sp-vault-pick">选择…</button></div>
-        </div>
-        <div class="set-row" style="margin:0"><button type="button" class="btn ghost" id="sp-vault-migrate" style="font-size:12px">${t('lib.migrateBtn')}</button><span class="set-desc" style="align-self:center">${t('lib.migrateNote')}</span></div>
+        <div class="set-h2">${t('lib.vault')}</div>
+        <div class="set-field"><div class="set-row" style="margin:0"><input id="sp-vault" readonly placeholder=\"${t('lib.notChosen')}\" style="flex:1" /><button type="button" class="btn ghost" id="sp-vault-pick">选择…</button></div></div>
+        <div class="set-row" style="margin:0"><button type="button" class="btn ghost" id="sp-vault-migrate" style="font-size:12px">${t('lib.migrateBtn')}</button><span class="set-desc" style="align-self:center;margin:0">${t('lib.migrateNote')}</span></div>
         <div class="set-status" id="sp-vault-status"></div>
         <div class="set-h2">${t('lib.compileTitle')}</div>
         <div class="set-desc" style="margin:0 0 10px">${t('lib.compileDesc')}</div>
