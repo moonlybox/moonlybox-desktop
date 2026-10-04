@@ -4071,6 +4071,7 @@ function bindChat(chatInfo) {
   const logEl = () => $('log')
   // 当前聚合态：连续相关行并入同一容器（AI 气泡 / 工具折叠 / 思考折叠）
   let cur = { type: null, el: null, text: '' }
+  let lastAiText = '' // #329.5：最后一条 AI 气泡原始文本（兜底判重用——DOM textContent 经 markdown 渲染≠原文）
   const scroll = () => { const el = logEl(); if (el) el.scrollTop = el.scrollHeight }
   const flushCur = () => {
     if (!cur.type || !cur.el) return
@@ -4089,7 +4090,7 @@ function bindChat(chatInfo) {
     wrap.append(roleEl, bubble)
     logEl().appendChild(wrap)
     if (role === 'user') bubble.textContent = text
-    else { cur = { type: 'ai', el: wrap, text } ; setBubbleMarkdown(bubble, text) }
+    else { cur = { type: 'ai', el: wrap, text }; lastAiText = text; setBubbleMarkdown(bubble, text) }
     scroll()
     return bubble
   }
@@ -4299,12 +4300,8 @@ function bindChat(chatInfo) {
       const full = String(r.text ?? '')
       const m = full.match(/(?:^|\n)小月：([\s\S]*?)(?=\n（工具调用 |\n（[^）]*）$|$)/)
       const finalAnswer = m ? m[1].trim() : ''
-      if (finalAnswer) {
-        const bubbles = Array.from(logEl()?.querySelectorAll('.msg.ai .msg-bubble') ?? [])
-        const lastText = String(bubbles.at(-1)?.textContent ?? '')
-        if (!lastText.includes(finalAnswer.slice(0, 24))) {
-          addMsg('ai', finalAnswer)
-        }
+      if (finalAnswer && finalAnswer !== lastAiText.trim()) {
+        addMsg('ai', finalAnswer)
       }
     }
     if (xyAborted) {

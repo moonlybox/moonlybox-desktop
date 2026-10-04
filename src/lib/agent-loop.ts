@@ -289,6 +289,14 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     if (!res.ok) throw new Error(res.error ?? 'LLM 调用失败')
 
     if (!res.toolCalls || res.toolCalls.length === 0) {
+      // #329.5：整理链轮末编排兜底——GLM 5.2 实证会「登记后停下等继续」（提示词两轮压不住）：
+      // 本轮已登记 cloud_organize 任务但从未调过 organize_bookmarks 且模型停下 → 注入推进指令强制再来一轮。
+      const didCreateOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize')
+      const didOrganize = used.some((u) => u.name === 'organize_bookmarks')
+      if (didCreateOrganize && !didOrganize && round < MAX_TOOL_ROUNDS - 1) {
+        messages.push({ role: 'user', content: '（系统）任务已登记且用户已授权。现在立即调用 organize_bookmarks（不带 confirmToken）生成变更预览 diff，并把 diff 摘要展示给用户。不要输出任何「回复继续」式停顿。' })
+        continue
+      }
       let text = res.text ?? ''
       // #317.F12：推理泄漏检测+一次自纠——system 纪律失守时兜底（判窄不判宽，避免误伤正常长答）
       // #317.F14：自纠循环（上限 2 次）——首版修正令 200 字被 4B 模型当新题目展开分析（真机：重写回复本身
