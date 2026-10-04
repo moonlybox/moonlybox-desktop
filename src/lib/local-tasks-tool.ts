@@ -184,11 +184,11 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
     }
   }
   if (name === 'local_task_cloud_organize_preview') {
-    // #329.7：一步化预览——圈定+organize 预览（token 原样返回给模型，下一步带它执行=UI 确认条）
+    // #329.12 重构：preview 只圈定清单（不含 organize 调用——标签方案必须由 LLM 生成，工具生成不了）。
+    // 旧版内部调 organize_bookmarks({ids}) 无变更内容→API 422「未提供任何变更」=「预览失败」真因。
     try {
       const kind = args.kind === 'descriptions' ? 'descriptions' : 'tags'
       const { getJob, updateJob, allJobs } = await import('./tasks')
-      // #329.8：jobId 防呆——模型常编造 id（真机实证 task_muu5xxx）；无效时自动取最近的 cloud_organize 任务
       let job = getJob(String(args.jobId ?? ''))
       if (!job || job.type !== 'cloud_organize') {
         job = allJobs().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
@@ -202,31 +202,17 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
       try { sData = JSON.parse(sText) } catch { return JSON.stringify({ ok: false, error: `清单获取失败：${sText.slice(0, 120)}` }) }
       const items: Array<any> = sData.bookmarks ?? []
       if (!items.length) return JSON.stringify({ ok: true, message: '没有符合条件的收藏', total: 0 })
-      const ids = items.map((b: any) => b.id)
-      const org = await callTool('organize_bookmarks', kind === 'descriptions' ? { ids, description: '（待定）' } : { ids })
-      const oText = org?.content?.map((c: any) => c.text ?? '').join('') ?? ''
-      let oData: any
-      try { oData = JSON.parse(oText) } catch { return JSON.stringify({ ok: false, error: `预览失败：${oText.slice(0, 120)}` }) }
-      if (oData.ok === false) return JSON.stringify({ ok: false, error: oData.message ?? '预览失败' })
       updateJob(job.id, { status: 'running', startedAt: new Date().toISOString() })
-      const diffs: Array<any> = oData.diff ?? []
-      const lines = diffs.slice(0, 50).map((d: any) => {
-        const title = String(d.title ?? d.id ?? '').slice(0, 40)
-        const add = (d.tagsAdd ?? d.attach ?? []).join('、')
-        return `· ${title} → ${add || '（无标签变更）'}`
-      })
+      const list = items.map((b: any, i: number) => `${i + 1}. id=${b.id} | ${String(b.title ?? '').slice(0, 50)} | ${String(b.description ?? b.note ?? '').slice(0, 60)}`)
       return JSON.stringify({
         ok: true,
         jobId: job.id,
         total: items.length,
-        changed: oData.changed ?? diffs.length,
-        diffSummary: lines,
-        confirmToken: oData.confirmToken ?? null,
-        message: `预览已生成（${items.length} 条）。把 diffSummary 展示给用户；用户确认后调 organize_bookmarks {ids 摘要见下, confirmToken} 执行（UI 会弹确认条）。token 30 分钟有效。`,
-        ids,
+        list,
+        message: `清单已圈定（${items.length} 条）。**你现在逐条生成标签方案**，然后调 organize_bookmarks {items:[{id, tagsAdd:["..."]}, ...]}（≤50 条/批）——两段式：先不带 confirmToken 拿预览 diff，把 diffSummary 展示给用户，用户确认后带 confirmToken 执行。`,
       })
     } catch (e: any) {
-      return JSON.stringify({ ok: false, error: `预览失败：${String(e?.message ?? e)}` })
+      return JSON.stringify({ ok: false, error: `清单获取失败：${String(e?.message ?? e)}` })
     }
   }
   if (name === 'local_task_update_cloud_organize') {
