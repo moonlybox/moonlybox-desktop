@@ -634,8 +634,15 @@ ${memBlock}` : ''}${skillBlock}`
   })
   if (result.answer) {
     console.log(`小月：${result.answer}`)
-    appendTurn(sessionId, question, result.answer)
-    if (opts.chatId) wsAppendTurn(opts.chatId, 'assistant', result.answer)
+    // #329.15：垃圾文本不落盘——工具调用文本化（tool_xxx path C:\）若入历史，后续轮会模仿（垃圾自我繁殖）
+    const isGarbage = /\btool_[a-z_]+\s*path\s*[A-Za-z]:\\/.test(result.answer)
+      || /^\s*(tool_result_read|organize_bookmarks|search_bookmarks|local_task_[a-z_]+)\s*(path|[\{\[])/i.test(result.answer.trim())
+    if (!isGarbage) {
+      appendTurn(sessionId, question, result.answer)
+      if (opts.chatId) wsAppendTurn(opts.chatId, 'assistant', result.answer)
+    } else {
+      console.log('（异常回复已拦截，未写入会话历史）')
+    }
   } else if (!result.toolCalls.length) {
     // #280.3：LLM 链路整体成功但零输出——给可见引导行，绝不让小月静默
     console.log('（小月这次没有返回内容——请重试；若反复出现，检查模型是否兼容工具调用，或联系反馈）')

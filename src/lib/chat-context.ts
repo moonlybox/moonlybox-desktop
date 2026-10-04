@@ -33,7 +33,13 @@ function sessionFile(sessionId: string): string {
 function loadSessionDisk(sessionId: string): SessionTurn[] {
   try {
     const arr = JSON.parse(fs.readFileSync(sessionFile(sessionId), 'utf8'))
-    return Array.isArray(arr) ? arr.filter((t: any) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string').slice(-MAX_TURNS) : []
+    // #329.15：回灌过滤垃圾 assistant（工具调用文本化）——盘上历史若已被污染，回灌时清洗（防模仿繁殖）
+    return Array.isArray(arr)
+      ? arr
+          .filter((t: any) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string')
+          .filter((t: any) => t.role !== 'assistant' || !(/\btool_[a-z_]+\s*path\s*[A-Za-z]:\\/.test(t.content) || /^\s*(tool_result_read|organize_bookmarks|search_bookmarks|local_task_[a-z_]+)\s*(path|[\{\[])/i.test(t.content.trim())))
+          .slice(-MAX_TURNS)
+      : []
   } catch {
     return []
   }
