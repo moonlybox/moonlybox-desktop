@@ -686,6 +686,9 @@ const I18N_DICT = {
   'up.ready': { zh: 'v{v} 已就绪，点击安装并重启', en: 'v{v} ready — click to install and restart' },
   'up.latest': { zh: '最新', en: 'Latest' },
   'ac.signedAs': { zh: '已登录：{e}', en: 'Signed in: {e}' },
+  'ac.premiumBadge': { zh: '高级会员', en: 'Premium' },
+  'ac.freeBadge': { zh: '免费版', en: 'Free' },
+  'ac.upgrade': { zh: '升级高级会员，解锁云端 AI 调用', en: 'Upgrade to Premium for cloud AI tools' },
   'ac.notSigned': { zh: '未', en: 'Off' },
   'lg.title': { zh: '登录魔力宝盒', en: 'Sign in to MoonlyBox' },
   'lg.steps': { zh: '1. 点击下方按钮在浏览器打开授权页（手机也可以）<br/>2. 输入用户码确认 → 回到本窗口等待', en: '1. Click below to open the auth page in a browser (phone works too)<br/>2. Enter the code, confirm, then come back and wait' },
@@ -695,6 +698,7 @@ const I18N_DICT = {
   'lg.openFail': { zh: '打开失败，请手动访问：', en: 'Open failed — visit manually: ' },
   'lg.copyLink': { zh: '手动复制授权链接', en: 'Copy auth link manually' },
   'lg.signedIn': { zh: '✓ 已登录：', en: '✓ Signed in: ' },
+  'lg.premiumHint': { zh: '云端 AI 调用（月光链）需要高级会员，升级后可用', en: 'Cloud AI tools (MoonLink) require Premium membership' },
   'lg.waitConfirm': { zh: '等待你在浏览器/手机确认…', en: 'Waiting for you to confirm in browser/phone…' },
   'lg.denied': { zh: '已在网页拒绝', en: 'Denied on the web page' },
   'lg.expired': { zh: '用户码过期，重新点击头像', en: 'Code expired — click avatar again' },
@@ -4499,6 +4503,12 @@ $('btn-avatar').onclick = async () => {
     // #262：profile 拉到真实头像 → rail 主界面头像同步更新（修「面板有头像、rail 还是字母」不同步）
     applyRailAvatar(avatarUrl, d.email, true)
     const extSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.55"><path d="M7 17L17 7M9 7h8v8"/></svg>`
+    // #323 连接态：会员徽标（premium 且未到期=高级会员；否则免费版+升级入口）——数据=profile 的 level/premiumExpiresAt
+    const isPrem = !!(p?.level === 'premium' && p?.premiumExpiresAt && new Date(p.premiumExpiresAt) > new Date())
+    const badge = isPrem
+      ? `<span style="font-size:11px;padding:1px 8px;border-radius:999px;background:rgba(251,191,36,.15);color:#fbbf24;margin-left:6px">${t('ac.premiumBadge')}${p.premiumExpiresAt ? ' · ' + p.premiumExpiresAt.slice(0, 10) : ''}</span>`
+      : `<span style="font-size:11px;padding:1px 8px;border-radius:999px;background:var(--hover);color:var(--muted,#94a3b8);margin-left:6px">${t('ac.freeBadge')}</span>`
+    const upgradeRow = isPrem ? '' : `<div id="ac-upgrade" style="display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#fbbf24">${t('ac.upgrade')} ${extSvg}</div>`
     const dlg = document.createElement('dialog')
     dlg.innerHTML = `
       <div class="dlg-body">
@@ -4507,11 +4517,12 @@ $('btn-avatar').onclick = async () => {
           ? `<img src="${avatarUrl}" style="width:52px;height:52px;border-radius:50%;object-fit:cover" referrerpolicy="no-referrer"/>`
           : `<div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px">${(nickname[0] ?? '?').toUpperCase()}</div>`}
         <div style="min-width:0">
-          <div style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nickname}</div>
+          <div style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nickname}${badge}</div>
           <div class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px">${signature || (d.email ?? '')}</div>
         </div>
       </div>
       <div style="border-top:1px solid var(--border);margin:14px 0 6px"></div>
+      ${upgradeRow}
       <div id="ac-feedback" style="display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px">${t('ac.feedback')} ${extSvg}</div>
       <div id="ac-settings" style="display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px">${t('ac.settings')} ${extSvg}</div>
       <div id="ac-logout" style="display:flex;align-items:center;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:13.5px;color:#f87171">${t('ac.logout')}</div>
@@ -4523,6 +4534,8 @@ $('btn-avatar').onclick = async () => {
       el.onmouseenter = () => { el.style.background = 'var(--hover)' }
       el.onmouseleave = () => { el.style.background = 'transparent' }
     })
+    const upEl = dlg.querySelector('#ac-upgrade')
+    if (upEl) upEl.onclick = () => { dlg.close(); window.moonlybox.openExternal('https://moonlybox.cn/upgrade') }
     dlg.querySelector('#ac-feedback').onclick = () => { dlg.close(); window.moonlybox.openExternal('https://moonlybox.cn/feedback') }
     dlg.querySelector('#ac-settings').onclick = () => { dlg.close(); window.moonlybox.openExternal('https://moonlybox.cn/settings') }
     dlg.addEventListener('close', () => dlg.remove())
@@ -4671,7 +4684,14 @@ async function showLoginDialog() {
       const pd = JSON.parse(pr.text)
       if (pd.status === 'done') {
         $('lg-status').textContent = t('lg.signedIn') + pd.email
-        await refreshAvatar()
+        // #323 连接态探针：登录成功即拉 profile 会员态——非 premium 提示月光链需会员（不阻塞登录，不拦截授权）
+        try {
+          const mr = await window.moonlybox.rpc('auth', { op: 'profile' }, 25_000)
+          const mu = JSON.parse(mr.text)?.data?.user
+          if (mu && !(mu.level === 'premium' && mu.premiumExpiresAt && new Date(mu.premiumExpiresAt) > new Date())) {
+            $('lg-status').innerHTML = `${t('lg.signedIn')}${pd.email} · <span style="color:#fbbf24">${t('lg.premiumHint')}</span>`
+          }
+        } catch {}
         setTimeout(() => { closed = true; dlg.close(); dlg.remove(); if (currentNav === 'cloud') renderList('cloud') }, 1200)
         return
       }
