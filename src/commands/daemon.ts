@@ -129,7 +129,12 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
       const prev = xiaoyueTail
       let release: () => void
       xiaoyueTail = new Promise<void>((r) => { release = r })
+      // #328.2：排队可见化——仅真等待（前轮未即刻结束）才提示，避免正常串行噪声
+      let waited = false
+      const waitTick = setTimeout(() => { waited = true; emit('（排队：等待上一轮对话结束后自动执行）') }, 300)
       await prev
+      clearTimeout(waitTick)
+      void waited
       try {
         return await (async () => {
       const q = String(args.q ?? '')
