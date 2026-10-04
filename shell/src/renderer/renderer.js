@@ -4300,8 +4300,10 @@ function bindChat(chatInfo) {
       const full = String(r.text ?? '')
       const m = full.match(/(?:^|\n)小月：([\s\S]*?)(?=\n（工具调用 |\n（[^）]*）$|$)/)
       const finalAnswer = m ? m[1].trim() : ''
-      if (finalAnswer && finalAnswer !== lastAiText.trim()) {
-        addMsg('ai', finalAnswer)
+      if (finalAnswer) {
+        // #329.8：形态归一判重——行流渲染与 done.text 可能差转义/空白（真机双份垃圾气泡实证）
+        const norm = (x) => String(x).replace(/[\s\\]+/g, '')
+        if (norm(finalAnswer) !== norm(lastAiText)) addMsg('ai', finalAnswer)
       }
     }
     if (xyAborted) {

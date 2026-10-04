@@ -304,7 +304,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       // 又是 2000 字「检查是否符合…草拟…」），改极短硬令+多轮兜底
       for (let fixRound = 0; fixRound < 2 && isLeakyAnswer(text); fixRound++) {
         say(`（回复夹带了分析过程，正在自动重写 ${fixRound + 1}/2——最终回答以重写后的干净版为准）`)
-        const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: '不要分析。直接输出最终中文回答本身。' }], undefined)
+        const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: '不要分析，不要复述此前的方案/分类清单。直接输出最终中文回答本身（若是进度汇报，只说当前进度与下一步）。' }], undefined)
         if (fix.ok && fix.text && fix.text.trim()) text = fix.text
       }
       return { answer: text, toolCalls: used }

@@ -187,9 +187,14 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
     // #329.7：一步化预览——圈定+organize 预览（token 原样返回给模型，下一步带它执行=UI 确认条）
     try {
       const kind = args.kind === 'descriptions' ? 'descriptions' : 'tags'
-      const { getJob, updateJob } = await import('./tasks')
-      const job = getJob(String(args.jobId ?? ''))
-      if (!job || job.type !== 'cloud_organize') return JSON.stringify({ ok: false, error: '任务不存在，请先调 local_task_create_cloud_organize' })
+      const { getJob, updateJob, allJobs } = await import('./tasks')
+      // #329.8：jobId 防呆——模型常编造 id（真机实证 task_muu5xxx）；无效时自动取最近的 cloud_organize 任务
+      let job = getJob(String(args.jobId ?? ''))
+      if (!job || job.type !== 'cloud_organize') {
+        job = allJobs().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
+          .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0] ?? null
+      }
+      if (!job) return JSON.stringify({ ok: false, error: '没有进行中的云端整理任务，请先调 local_task_create_cloud_organize' })
       const { callTool } = await import('./moonlink')
       const sr = await callTool('search_bookmarks', kind === 'descriptions' ? { noDescription: true, limit: 200 } : { untagged: true, limit: 200 })
       const sText = sr?.content?.map((c: any) => c.text ?? '').join('') ?? ''
