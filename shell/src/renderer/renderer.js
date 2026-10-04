@@ -471,7 +471,9 @@ const I18N_DICT = {
   'chat.compactDesc': { zh: '历史过长时自动摘要，节省 token', en: 'Auto-summarize long history to save tokens' },
   'chat.ctLabel': { zh: '压缩阈值（历史达到容量的比例时触发）：', en: 'Compact threshold (trigger at this share of capacity): ' },
   'chat.cgLabel': { zh: '压缩目标（压缩后保留的容量）：', en: 'Compact target (capacity kept after compact): ' },
-  'chat.retryLabel': { zh: '模型重试次数（调用失败自动重试）', en: 'Model retries (auto-retry on failure)' },
+  'chat.retryOn': { zh: '模型超时重试', en: 'Retry on Timeout/Failure' },
+  'chat.retryOnDesc': { zh: '模型调用失败/超时后自动重试', en: 'Auto-retry when a model call fails or times out' },
+  'chat.retryLabel': { zh: '重试次数', en: 'Retry count' },
   'mp.groupCloud': { zh: '平台 API', en: 'Platform APIs' },
   'mp.groupCustom': { zh: '自定义', en: 'Custom' },
   'mp.groupLocal': { zh: '本地部署', en: 'Local' },
@@ -660,12 +662,12 @@ const I18N_DICT = {
   'xy.model': { zh: '模型', en: 'Model' },
   'xy.thinking': { zh: '思考', en: 'Thinking' },
   'xy.thinkOn': { zh: '开', en: 'On' },
-  'xy.subAgent': { zh: '小月子任务（实验）', en: 'Xiaoyue subagent (experimental)' },
+  'xy.subAgent': { zh: '启用子任务', en: 'Enable Subtasks' },
   'xy.subAgentDesc': { zh: '允许小月在对话中派出独立子任务执行复杂多步研究（子任务过程静默，结论回主对话；写操作仍会向你确认）。默认关闭。', en: 'Let Xiaoyue dispatch isolated subagents for complex multi-step research in chat (silent run, summary returns to main chat; writes still ask you). Off by default.' },
   'xy.subAgentOk': { zh: '当前模型可支撑子任务。', en: 'Current model supports subagents.' },
   'xy.subOvAuto': { zh: '子任务:自动', en: 'Subagent: auto' },
-  'chat.cacheOpt': { zh: '云端模型优化缓存命中', en: 'Optimize cache hits for cloud models' },
-  'chat.cacheOptDesc': { zh: 'Agent 为你降本：云端 API 模型按前缀缓存计费，开启后动态记忆挪到消息尾部，多轮对话输入费用更低。仅对云端模型生效，本地部署模型自动忽略。', en: 'Agent cost saver: cloud APIs bill cached prefixes cheaper. Moves dynamic memory to message tail for cheaper multi-turn input. Cloud models only; local models ignore this.' },
+  'chat.cacheOpt': { zh: '优化缓存命中', en: 'Optimize Cache Hits' },
+  'chat.cacheOptDesc': { zh: '云端 API 模型按前缀缓存计费，开启后动态记忆挪到消息尾部，多轮对话输入费用更低。仅对云端模型生效，本地部署模型自动忽略。', en: 'Cloud APIs bill cached prefixes cheaper. Moves dynamic memory to the message tail for cheaper multi-turn input. Cloud models only; local models ignore this.' },
   'xy.subOvOn': { zh: '子任务:开', en: 'Subagent: on' },
   'xy.subOvOff': { zh: '子任务:关', en: 'Subagent: off' },
   'xy.subAgentOff': { zh: '子任务未开启或当前模型不建议开启。', en: 'Subagent is off or not recommended for the current model.' },
@@ -1570,7 +1572,7 @@ async function renderWork(nav, arg, label2) {
       const tabs = cat.subs
         ? `<div class="set-row" style="gap:6px;margin:0 0 18px">${cat.subs.map((s) => `<button type="button" class="btn ${s === currentSetSub ? '' : 'ghost'}" data-setsub="${s}">${t(SET_SUB_LABELS[s] ?? s)}</button>`).join('')}</div>`
         : ''
-      w.innerHTML = `<div class="set-panel"><h3>${title}</h3><p class="set-desc">${desc}</p>${tabs}${inner}</div>`
+      w.innerHTML = `<div class="set-panel"><div class="set-body"><h3>${title}</h3><p class="set-desc">${desc}</p>${tabs}${inner}</div></div>`
       w.querySelectorAll('[data-setsub]').forEach((b) => {
         b.onclick = () => { currentSetSub = b.dataset.setsub; renderWork('settings') }
       })
@@ -1672,15 +1674,17 @@ async function renderWork(nav, arg, label2) {
           <button type="button" class="toggle ${cv.autoCompress !== false ? 'on' : ''}" id="sp-compress" ${cv.contextEnabled === false ? 'disabled' : ''}></button></div>
         <div class="set-field"><label>${t('chat.ctLabel')}<span id="sp-ct-v">${cv.compressThreshold ?? 80}%</span></label>
           <input type="range" id="sp-ct" min="50" max="100" step="5" value="${cv.compressThreshold ?? 80}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
-        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('xy.subAgent')}</div><div class="sc-desc">${t('xy.subAgentDesc')}</div></div>
-          <button type="button" class="toggle ${(g.agent?.subAgent ?? false) ? 'on' : ''}" id="sp-subagent"></button></div>
-        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('chat.cacheOpt')}</div><div class="sc-desc">${t('chat.cacheOptDesc')}</div></div>
-          <button type="button" class="toggle ${g.chat?.cacheOptimize !== false ? 'on' : ''}" id="sp-cacheopt"></button></div>
-        <div class="set-desc" id="sp-subagent-hint" style="margin:-6px 0 10px;min-height:16px"></div>
         <div class="set-field"><label>${t('chat.cgLabel')}<span id="sp-cg-v">${cv.compressTarget ?? 20}%</span></label>
           <input type="range" id="sp-cg" min="10" max="30" step="5" value="${cv.compressTarget ?? 20}" style="width:260px" ${cv.contextEnabled === false || cv.autoCompress === false ? 'disabled' : ''} /></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('xy.subAgent')}</div><div class="sc-desc">${t('xy.subAgentDesc')}</div></div>
+          <button type="button" class="toggle ${(g.agent?.subAgent ?? false) ? 'on' : ''}" id="sp-subagent"></button></div>
+        <div class="set-desc" id="sp-subagent-hint" style="margin:-6px 0 10px;min-height:16px"></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('chat.cacheOpt')}</div><div class="sc-desc">${t('chat.cacheOptDesc')}</div></div>
+          <button type="button" class="toggle ${g.chat?.cacheOptimize !== false ? 'on' : ''}" id="sp-cacheopt"></button></div>
+        <div class="set-card"><div class="sc-main"><div class="sc-title">${t('chat.retryOn')}</div><div class="sc-desc">${t('chat.retryOnDesc')}</div></div>
+          <button type="button" class="toggle ${cv.retryEnabled !== false ? 'on' : ''}" id="sp-retryon"></button></div>
         <div class="set-field"><label>${t('chat.retryLabel')}</label>
-          <input type="number" id="sp-retry" min="1" max="50" value="${cv.maxRetries ?? 10}" style="width:120px" /></div>
+          <input type="number" id="sp-retry" min="1" max="50" value="${cv.maxRetries ?? 3}" style="width:120px" ${cv.retryEnabled === false ? 'disabled' : ''} /></div>
         <div class="set-status" id="sp-chat-status"></div>
       `)
       const syncDisabled = () => {
@@ -1688,6 +1692,7 @@ async function renderWork(nav, arg, label2) {
         $('sp-compress').disabled = !ctx
         $('sp-ct').disabled = !ctx || !ac
         $('sp-cg').disabled = !ctx || !ac
+        $('sp-retry').disabled = !$('sp-retryon').classList.contains('on') // #322：重试开关关闭→次数禁用
       }
       $('sp-chat-model').onchange = async (e) => {
         await saveAppSettings({ model: { default: e.target.value } })
@@ -1696,6 +1701,7 @@ async function renderWork(nav, arg, label2) {
         setTimeout(() => { hint.textContent = '' }, 2500)
       }
       $('sp-ctx').onclick = (e) => { e.currentTarget.classList.toggle('on'); syncDisabled(); saveChat() }
+      $('sp-retryon').onclick = (e) => { e.currentTarget.classList.toggle('on'); syncDisabled(); saveChat() }
       $('sp-compress').onclick = (e) => { e.currentTarget.classList.toggle('on'); saveChat() }
       $('sp-ct').oninput = (e) => { $('sp-ct-v').textContent = `${e.target.value}%` }
       $('sp-cg').oninput = (e) => { $('sp-cg-v').textContent = `${e.target.value}%` }
@@ -1707,13 +1713,14 @@ async function renderWork(nav, arg, label2) {
           autoCompress: $('sp-compress').classList.contains('on'),
           compressThreshold: Number($('sp-ct').value),
           compressTarget: Number($('sp-cg').value),
-          maxRetries: Number($('sp-retry').value) || 10,
+          retryEnabled: $('sp-retryon').classList.contains('on'),
+          maxRetries: Number($('sp-retry').value) || 3,
         }, agent: { subAgent: $('sp-subagent').classList.contains('on') }, chat: { ...(APP_SETTINGS.chat ?? {}), cacheOptimize: $('sp-cacheopt').classList.contains('on') } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? t('ui.saved') + t('ui.appliesInstant') : (r.error ?? t('ui.saveFail'))
         void refreshSubAgentHint()
       }
-      for (const id of ['sp-ctx', 'sp-compress', 'sp-ct', 'sp-cg', 'sp-retry', 'sp-subagent', 'sp-cacheopt']) $(id).onchange = saveChat
+      for (const id of ['sp-ctx', 'sp-compress', 'sp-ct', 'sp-cg', 'sp-retry', 'sp-retryon', 'sp-subagent', 'sp-cacheopt']) $(id).onchange = saveChat
       // #317.6b：子任务准入提示（当前默认模型判定；总闸关=显示总闸提示）
       const refreshSubAgentHint = async () => {
         const el = $('sp-subagent-hint'); if (!el) return
@@ -1738,8 +1745,9 @@ async function renderWork(nav, arg, label2) {
         </div>
         <div class="set-row" style="margin:0"><button type="button" class="btn ghost" id="sp-vault-migrate" style="font-size:12px">${t('lib.migrateBtn')}</button><span class="set-desc" style="align-self:center">${t('lib.migrateNote')}</span></div>
         <div class="set-status" id="sp-vault-status"></div>
-        <div class="set-card" style="margin-top:14px"><div class="sc-main"><div class="sc-title">${t('lib.compileTitle')}</div><div class="sc-desc">${t('lib.compileDesc')}</div></div></div>
-        <div class="set-field" style="margin-top:6px"><label>${t('lib.compileModel')}</label>
+        <div class="set-h2">${t('lib.compileTitle')}</div>
+        <div class="set-desc" style="margin:0 0 10px">${t('lib.compileDesc')}</div>
+        <div class="set-field"><label>${t('lib.compileModel')}</label>
           <select id="sp-compile-model" class="set-select set-select-sm" style="max-width:420px">
             <option value="">${t('lib.compileFollow')}</option>
             ${modelPickerOpts(gset?.model?.default ?? '')}

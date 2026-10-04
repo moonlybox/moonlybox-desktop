@@ -110,7 +110,9 @@ export async function chatWithRetry(
   call: () => Promise<{ ok: boolean; error?: string }>,
   onRetry?: (attempt: number, total: number, error: string) => void,
 ): Promise<{ ok: boolean; error?: string; attempts: number }> {
-  const total = Math.max(1, loadSettings().chat.maxRetries)
+  const cfg = loadSettings().chat
+  if (cfg.retryEnabled === false) { const r1 = await call(); return { ...r1, attempts: 1 } } // #322：总开关关闭=只调一次
+  const total = Math.max(1, cfg.maxRetries)
   let lastErr = ''
   for (let attempt = 1; attempt <= total; attempt++) {
     const res = await call()

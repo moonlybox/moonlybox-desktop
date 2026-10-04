@@ -136,7 +136,11 @@
     .set-cat.active { background: var(--active-bg); color: var(--active-fg); font-weight: 600; }
     .set-cat .sub { font-size: 11px; color: var(--muted); margin-left: auto; padding-left: 6px; }
     .set-cat.active .sub { color: var(--active-fg); opacity: .75; }
-    .set-panel { padding: 24px 32px; max-width: 760px; user-select: text; flex: 1; min-height: 0; overflow-y: auto; }
+    /* #322：滚动容器=整个第三列（滚动条贴窗口右缘）；内容宽度由 .set-body 收束 */
+    .set-panel { padding: 24px 32px; user-select: text; flex: 1; min-height: 0; overflow-y: auto; }
+    .set-body { max-width: 760px; }
+    /* #322 排版规范：一级类目=h3(15px)；说明=set-desc(12px muted)；二级类目=set-h2；设置项=set-card(开关)/set-field(输入下拉)/set-row(按钮组) */
+    .set-h2 { font-size: 13px; font-weight: 600; margin: 18px 0 8px; }
     .set-panel h3 { font-size: 15px; margin: 0 0 4px; }
     .set-desc { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 0 0 18px; }
     .set-field { margin: 0 0 14px; }

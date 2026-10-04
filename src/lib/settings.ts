@@ -27,7 +27,8 @@ export interface SettingsSchema {
     autoCompress: boolean // 上下文自动压缩
     compressThreshold: number // 压缩阈值 50~100（%）
     compressTarget: number // 压缩目标 10~30（%）
-    maxRetries: number // 模型重试次数（默认 10）
+    maxRetries: number // 模型重试次数（默认 3，#322）
+    retryEnabled?: boolean // 模型超时重试总开关（默认 true，#322）
     /** #317.4：思考模式档位（小月对话输入框下拉）——'off'=关思考（默认，#310.36 现状）；'on'=开启思考（不注入关思考指令/Ollama think:true） */
     thinking?: 'on' | 'off'
     /** #317.P4：云端模型优化缓存命中（默认开；仅对云端 API 模型生效——动态记忆块挪出 system 保 prompt cache 前缀稳定；本地模型不适用自动忽略） */
@@ -96,7 +97,7 @@ export interface SettingsSchema {
 export const DEFAULT_SETTINGS: SettingsSchema = {
   general: { launchAtLogin: false, launchMinimized: false, closeToTray: true, keepAwake: false, clipboardWatch: false },
   appearance: { theme: 'system', lang: 'zh-CN', zoom: 100 },
-  chat: { contextEnabled: true, autoCompress: true, compressThreshold: 80, compressTarget: 20, maxRetries: 10, cacheOptimize: true },
+  chat: { contextEnabled: true, autoCompress: true, compressThreshold: 80, compressTarget: 20, maxRetries: 3, retryEnabled: true, cacheOptimize: true },
   agent: { subAgent: false },
   model: { default: '', compileDefault: '', syncToMoon: true, providers: [], custom: [], local: [] },
   messaging: { providers: {} },
