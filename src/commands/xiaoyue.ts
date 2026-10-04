@@ -693,16 +693,82 @@ async function maybeSelfImprove(sessionId: string, messages: Array<{ role: strin
       console.log(`（自我改进跳过：${wr.reason}）`)
     }
   }
+  let deposited = false // #320.2：本次评估是否产生了实际沉淀动作（维护计数的事件源）
   if (verdict?.memory) {
     const { localMemoryAdd } = await import('../lib/memory-local')
     const mr = localMemoryAdd(vaultRoot, String(verdict.memory).slice(0, 500))
     if (mr.ok && !mr.duplicated) {
+      deposited = true
       // 记忆标识=条目短指纹（memory-local 无 ID——用内容 hash 前 8 位）
       const h = require('node:crypto') as typeof import('node:crypto')
       const fp = h.createHash('sha256').update(String(verdict.memory)).digest('hex').slice(0, 8)
       console.log(`（小月正在从历史对话中沉淀记忆：${fp}）`)
     }
   }
+  // #320.2：维护=沉淀的下一层——每第 3 次实际沉淀动作后触发一次记忆维护（fire-and-forget，本地 LLM 零 token）
+  if (deposited || (skillsOn && verdict?.skill?.name)) {
+    _maintainCount++
+    if (_maintainCount >= 3) {
+      _maintainCount = 0
+      void maintainMemories(vaultRoot).catch(() => {})
+    }
+  }
+}
+
+// --- #320.2 记忆维护（沉淀的下一层；标注不删除） ---
+let _maintainCount = 0
+
+async function maintainMemories(vaultRoot: string): Promise<void> {
+  const { readFileSync, writeFileSync, existsSync } = await import('node:fs')
+  const path = await import('node:path')
+  const memFile = path.join(vaultRoot, '.moonlybox', 'memory', 'MEMORY.md')
+  if (!existsSync(memFile)) return
+  const entries: Array<{ fp: string; text: string }> = []
+  for (const raw of readFileSync(memFile, 'utf8').split('\n')) {
+    const line = raw.trim()
+    if (!line.startsWith('-')) continue
+    if (/(superseded-by:|expired)/.test(line)) continue // 已标注的不再进维护视野
+    const text = line.replace(/^[-*\s]+/, '').replace(/<!--.*?-->\s*$/, '').trim()
+    if (!text) continue
+    entries.push({ fp: (await import('../lib/memory-local')).memoryFp(text), text })
+  }
+  if (entries.length < 6) return // 条目太少无维护价值
+  const list = entries.slice(0, 80).map((e) => `${e.fp}: ${e.text}`).join('\n') // 预算护栏
+  const sys =
+    `你是记忆维护器。下面是用户的长期记忆条目清单（fp: 内容）。找出：\n` +
+    `1. merge——多条讲同一件事可合并为一条更完整的（into=合并后文本，removeFps=被合并条目）；\n` +
+    `2. supersede——新信息已使某条过时（如换框架/换城市），oldFp=过时条目（原文保留标注，不删）；\n` +
+    `3. expire——明显过时失效的条目（如已完成的项目状态）。\n` +
+    `宁缺勿滥：没有把握的不要输出；最多 5 个动作。\n` +
+    `输出严格 JSON（无其他文本）：\n` +
+    `{"merge":[{"into":"合并后一条文本","removeFps":["fp1","fp2"]}],"supersede":[{"oldFp":"fp","newText":"替代后的新表述"}],"expire":["fp"]}\n\n` +
+    `条目清单：\n${list}`
+  const { resolveActiveModel } = await import('../lib/model-registry')
+  const active = resolveActiveModel()
+  const er = await byokChatMessages([{ role: 'user', content: sys }], undefined, 90_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey} : undefined, 2_000)
+  if (!er.ok || !er.text) return
+  const jm = er.text.match(/\{[\s\S]*\}/)
+  if (!jm) return
+  let plan: { merge?: Array<{ into: string; removeFps: string[] }>; supersede?: Array<{ oldFp: string; newText: string }>; expire?: string[] } | null = null
+  try { plan = JSON.parse(jm[0]) } catch { return }
+  const ml = await import('../lib/memory-local')
+  const { localMemoryAdd, markMemoryLine } = ml
+  let acted = 0
+  for (const m of plan?.merge ?? []) {
+    if (!m?.into || !Array.isArray(m.removeFps) || !m.removeFps.length) continue
+    const added = localMemoryAdd(vaultRoot, String(m.into).slice(0, 500))
+    if (added.ok && !added.duplicated) {
+      for (const fp of m.removeFps) acted += markMemoryLine(vaultRoot, 'memory', String(fp), ml.memoryFp(String(m.into)))
+      acted++
+    }
+  }
+  for (const sp2 of plan?.supersede ?? []) {
+    if (!sp2?.oldFp || !sp2?.newText) continue
+    const added = localMemoryAdd(vaultRoot, String(sp2.newText).slice(0, 500))
+    if (added.ok && !added.duplicated) acted += markMemoryLine(vaultRoot, 'memory', String(sp2.oldFp), ml.memoryFp(String(sp2.newText)))
+  }
+  for (const fp of plan?.expire ?? []) acted += markMemoryLine(vaultRoot, 'memory', String(fp), 'expired')
+  if (acted > 0) console.log(`（小月整理了长期记忆：${acted} 项调整——被替代/过期条目已标注，可在记忆文件中查看）`)
 }
 
 const CONFIRM_SET = new Set(['y', 'Y', 'yes', 'Yes', '是', '好'])

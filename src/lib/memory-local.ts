@@ -137,6 +137,7 @@ export function localMemoryRetrieve(vaultRoot: string, query: string, opts?: { t
       if (!line.startsWith('-')) continue
       const text = line.replace(/^[-*\s]+/, '').replace(/<!--.*?-->\s*$/, '').trim()
       if (!text) continue
+      if (isRetiredLine(line)) continue // #320.2：被替代/已过期条目不进检索
       const low = text.toLowerCase()
       let score = 0
       for (const tk of toks) if (low.includes(tk)) score += tk.length >= 3 ? 2 : 1
@@ -166,4 +167,39 @@ export function localMemoryRetrieveBlock(vaultRoot: string, query: string, opts?
   const hits = localMemoryRetrieve(vaultRoot, query, opts)
   if (!hits.length) return ''
   return hits.map((h) => `- ${h.text}${h.source === 'profile' ? '（画像）' : ''}`).join('\n')
+}
+
+// --- #320.2 记忆维护管道（动作=标注不删除；主权红线：永不自动真删，用户可手动清） ---
+
+/** 条目指纹：内容 sha256 前 8 位（与 xiaoyue.ts 沉淀回执同式） */
+export function memoryFp(text: string): string {
+  return require('node:crypto').createHash('sha256').update(text).digest('hex').slice(0, 8)
+}
+
+/** 判断行是否已被维护标注（superseded/expired） */
+export function isRetiredLine(line: string): boolean {
+  return /superseded-by:|expired/.test(line)
+}
+
+/**
+ * 维护动作=在目标行尾追加标注注释（superseded-by:<fp> / expired），保留原文可追溯。
+ * 返回实际标注的行数（目标行找不到=0，调用方如实报账）。
+ */
+export function markMemoryLine(vaultRoot: string, file: 'memory' | 'profile', fp: string, mark: 'expired' | string): number {
+  const { memFile, userFile } = ensureFiles(vaultRoot)
+  const target = file === 'profile' ? userFile : memFile
+  if (!fs.existsSync(target)) return 0
+  const lines = fs.readFileSync(target, 'utf8').split('\n')
+  let n = 0
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i]
+    if (!raw.trim().startsWith('-')) continue
+    const text = raw.replace(/^[-*\s]+/, '').replace(/<!--.*?-->\s*$/, '').trim()
+    if (memoryFp(text) !== fp) continue
+    if (isRetiredLine(lines[i])) continue // 已标注不重复标
+    lines[i] = raw.replace(/\s*$/, '') + ` <!-- ${mark === 'expired' ? 'expired' : 'superseded-by:' + mark} -->`
+    n++
+  }
+  if (n > 0) fs.writeFileSync(target, lines.join('\n'), 'utf8')
+  return n
 }
