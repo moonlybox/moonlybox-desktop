@@ -1708,14 +1708,20 @@ async function renderWork(nav, arg, label2) {
       const saveChat = async () => {
         const st = $('sp-chat-status')
         st.className = 'set-status'; st.textContent = t('ui.saving')
-        const r = await saveAppSettings({ chat: {
-          contextEnabled: $('sp-ctx').classList.contains('on'),
-          autoCompress: $('sp-compress').classList.contains('on'),
-          compressThreshold: Number($('sp-ct').value),
-          compressTarget: Number($('sp-cg').value),
-          retryEnabled: $('sp-retryon').classList.contains('on'),
-          maxRetries: Number($('sp-retry').value) || 3,
-        }, agent: { subAgent: $('sp-subagent').classList.contains('on') }, chat: { ...(APP_SETTINGS.chat ?? {}), cacheOptimize: $('sp-cacheopt').classList.contains('on') } })
+        // #322.2：单一 chat 对象——历史双 chat key 后者覆盖前者，maxRetries 等字段被静默丢弃（保存成功但无效）
+        const r = await saveAppSettings({
+          chat: {
+            ...(APP_SETTINGS.chat ?? {}),
+            contextEnabled: $('sp-ctx').classList.contains('on'),
+            autoCompress: $('sp-compress').classList.contains('on'),
+            compressThreshold: Number($('sp-ct').value),
+            compressTarget: Number($('sp-cg').value),
+            retryEnabled: $('sp-retryon').classList.contains('on'),
+            maxRetries: Number($('sp-retry').value) || 3,
+            cacheOptimize: $('sp-cacheopt').classList.contains('on'),
+          },
+          agent: { subAgent: $('sp-subagent').classList.contains('on') },
+        })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? t('ui.saved') + t('ui.appliesInstant') : (r.error ?? t('ui.saveFail'))
         void refreshSubAgentHint()
