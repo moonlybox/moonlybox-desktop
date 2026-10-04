@@ -4283,6 +4283,7 @@ function bindChat(chatInfo) {
     if (stopBtn) stopBtn.style.display = ''
     xyAborted = false
     aiRendered.clear() // #329.10：每轮清账本（同一内容下轮再问仍正常渲染）
+    lastAiText = '' // #329.11：每轮重置（本轮行流全丢时兜底才可判「从未渲染」）
     xyRunning.add(xyPaneMeta?.id ?? '?')
     window.__xyPendingChat = xyPaneMeta?.id ?? '?' // #317.MDI：rpc-start 时建归属映射
     addMsg('user', q) // #288：用户消息直接走气泡（不再经行分类）
@@ -4307,8 +4308,9 @@ function bindChat(chatInfo) {
       const m = full.match(/(?:^|\n)小月：([\s\S]*?)(?=\n（工具调用 |\n（[^）]*）$|$)/)
       const finalAnswer = m ? m[1].trim() : ''
       if (finalAnswer) {
-        // #329.10：账本判重——行流渲染过的终答不再补（ norm 后 hash 集合，比单比 lastAiText 强）
-        if (!aiRendered.has(normKey(finalAnswer))) addMsg('ai', finalAnswer)
+        // #329.11：兜底只在「本轮从未渲染过任何 AI 气泡」时补（行流全丢才救）——
+        // 账本/单变量判重都可能出现第三源叠加（真机多轮实证），零叠加原则：行流在，兜底必静默
+        if (!lastAiText) addMsg('ai', finalAnswer)
       }
     }
     if (xyAborted) {
@@ -4460,7 +4462,11 @@ function bindChat(chatInfo) {
     sep.style.opacity = '.7'
     sep.textContent = `—— 历史对话（${meta.turns.length} 轮）——`
     logEl().appendChild(sep)
-    for (const t of meta.turns.slice(-40)) addMsg(t.role === 'user' ? 'user' : 'ai', t.content)
+    for (const t of meta.turns.slice(-40)) {
+      const el = addMsg(t.role === 'user' ? 'user' : 'ai', t.content)
+      // #329.11：历史恢复也入账本——否则切回重放（历史）+缓冲重放（行流「小月：」行）同文双份（真机实证）
+      if (t.role !== 'user' && el) aiRendered.add(normKey(t.content))
+    }
     const sep2 = sep.cloneNode(true)
     sep2.textContent = t('xy.historySep')
     logEl().appendChild(sep2)
