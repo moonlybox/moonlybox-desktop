@@ -4069,9 +4069,11 @@ function bindChat(chatInfo) {
   // #288 对话 UI：log() 升级为结构化消息渲染——行前缀分类（用户气泡/AI 气泡 Markdown/工具折叠条/思考折叠条/活动小字）。
   // daemon 协议不变（console.log 行级流），渲染分类全在 renderer 侧。
   const logEl = () => $('log')
+  const normKey = (x) => String(x).replace(/[\s\\]+/g, '') // #329.10：终答去重键（形态归一）
   // 当前聚合态：连续相关行并入同一容器（AI 气泡 / 工具折叠 / 思考折叠）
   let cur = { type: null, el: null, text: '' }
   let lastAiText = '' // #329.5：最后一条 AI 气泡原始文本（兜底判重用——DOM textContent 经 markdown 渲染≠原文）
+  const aiRendered = new Set() // #329.10：已渲染终答账本（norm 后键）——兜底与行流共享去重
   const scroll = () => { const el = logEl(); if (el) el.scrollTop = el.scrollHeight }
   const flushCur = () => {
     if (!cur.type || !cur.el) return
@@ -4090,7 +4092,7 @@ function bindChat(chatInfo) {
     wrap.append(roleEl, bubble)
     logEl().appendChild(wrap)
     if (role === 'user') bubble.textContent = text
-    else { cur = { type: 'ai', el: wrap, text }; lastAiText = text; setBubbleMarkdown(bubble, text) }
+    else { cur = { type: 'ai', el: wrap, text }; lastAiText = text; aiRendered.add(normKey(text)); setBubbleMarkdown(bubble, text) }
     scroll()
     return bubble
   }
@@ -4135,6 +4137,9 @@ function bindChat(chatInfo) {
       return
     }
     if (line.startsWith('小月：')) {
+      // #329.10：行流重复帧守卫（同一终答到达两次时只渲染一次）
+      const finalKey = normKey(line.slice(3))
+      if (finalKey && aiRendered.has(finalKey)) return
       flushCur()
       hideThinking() // #317.F5：终答已出——thinking 立即收（不等 done；done 只是兜底）
       // 终答（可能多行——payload 单条含 \n）
@@ -4277,6 +4282,7 @@ function bindChat(chatInfo) {
     const stopBtn = $('btn-stop')
     if (stopBtn) stopBtn.style.display = ''
     xyAborted = false
+    aiRendered.clear() // #329.10：每轮清账本（同一内容下轮再问仍正常渲染）
     xyRunning.add(xyPaneMeta?.id ?? '?')
     window.__xyPendingChat = xyPaneMeta?.id ?? '?' // #317.MDI：rpc-start 时建归属映射
     addMsg('user', q) // #288：用户消息直接走气泡（不再经行分类）
@@ -4301,9 +4307,8 @@ function bindChat(chatInfo) {
       const m = full.match(/(?:^|\n)小月：([\s\S]*?)(?=\n（工具调用 |\n（[^）]*）$|$)/)
       const finalAnswer = m ? m[1].trim() : ''
       if (finalAnswer) {
-        // #329.8：形态归一判重——行流渲染与 done.text 可能差转义/空白（真机双份垃圾气泡实证）
-        const norm = (x) => String(x).replace(/[\s\\]+/g, '')
-        if (norm(finalAnswer) !== norm(lastAiText)) addMsg('ai', finalAnswer)
+        // #329.10：账本判重——行流渲染过的终答不再补（ norm 后 hash 集合，比单比 lastAiText 强）
+        if (!aiRendered.has(normKey(finalAnswer))) addMsg('ai', finalAnswer)
       }
     }
     if (xyAborted) {
