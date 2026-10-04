@@ -295,7 +295,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       const didCreateOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize')
         || messages.some((m: any) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.some((tc: any) => tc?.function?.name === 'local_task_create_cloud_organize'))
       if (didCreateOrganize && !didOrganize && round < MAX_TOOL_ROUNDS - 1) {
-        messages.push({ role: 'user', content: '（系统）整理任务已登记且用户已授权。现在立即调用 local_task_cloud_organize_preview（传 jobId 与 kind）生成变更预览 diff 并展示给用户；若预览已生成（上下文中有 confirmToken），则直接把 diff 摘要展示并询问用户是否确认执行。不要输出任何「回复继续」式停顿，不要把工具调用写成正文。' })
+        messages.push({ role: 'user', content: '（系统）整理任务已登记且用户已授权自动执行。继续：调 local_task_cloud_organize_preview 圈定清单→逐条生成 items 标签方案→organize_bookmarks 预览→立即带 confirmToken 执行→update 上报收口。全程不要停顿、不要把工具调用写成正文。' })
         continue
       }
       let text = res.text ?? ''
@@ -304,7 +304,14 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       // 又是 2000 字「检查是否符合…草拟…」），改极短硬令+多轮兜底
       for (let fixRound = 0; fixRound < 2 && isLeakyAnswer(text); fixRound++) {
         say(`（回复夹带了分析过程，正在自动重写 ${fixRound + 1}/2——最终回答以重写后的干净版为准）`)
-        const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: '不要分析，不要复述此前的方案/分类清单。直接输出最终中文回答本身（若是进度汇报，只说当前进度与下一步）。' }], undefined)
+        // #329.13：整理链进行中（已登记未收口）→自纠令改为「继续干活」而非「重写文字」——
+        // GLM 5.2 实证会把工具调用写成正文然后停；此时正确动作是回工具链，不是重说一遍
+        const midOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize' || u.name === 'local_task_cloud_organize_preview')
+          && !used.some((u) => u.name === 'local_task_update_cloud_organize')
+        const fixPrompt = midOrganize
+          ? '不要把工具调用写成文字。继续调用工具完成云端整理（预览→展示→执行→上报进度），完成后用一句中文汇报结果。'
+          : '不要分析，不要复述此前的方案/分类清单。直接输出最终中文回答本身（若是进度汇报，只说当前进度与下一步）。'
+        const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: fixPrompt }], undefined)
         if (fix.ok && fix.text && fix.text.trim()) text = fix.text
       }
       return { answer: text, toolCalls: used }
