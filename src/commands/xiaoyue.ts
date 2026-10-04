@@ -625,6 +625,9 @@ ${memBlock}` : ''}${skillBlock}`
       },
     ],
     vaultRoot: defaultVaultRoot(),
+    // #328.5：历史注入——此前 agentLoop 只收 question 单条（多轮上下文从未进工具链）：
+    // 提议轮单轮自洽（扫描→提议），确认轮「开始」孤立→LLM 打招呼。history=除 system/当前问题外的既往轮次。
+    history: built.messages.filter((m) => m.role !== 'system' || String(m.content).startsWith('[CONTEXT_SUMMARY]')).slice(0, -1) as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
     chat: mainChatFn,
     confirm,
     say: (line) => console.log(line),

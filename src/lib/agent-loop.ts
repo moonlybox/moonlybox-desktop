@@ -30,6 +30,8 @@ function toolResultText(result: { content: Array<{ type: string; text?: string }
 export interface AgentLoopDeps {
   system: string
   question: string
+  /** #328.5：对话历史（不含主 system/当前 question 的既往轮次；可含 [CONTEXT_SUMMARY] 压缩摘要）——缺省=单轮无上下文（此前多轮对话失忆根因） */
+  history?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>
   /** 就绪态（BYOK 已配置） */
   ready: boolean
   /** 单轮 LLM 调用（byokChatMessages 的包装，测试可注入） */
@@ -261,6 +263,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   const answerDiscipline = `\n【回复纪律】你的回复会原样展示给用户：只输出给用户看的最终中文回答本身。禁止把内部分析、计划、草稿对照（如「首先我需要…」「可能的回复是…」「Wait…」）、英文思考写进回复。`
   const messages: import('../lib/llm').ChatMessage[] = [
     { role: 'system', content: system + toolGuide + answerDiscipline },
+    ...(deps.history ?? []).map((h) => ({ role: h.role, content: h.content })), // #328.5：历史注入
     { role: 'user', content: question },
   ]
   const used: Array<{ name: string; ok: boolean }> = []
