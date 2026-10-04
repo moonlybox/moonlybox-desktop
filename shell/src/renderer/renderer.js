@@ -2781,7 +2781,7 @@ async function renderWork(nav, arg, label2) {
     const itemRow = (it) => {
       let name = String(it.path).split(/[\\/]/).pop()
       // #329.3：云端整理占位行名——「cloud:#N」→「收藏 #N」（用户可读；任务详情/产物说明已有 tk.cloudNoPages）
-      if (/^cloud:#\d+$/.test(name)) name = t('tk.cloudItem').replace('{n}', name.slice(6))
+      if (/^cloud:#\d+$/.test(name)) name = t('tk.cloudItem').replace('{n}', name.slice(7))
       const color = { done: 'var(--ok,#34d399)', failed: 'var(--danger,#e56969)', running: 'var(--accent,#818cf8)', skipped: 'inherit', cancelled: 'inherit', pending: 'inherit' }[it.status] ?? 'inherit'
       const badgeBg = { done: 'rgba(52,211,153,.12)', failed: 'rgba(229,105,105,.14)', running: 'rgba(129,140,248,.14)' }[it.status] ?? 'transparent'
       const spin = it.status === 'running' ? '<span style="display:inline-block;animation:tkspin 1s linear infinite">◐</span> ' : ''
