@@ -316,6 +316,12 @@ const I18N_DICT = {
   'dg.quickOk': { zh: '创建并编辑', en: 'Create & Edit' },
   'dg.quickDesc': { zh: '选择图示类型，创建后自动填充该类型的示例代码，稍后可修改。', en: 'Pick a type — sample code is filled on create, editable later.' },
   'dg.untitled': { zh: '未命名图示', en: 'Untitled diagram' },
+  'xy.prompts': { zh: '常用指令', en: 'Quick prompts' },
+  'xy.p1': { zh: '整理我的收藏，对未打标签的收藏打上合适的标签', en: 'Organize my bookmarks: add suitable tags to untagged ones' },
+  'xy.p2': { zh: '给没有描述的收藏补充描述', en: 'Fill in descriptions for bookmarks that have none' },
+  'xy.p3': { zh: '新增一个备忘标签，标签内容：……', en: 'Create a memo tag, content: …' },
+  'xy.p4': { zh: '新建一条待办，一周后到期，内容是……，项目是……，目标是……', en: 'New todo due in a week — what: …, project: …, goal: …' },
+  'xy.p5': { zh: '帮我找关于……的收藏', en: 'Find my bookmarks about …' },
   'xy.historySep': { zh: '—— 以上为历史 ——', en: '—— history above ——' },
   'xy.thinking': { zh: '小月思考中…', en: 'Xiaoyue is thinking…' },
   'xy.retrying': { zh: '模型响应慢，重试 {n}/{total}（{err}）…', en: 'Model slow, retry {n}/{total} ({err})…' },
@@ -1419,7 +1425,8 @@ async function renderXiaoyuePane(arg) {
       <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:16px;white-space:pre-wrap;user-select:text"></div>
       <div style="padding:8px 16px 12px;border-top:1px solid var(--border)">
         <textarea id="q" rows="1" placeholder="${xyPaneMeta ? (xyPaneMeta.workspaceId ? t('xy.qPlaceholder') : t('xy.docOnly')) : t('xy.pickFirst')}" style="display:block;width:100%;resize:none;box-sizing:border-box;line-height:1.5;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg,#0f172a);color:var(--fg,#e2e8f0);font:inherit;max-height:160px;overflow-y:auto" ${xyPaneMeta ? '' : 'disabled'}></textarea>
-        <div class="row" style="margin-top:6px;align-items:center;gap:8px">
+        <div class="row" style="margin-top:6px;align-items:center;gap:8px;position:relative">
+          <button class="btn ghost" id="xy-prompts-btn" style="font-size:12px" ${xyPaneMeta ? '' : 'disabled'}>⭐ ${t('xy.prompts')}</button>
           <button class="btn ghost" id="xy-model-btn" style="font-size:12px" ${xyPaneMeta ? '' : 'disabled'}>⚙ <span id="xy-model-label"></span></button>
           <button class="btn ghost" id="xy-think-btn" style="font-size:12px" ${xyPaneMeta ? '' : 'disabled'}>🧠 <span id="xy-think-label"></span></button>
           <div style="flex:1"></div>
@@ -1432,6 +1439,40 @@ async function renderXiaoyuePane(arg) {
       const ab = document.getElementById('btn-ask')
       const sb = document.getElementById('btn-stop')
       if (ab && sb && ab.disabled) sb.style.display = ''
+    }
+    // #325 常用指令（提示词模板）：点选→填入输入框（不直接发送——留空位给用户补全/确认）。点击面板外关闭。
+    const promptsBtn = document.getElementById('xy-prompts-btn')
+    if (promptsBtn) {
+      const PROMPTS = [
+        t('xy.p1'), t('xy.p2'), t('xy.p3'), t('xy.p4'), t('xy.p5'),
+      ]
+      promptsBtn.onclick = (e) => {
+        e.stopPropagation()
+        let panel = document.getElementById('xy-prompts-panel')
+        if (panel) { panel.remove(); return }
+        panel = document.createElement('div')
+        panel.id = 'xy-prompts-panel'
+        panel.style.cssText = 'position:absolute;bottom:44px;left:0;z-index:30;min-width:340px;max-width:460px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);padding:6px;display:flex;flex-direction:column'
+        for (const p of PROMPTS) {
+          const it = document.createElement('div')
+          it.textContent = p
+          it.style.cssText = 'padding:8px 10px;border-radius:8px;cursor:pointer;font-size:12.5px;line-height:1.5'
+          it.onmouseenter = () => { it.style.background = 'var(--hover)' }
+          it.onmouseleave = () => { it.style.background = 'transparent' }
+          it.onclick = () => {
+            const q = document.getElementById('q')
+            if (q) { q.value = p; q.focus(); q.dispatchEvent(new Event('input')) }
+            panel.remove()
+          }
+          panel.appendChild(it)
+        }
+        promptsBtn.parentElement.appendChild(panel)
+        setTimeout(() => {
+          document.addEventListener('click', function h(ev) {
+            if (!panel.contains(ev.target)) { panel.remove(); document.removeEventListener('click', h) }
+          })
+        }, 0)
+      }
     }
     if (xyPaneMeta) {
       bindChat({ meta: xyPaneMeta })
