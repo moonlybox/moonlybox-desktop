@@ -287,8 +287,9 @@ export async function runAgentTools(
   // #256.3：上下文管理（设置可关）——buildMessages 组装历史/压缩，appendTurn 落账
   const sessionId = opts.sessionId ?? 'default'
   const built = buildMessages(sessionId, system, question)
-  // #328.2：诊断行——上下文恢复可见化（排查「开始」无响应：一眼看出历史轮数与会话 id）
-  console.log(`（会话上下文：sessionId=${sessionId}，历史 ${built.messages.filter((m) => m.role !== 'system').length - 1} 轮）`) 
+  // #328.2：诊断行——上下文恢复可见化（排查「开始」无响应：逐条列出 LLM 实际看到的非 system 消息）
+  const ctxDump = built.messages.filter((m) => m.role !== 'system').map((m) => `${m.role === 'user' ? 'U' : 'A'}:${String(m.content).slice(0, 24).replace(/\n/g, ' ')}`).join(' | ')
+  console.log(`（会话上下文：sessionId=${sessionId}｜${ctxDump}）`)
   // 压缩发生时：真调 LLM 生成摘要回填占位（#317.3——此前硬编码一句空话=失忆根因）
   if (built.compressed && built.dropped.length > 0) {
     const summaryMsg = built.messages.find((m) => m.role === 'system' && String(m.content).startsWith('[CONTEXT_SUMMARY]'))
