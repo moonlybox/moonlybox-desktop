@@ -7,7 +7,10 @@
  * - 重试=LLM 调用失败自动重试 maxRetries 次（指数退避 1s*2^n 封顶 30s），网络/限流场景自愈。
  * - settings（chat 节）运行时可变——每次进入会话时读最新值，改设置即刻生效。
  */
+import fs from 'node:fs'
+import path from 'node:path'
 import { loadSettings } from './settings'
+import { configDir } from './config'
 import type { ChatMessage } from './llm'
 
 export interface SessionTurn {
@@ -20,10 +23,33 @@ const sessions = new Map<string, SessionTurn[]>()
 
 const MAX_TURNS = 200 // 硬上限（防内存膨胀）；超限先丢最老
 
+// #327：默认会话盘镜像——「小月」tab 直发（无 chatId）此前纯内存，daemon 重启（RPC 超时自愈/热重载/崩溃）即失忆
+// （真机复现：扫描 39 条征确认→daemon 重启→回「开始」小月打招呼）。chatId 链已有盘回灌（workspaces.ts），
+// 这里给 default 链补一致性：内存空时从盘回灌，appendTurn 同步写盘（本机 0600，与 chat 记录同级隐私）。
+function sessionFile(sessionId: string): string {
+  return path.join(configDir(), `chat-session-${sessionId}.json`)
+}
+
+function loadSessionDisk(sessionId: string): SessionTurn[] {
+  try {
+    const arr = JSON.parse(fs.readFileSync(sessionFile(sessionId), 'utf8'))
+    return Array.isArray(arr) ? arr.filter((t: any) => t && (t.role === 'user' || t.role === 'assistant') && typeof t.content === 'string').slice(-MAX_TURNS) : []
+  } catch {
+    return []
+  }
+}
+
+function saveSessionDisk(sessionId: string, turns: SessionTurn[]): void {
+  try {
+    fs.mkdirSync(configDir(), { recursive: true })
+    fs.writeFileSync(sessionFile(sessionId), JSON.stringify(turns.slice(-MAX_TURNS)), { mode: 0o600 })
+  } catch {}
+}
+
 export function getSession(sessionId: string): SessionTurn[] {
   let s = sessions.get(sessionId)
   if (!s) {
-    s = []
+    s = loadSessionDisk(sessionId) // #327：内存空→盘回灌（daemon 重启后恢复）
     sessions.set(sessionId, s)
   }
   return s
@@ -31,6 +57,7 @@ export function getSession(sessionId: string): SessionTurn[] {
 
 export function clearSession(sessionId: string): void {
   sessions.delete(sessionId)
+  try { fs.unlinkSync(sessionFile(sessionId)) } catch {}
 }
 
 /** 组装带上下文的 messages：system + （可选）摘要 + 历史 + 新问题 */
@@ -88,6 +115,7 @@ export function appendTurn(sessionId: string, userQ: string, answer: string): vo
   history.push({ role: 'user', content: userQ })
   history.push({ role: 'assistant', content: answer })
   while (history.length > MAX_TURNS) history.shift()
+  saveSessionDisk(sessionId, history) // #327：同步盘镜像
 }
 
 /** 压缩摘要生成（用同一 BYOK 通道把丢弃轮次摘要成一段话） */
