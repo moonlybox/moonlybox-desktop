@@ -487,7 +487,7 @@ ${skillIdx}`
     : ''
   // #317.④ 记忆检索化：画像（USER.md）常驻+长期记忆（MEMORY.md）按问题检索 top-N——替代全文灌窗+截断
   const memQuery = [question, ...built.messages.filter((m) => m.role === 'user').slice(-2).map((m) => String(m.content))].join(' ')
-  const memBlock = memOn && memLocal ? localMemoryRetrieveBlock(defaultVaultRoot(), memQuery, { topN: 8, maxChars: Math.min(1200, memCfg.injectLimit ?? 5000) }) : ''
+  const memBlock = memOn && memLocal ? localMemoryRetrieveBlock(defaultVaultRoot(), memQuery, { topN: 9, maxChars: Math.min(1200, memCfg.injectLimit ?? 5000) }) : ''
   // #317.P4：云端模型优化缓存命中（cacheOptimize 默认开，仅云端 API 模型生效）——
   // prompt cache 是前缀匹配：memBlock 每轮随问题变，留在 system 会打碎整个前缀。云端=动态块挪到本轮问题尾部（前缀全静态）；
   // 本地部署无 cache 计费，效率优先维持 memBlock 前置 system（模型对 system 内记忆权重感更高）。
@@ -649,7 +649,7 @@ async function maybeSelfImprove(sessionId: string, messages: Array<{ role: strin
   const st = _siState.get(sessionId) ?? { turns: 0, runs: 0 }
   st.turns++
   // 节流：≥10 轮且每会话 ≤3 次；有最终回答才评估（纯工具轮无对话内容）
-  if (st.turns < 10 || st.runs >= 3 || !result.answer) { _siState.set(sessionId, st); return }
+  if (st.turns < 9 || st.runs >= 3 || !result.answer) { _siState.set(sessionId, st); return } // #320.3：阈值美学 3/9（评估 9 轮、会话限 3 次、维护每 3 次沉淀）
   st.turns = 0
   st.runs++
   _siState.set(sessionId, st)
@@ -657,7 +657,7 @@ async function maybeSelfImprove(sessionId: string, messages: Array<{ role: strin
   const skillsOn = (loadSettings().skills ?? { enabled: true }).enabled !== false
   const digest = messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')
-    .slice(-8)
+    .slice(-9)
     .map((m) => `${m.role === 'user' ? '用户' : '小月'}：${String(m.content).slice(0, 200)}`)
     .join('\n')
     .slice(-6000)
@@ -732,14 +732,14 @@ async function maintainMemories(vaultRoot: string): Promise<void> {
     if (!text) continue
     entries.push({ fp: (await import('../lib/memory-local')).memoryFp(text), text })
   }
-  if (entries.length < 6) return // 条目太少无维护价值
-  const list = entries.slice(0, 80).map((e) => `${e.fp}: ${e.text}`).join('\n') // 预算护栏
+  if (entries.length < 9) return // #320.3：条目不足 9 无维护价值（阈值美学 3/9）
+  const list = entries.slice(0, 81).map((e) => `${e.fp}: ${e.text}`).join('\n') // #320.3：预算 9² 条
   const sys =
     `你是记忆维护器。下面是用户的长期记忆条目清单（fp: 内容）。找出：\n` +
     `1. merge——多条讲同一件事可合并为一条更完整的（into=合并后文本，removeFps=被合并条目）；\n` +
     `2. supersede——新信息已使某条过时（如换框架/换城市），oldFp=过时条目（原文保留标注，不删）；\n` +
     `3. expire——明显过时失效的条目（如已完成的项目状态）。\n` +
-    `宁缺勿滥：没有把握的不要输出；最多 5 个动作。\n` +
+    `宁缺勿滥：没有把握的不要输出；最多 9 个动作。\n` +
     `输出严格 JSON（无其他文本）：\n` +
     `{"merge":[{"into":"合并后一条文本","removeFps":["fp1","fp2"]}],"supersede":[{"oldFp":"fp","newText":"替代后的新表述"}],"expire":["fp"]}\n\n` +
     `条目清单：\n${list}`

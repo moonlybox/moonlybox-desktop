@@ -124,7 +124,7 @@ export interface MemoryHit { source: 'memory' | 'profile'; text: string; score: 
  * query=用户问题（调用方拼入最近一轮对话要点更佳）。零命中返回 []（调用方省略该段）。
  */
 export function localMemoryRetrieve(vaultRoot: string, query: string, opts?: { topN?: number; maxChars?: number }): MemoryHit[] {
-  const topN = opts?.topN ?? 8
+  const topN = opts?.topN ?? 9 // #320.3：阈值美学 3/9
   const maxChars = opts?.maxChars ?? 1200
   const toks = tokenize(query)
   if (!toks.length) return []
