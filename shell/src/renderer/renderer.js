@@ -4290,6 +4290,20 @@ function bindChat(chatInfo) {
     hideThinking()
     // #283.4：回答只显示一路——过程行（含「小月：」终答）已经 kernel log 实时上屏，
     // done.text 是同一批行的整包（parts.join），再 log 一次＝回答重复两段。done 分支只报错误。
+    // #329.1：终答兜底——真机反复出现「诊断行上屏但『小月：』终答缺失」（daemon 实验铁证 done.text 恒含终答行，
+    // 丢失发生在行流段）——从 done.text 解析最后一条「小月：」行，屏上无此内容则补渲染（幂等）。
+    if (r.event === 'done' && r.code === 0) {
+      const full = String(r.text ?? '')
+      const m = full.match(/(?:^|\n)小月：([\s\S]*?)(?=\n（工具调用 |\n（[^）]*）$|$)/)
+      const finalAnswer = m ? m[1].trim() : ''
+      if (finalAnswer) {
+        const bubbles = Array.from(logEl()?.querySelectorAll('.msg.ai .msg-bubble') ?? [])
+        const lastText = String(bubbles.at(-1)?.textContent ?? '')
+        if (!lastText.includes(finalAnswer.slice(0, 24))) {
+          addMsg('ai', finalAnswer)
+        }
+      }
+    }
     if (xyAborted) {
       flushCur()
       const el = document.createElement('div')
