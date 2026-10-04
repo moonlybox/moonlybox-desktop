@@ -76,19 +76,41 @@ function requestUiConfirm(
 }
 
 /** 把全局 console 换成发 log 事件的通道（执行期），结束恢复。 */
+// #328：并发安全——handleLine 是 void 并发 dispatch（不排队），两条 xiaoyue 交叠时后装的捕获器会被
+// 先结束者的 finally 用「进入前快照」覆盖（快照可能是前一轮的 emit 或原始 stdout）——恢复成原始 stdout 时，
+// 后一轮的全部输出走裸文本 stdout，main.js JSON.parse 失败静默丢弃（真机：扫描轮超时后回「开始」零输出）。
+// 改栈式嵌套：恢复时仅当当前捕获器仍是自己这一层时才还原（内层未结束则保持内层 emit）。
+type ConsoleEmit = { log: (...a: unknown[]) => void; error: (...a: unknown[]) => void }
+let consoleCaptureStack = 0
+let consoleOrig: ConsoleEmit | null = null
 function withCapturedConsole(fn: () => Promise<void>, emit: (text: string) => void): Promise<void> {
-  const orig = { log: console.log, error: console.error }
-  console.log = (...a: unknown[]) => emit(a.map(String).join(' '))
-  console.error = (...a: unknown[]) => emit('[stderr] ' + a.map(String).join(' '))
+  if (consoleCaptureStack === 0) {
+    consoleOrig = { log: console.log, error: console.error }
+  }
+  consoleCaptureStack++
+  const myEmit: ConsoleEmit = {
+    log: (...a: unknown[]) => emit(a.map(String).join(' ')),
+    error: (...a: unknown[]) => emit('[stderr] ' + a.map(String).join(' ')),
+  }
+  console.log = myEmit.log
+  console.error = myEmit.error
   return fn().finally(() => {
-    console.log = orig.log
-    console.error = orig.error
+    consoleCaptureStack--
+    // 仅当栈顶（当前活跃捕获器）是自己时才降级恢复：内层并发轮未结束时保持其捕获器
+    if (consoleCaptureStack === 0) {
+      console.log = consoleOrig!.log
+      console.error = consoleOrig!.error
+      consoleOrig = null
+    }
   })
 }
 
 function defaultVaultDir(): string {
   return process.env.MOONLYBOX_VAULT || `${process.env.HOME}/MyMoonVault`
 }
+
+// #328：xiaoyue 互斥锁（模块级——daemon 单实例；handleLine 是 void 并发 dispatch，不排队）
+let xiaoyueBusy = false
 
 async function dispatch(req: Request, emit: (text: string) => void): Promise<{ code: number; text: string }> {
   const args = (req.args ?? {}) as Record<string, unknown>
@@ -101,6 +123,14 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
       text = 'pong'
       break
     case 'xiaoyue': {
+      // #328：xiaoyue 互斥——LLM 链路与 console 捕获非并发安全（并发轮捕获器交叉/被冲掉=输出静默丢失）。
+      // 前一轮未结束（含客户端超时后仍在后台跑的）时，新请求直接拒绝并提示，不排队不交叉。
+      if (xiaoyueBusy) {
+        return { code: 1, text: '上一轮对话仍在后台执行中，请稍等它结束再发起新对话。' }
+      }
+      xiaoyueBusy = true
+      try {
+        return await (async () => {
       const q = String(args.q ?? '')
       // askOnce 内 console.log 过程行 → emit；最终回答也在 console 输出里，捕获全文为 text
       const parts: string[] = []
@@ -124,7 +154,11 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
         }
       }, (t) => { parts.push(t); emit(t) })
       text = parts.join('\n')
-      break
+      return { code, text }
+        })()
+      } finally {
+        xiaoyueBusy = false
+      }
     }
     case 'search': {
       const parts: string[] = []
