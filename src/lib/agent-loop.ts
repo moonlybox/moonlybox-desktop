@@ -295,8 +295,13 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       const didCreateOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize')
         || messages.some((m: any) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.some((tc: any) => tc?.function?.name === 'local_task_create_cloud_organize'))
       if (didCreateOrganize && !didOrganize && round < MAX_TOOL_ROUNDS - 1) {
-        messages.push({ role: 'user', content: '（系统）整理任务已登记且用户已授权自动执行。继续：调 local_task_cloud_organize_preview 圈定清单→逐条生成 items 标签方案→organize_bookmarks 预览→立即带 confirmToken 执行→update 上报收口。全程不要停顿、不要把工具调用写成正文。' })
-        continue
+        // #329.14：终局编排——模型绕圈（读清单/翻页/复读）不给 items 方案时，收走工具、要求纯 JSON 输出
+        //（分类决策=LLM 强项；机械调用=系统托管）。下一轮 finish=stop 的 text 若是 items JSON 就地执行（见 return 前拦截）。
+        const askedJson = messages.some((m: any) => m.role === 'user' && String(m.content ?? '').includes('只输出 items JSON'))
+        if (!askedJson) {
+          messages.push({ role: 'user', content: '（系统）不要再调用任何工具。基于上方清单（local_task_cloud_organize_preview 或 search 结果），**只输出 items JSON 数组**：[{"id":"收藏id","tagsAdd":["标签1","标签2"]}, ...]，覆盖全部待整理条目，每条 1~2 个标签。不要输出任何其他文字、解释或 Markdown 代码块标记。' })
+          continue
+        }
       }
       let text = res.text ?? ''
       // #317.F12：推理泄漏检测+一次自纠——system 纪律失守时兜底（判窄不判宽，避免误伤正常长答）
@@ -313,6 +318,12 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
           : '不要分析，不要复述此前的方案/分类清单。直接输出最终中文回答本身（若是进度汇报，只说当前进度与下一步）。'
         const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: fixPrompt }], undefined)
         if (fix.ok && fix.text && fix.text.trim()) text = fix.text
+      }
+      // #329.14：items JSON 就地执行——编排轮收到的纯 JSON 方案，系统托管完成 预览→token→执行→收口
+      const jsonPlan = parseItemsPlan(text)
+      if (jsonPlan) {
+        const exec = await runItemsPlan(jsonPlan, say, used)
+        return { answer: exec, toolCalls: used }
       }
       return { answer: text, toolCalls: used }
     }
@@ -440,6 +451,64 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     if (fin.ok && fin.text) return { answer: fin.text, toolCalls: used }
   } catch { /* 汇总失败回落占位 */ }
   return { answer: '（工具调用轮次达到上限，以上是已执行的结果）', toolCalls: used }
+}
+
+/** #329.14：解析 items 方案 JSON（宽容：剥 markdown 围栏/前后杂文） */
+function parseItemsPlan(text: string): Array<{ id: string; tagsAdd?: string[]; tagsRemove?: string[]; description?: string }> | null {
+  const t = (text ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
+  const m = t.match(/\[\s*\{[\s\S]*\}\s*\]/)
+  if (!m) return null
+  try {
+    const arr = JSON.parse(m[0])
+    if (!Array.isArray(arr) || !arr.length) return null
+    const ok = arr.filter((x: any) => x && typeof x.id === 'string' && (Array.isArray(x.tagsAdd) || Array.isArray(x.tagsRemove) || typeof x.description === 'string'))
+    return ok.length ? ok : null
+  } catch { return null }
+}
+
+/** #329.14：items 方案系统托管执行——预览→token→执行→收口，返回汇报文本 */
+async function runItemsPlan(
+  plan: Array<{ id: string; tagsAdd?: string[]; tagsRemove?: string[]; description?: string }>,
+  say: (line: string) => void,
+  used: Array<{ name: string; ok: boolean }>,
+): Promise<string> {
+  try {
+    say(`⚙ organize_bookmarks（items ×${plan.length}，自动托管）`)
+    const { callTool } = await import('./moonlink')
+    const body: any = { items: plan }
+    const pv = await callTool('organize_bookmarks', body)
+    const pvText = pv?.content?.map((c: any) => c.text ?? '').join('') ?? ''
+    let pvData: any
+    try { pvData = JSON.parse(pvText) } catch { return `预览失败：${pvText.slice(0, 120)}` }
+    if (pvData.ok === false) return `预览失败：${pvData.message ?? '未知错误'}`
+    const token = pvData.confirmToken
+    if (!token) return `无变更可执行（${pvData.changed ?? 0} 条差异）。`
+    used.push({ name: 'organize_bookmarks', ok: true })
+    const ex = await callTool('organize_bookmarks', { items: plan, confirmToken: token })
+    const exText = ex?.content?.map((c: any) => c.text ?? '').join('') ?? ''
+    let exData: any = {}
+    try { exData = JSON.parse(exText) } catch {}
+    const okEx = exData?.ok !== false
+    used.push({ name: 'organize_bookmarks', ok: okEx })
+    // 收口：最近 cloud_organize 任务推满
+    try {
+      const { allJobs, updateJob, updateItem } = await import('./tasks')
+      const job = allJobs().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
+        .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
+      if (job) {
+        if (job.status === 'queued') updateJob(job.id, { status: 'running', startedAt: new Date().toISOString() })
+        for (const it of job.items) {
+          if (it.status === 'pending') updateItem(job.id, it.path, { status: 'done' })
+        }
+        updateJob(job.id, { status: 'completed', finishedAt: new Date().toISOString() })
+      }
+    } catch { /* 收口失败不影响主结果 */ }
+    return okEx
+      ? `✅ 整理完成：${plan.length} 条收藏已按方案写入标签（云端已生效）。可在「任务」页查看记录，收藏页刷新即可看到新标签。`
+      : `执行失败：${exText.slice(0, 120)}`
+  } catch (e: any) {
+    return `托管执行失败：${String(e?.message ?? e)}`
+  }
 }
 
 /** #317.F12：终答推理泄漏判定——4B 级模型关思考后内部分析/英文思维链泄进正文（自纠重试用，判窄不判宽） */
