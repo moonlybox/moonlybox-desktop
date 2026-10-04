@@ -17,7 +17,10 @@ const ctxTokens = (messages: import('../lib/llm').ChatMessage[]): number =>
   messages.reduce((a, m) => a + Math.ceil(String(m.content ?? '').length / 3) + (Array.isArray(m.tool_calls) ? 120 : 0), 0)
 const CONFIRM_Y = new Set(['y', 'Y', 'yes', 'Yes', '是', '好'])
 
-function needsConfirm(tool: McpTool): boolean {
+function needsConfirm(tool: McpTool, args?: Record<string, unknown>): boolean {
+  // #329.4：organize_bookmarks 两段式——预览（不带 confirmToken）不弹确认条（dry_run 无副作用）；
+  // 带 confirmToken=真实写入=确认制。避免「预览也弹」造成双重确认疲劳。
+  if (tool.name === 'organize_bookmarks') return Boolean(args && args.confirmToken)
   const ann = tool.annotations
   if (ann?.readOnlyHint === true && ann?.destructiveHint !== true) return false
   return true // 无注解或含写操作 → 确认
@@ -341,7 +344,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       if (!meta) return { id: tc.id, name: tc.function.name, content: `未知工具：${tc.function.name}`, ok: false }
 
       say(`⚙ ${meta.title ?? meta.name} ${argsJson.slice(0, 120)}`)
-      if (needsConfirm(meta)) {
+      if (needsConfirm(meta, args)) {
         say(`  （写操作，确认执行？y/N）`)
         const ok = await confirm(meta.name, argsJson)
         if (!ok) {
@@ -352,7 +355,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       try {
         let lastErr: unknown = null
         let result: Awaited<ReturnType<typeof callTool>> | null = null
-        for (let attempt = 0; attempt < (needsConfirm(meta) ? 1 : 2); attempt++) {
+        for (let attempt = 0; attempt < (needsConfirm(meta, args) ? 1 : 2); attempt++) {
           try {
             if (attempt > 0) say(`  ↻ 重试一次…`)
             result = await callTool(meta.name, args)
