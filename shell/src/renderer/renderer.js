@@ -412,6 +412,7 @@ const I18N_DICT = {
   'tk.tabPages': { zh: '产物', en: 'Outputs' },
   'tk.pagesEmpty': { zh: '暂无本地知识页产物。', en: 'No local knowledge pages yet.' },
   'tk.cloudNoPages': { zh: '对云端资源进行整理，无本地产物。', en: 'Cloud resources were organized; no local outputs.' },
+  'tk.cloudItem': { zh: '收藏 #{n}', en: 'Bookmark #{n}' },
   'dir.noReadme': { zh: '此目录暂无 README.md 说明。', en: 'No README.md in this directory.' },
   'ui.ok': { zh: '确定', en: 'OK' },
   'lib.backfillDone': { zh: '补传完成：扫描 {s} 篇，成功 {p} 篇', en: 'Backfill done: {s} scanned, {p} pushed' },
@@ -2778,7 +2779,9 @@ async function renderWork(nav, arg, label2) {
     const IST = { pending: t('tk.iPending'), running: t('tk.iRunning'), done: t('tk.iDone'), failed: t('tk.iFail'), skipped: t('tk.iSkip'), cancelled: t('tk.iCancel') }
     // 行渲染（状态→样式语义色）
     const itemRow = (it) => {
-      const name = String(it.path).split(/[\\/]/).pop()
+      let name = String(it.path).split(/[\\/]/).pop()
+      // #329.3：云端整理占位行名——「cloud:#N」→「收藏 #N」（用户可读；任务详情/产物说明已有 tk.cloudNoPages）
+      if (/^cloud:#\d+$/.test(name)) name = t('tk.cloudItem').replace('{n}', name.slice(6))
       const color = { done: 'var(--ok,#34d399)', failed: 'var(--danger,#e56969)', running: 'var(--accent,#818cf8)', skipped: 'inherit', cancelled: 'inherit', pending: 'inherit' }[it.status] ?? 'inherit'
       const badgeBg = { done: 'rgba(52,211,153,.12)', failed: 'rgba(229,105,105,.14)', running: 'rgba(129,140,248,.14)' }[it.status] ?? 'transparent'
       const spin = it.status === 'running' ? '<span style="display:inline-block;animation:tkspin 1s linear infinite">◐</span> ' : ''
