@@ -109,8 +109,8 @@ function defaultVaultDir(): string {
   return process.env.MOONLYBOX_VAULT || `${process.env.HOME}/MyMoonVault`
 }
 
-// #328：xiaoyue 互斥锁（模块级——daemon 单实例；handleLine 是 void 并发 dispatch，不排队）
-let xiaoyueBusy = false
+// #328.1：xiaoyue 串行队列尾指针（模块级——daemon 单实例；handleLine 是 void 并发 dispatch，不排队）
+let xiaoyueTail: Promise<void> = Promise.resolve()
 
 async function dispatch(req: Request, emit: (text: string) => void): Promise<{ code: number; text: string }> {
   const args = (req.args ?? {}) as Record<string, unknown>
@@ -123,12 +123,13 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
       text = 'pong'
       break
     case 'xiaoyue': {
-      // #328：xiaoyue 互斥——LLM 链路与 console 捕获非并发安全（并发轮捕获器交叉/被冲掉=输出静默丢失）。
-      // 前一轮未结束（含客户端超时后仍在后台跑的）时，新请求直接拒绝并提示，不排队不交叉。
-      if (xiaoyueBusy) {
-        return { code: 1, text: '上一轮对话仍在后台执行中，请稍等它结束再发起新对话。' }
-      }
-      xiaoyueBusy = true
+      // #328.1：xiaoyue 串行队列——LLM 链路与 console 捕获非并发安全（并发轮捕获器交叉/被冲掉=输出静默丢失）。
+      // 拒绝式互斥（#328 首版）体验差：扫描确认流里用户回「开始」被拒=确认流断裂。改排队：后到轮等前一轮
+      // （含客户端超时后仍在后台跑的）真正结束后再执行——捕获器栈式化保证排队轮输出正确归属。
+      const prev = xiaoyueTail
+      let release: () => void
+      xiaoyueTail = new Promise<void>((r) => { release = r })
+      await prev
       try {
         return await (async () => {
       const q = String(args.q ?? '')
@@ -157,7 +158,7 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
       return { code, text }
         })()
       } finally {
-        xiaoyueBusy = false
+        release!()
       }
     }
     case 'search': {
