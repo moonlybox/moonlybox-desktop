@@ -163,7 +163,7 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
         ok: true,
         jobId: job.id,
         total,
-        message: `云端整理任务已创建（${total} 条）：现在开始逐条执行 ${kind === 'tags' ? 'organize_bookmarks（确认制：先 diff 征得用户同意）' : 'update_bookmark'}；每完成一条用 local_task_update_cloud_organize 上报进度（done=1），全部完成后 all=true 收口。注意：云端整理必须走任务登记，不得跳过本工具直接开始整理。产物在云端，任务页「产物」页帧显示无本地产物说明。`,
+        message: `云端整理任务已创建（${total} 条）：登记完成，**立即开始逐批执行**（不要停下来等用户再说「继续」）——${kind === 'tags' ? 'organize_bookmarks 两段式：先调（不带 confirmToken）拿 diff 预览，同轮把 diff 摘要给用户确认后带 confirmToken 执行' : 'update_bookmark 逐条执行'}；每完成一条用 local_task_update_cloud_organize 上报进度（done=1），全部完成后 all=true 收口。注意：不得跳过登记，也不得在登记后二次征询。产物在云端，任务页「产物」页帧显示无本地产物说明。`,
       })
     } catch (e: any) {
       return JSON.stringify({ ok: false, error: `任务创建失败：${String(e?.message ?? e)}` })
