@@ -108,13 +108,13 @@ const SETTINGS_CATS = [
   { id: 'chat', label: 'set.cat.chat' },
   { id: 'model', label: 'set.cat.model', subs: ['platform', 'custom', 'local'] }, // #310.2：平台API→自定义→本地部署
   { id: 'messaging', label: 'set.cat.messaging' },
-  { id: 'mcp', label: 'set.cat.mcp', subs: ['builtin', 'custom', 'market'] }, // #310.2：内置→自定义→市场
+  { id: 'mcp', label: 'set.cat.mcp', subs: ['builtin', 'custom'] }, // #321：MCP 市场移除（上下文占用对小模型不利，无必经 MCP 的推荐增强），销账
   { id: 'skills', label: 'set.cat.skills' },
   { id: 'websearch', label: 'set.cat.websearch' },
   { id: 'docproc', label: 'set.cat.docproc' },
   { id: 'memory', label: 'set.cat.memory' },
 ]
-const SET_SUB_LABELS = { platform: 'set.sub.platform', local: 'set.sub.local', custom: 'set.sub.custom', builtin: 'set.sub.builtin', market: 'set.sub.market' }
+const SET_SUB_LABELS = { platform: 'set.sub.platform', local: 'set.sub.local', custom: 'set.sub.custom', builtin: 'set.sub.builtin' }
 let currentHelpArg = 'about' // #310.5：帮助侧栏选中态跟踪（默认=关于）
 let _dbgOn = null; let _dbgAt = 0
 async function debugMirror() { // #310.7：调试开关缓存查询（#319.8：与调试页 UI 同源——settings 缺省时 dev=开/打包=关）
@@ -177,7 +177,6 @@ const I18N_DICT = {
   'set.sub.local': { zh: '本地部署', en: 'Local' },
   'set.sub.custom': { zh: '自定义', en: 'Custom' },
   'set.sub.builtin': { zh: '内置', en: 'Built-in' },
-  'set.sub.market': { zh: '市场', en: 'Market' },
   'help.terms': { zh: '📜 条款', en: '📜 Terms' },
   'help.feedback': { zh: '📝 问题反馈', en: '📝 Feedback' },
   'help.debug': { zh: '🐞 调试', en: '🐞 Debug' },
@@ -207,7 +206,6 @@ const I18N_DICT = {
   'panel.sub.model.custom': { zh: '添加多个 OpenAI 兼容端点（Ollama / LM Studio / vLLM / 中转站 / 私有部署），每条可单独启用/停用，任一可设为对话默认。本地端点 Key 可留空。', en: 'Add multiple OpenAI-compatible endpoints (Ollama / LM Studio / vLLM / proxy / self-hosted); each can be toggled and set as default. Local endpoints need no key.' },
   'panel.sub.messaging': { zh: '对接 IM 平台，让你在小月里远程收发消息与操作。Token/Secret 只存本机钥匙串。', en: 'Connect IM platforms to chat with Moonie remotely. Tokens/secrets stay in the local keychain.' },
   'panel.sub.mcp.builtin': { zh: 'Model Context Protocol 服务器——给小月接入外部工具与数据源的标准协议。', en: 'Model Context Protocol servers — the standard way to give Moonie external tools and data sources.' },
-  'panel.sub.mcp.market': { zh: '发现并安装社区 MCP 服务器。', en: 'Discover and install community MCP servers.' },
   'panel.sub.mcp.custom': { zh: '添加自己的 MCP 服务器（Streamable HTTP）。', en: 'Add your own MCP servers (Streamable HTTP).' },
   'panel.sub.skills': { zh: '书房里的自定义技能：小月按需读取技能全文并照其中的流程执行。数据不出本机、随书房备份。', en: 'Custom skills in your study: Moonie reads and follows them on demand. Data stays local and backs up with the study.' },
   'panel.sub.websearch': { zh: '给小月接上搜索与网页提取能力（本质=服务商能力暴露给 Agent 的工具）。', en: 'Give Moonie web search and page extraction (provider capabilities exposed as agent tools).' },
@@ -223,7 +221,6 @@ const I18N_DICT = {
   'panel.messaging': { zh: '消息接入', en: 'Messaging' },
   'panel.mcp.builtin': { zh: 'MCP · 内置', en: 'MCP · Built-in' },
   'panel.mcp.custom': { zh: 'MCP · 自定义', en: 'MCP · Custom' },
-  'panel.mcp.market': { zh: 'MCP · 市场', en: 'MCP · Market' },
   'panel.skills': { zh: '技能', en: 'Skills' },
   'panel.websearch': { zh: '网络搜索', en: 'Web Search' },
   'panel.docproc': { zh: '文档处理', en: 'Doc Processing' },
@@ -2411,9 +2408,7 @@ async function renderWork(nav, arg, label2) {
         const st = $('sp-mcp-status'); st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? t('ui.saved') : (r.error ?? t('ui.saveFail'))
       }
-    } else if (cat.id === 'mcp' && currentSetSub === 'market') {
-      panel(t('panel.mcp.market'), t('panel.sub.mcp.market'), '<div class="set-status">市场目录由平台维护，当前目录为空。</div>')
-} else if (cat.id === 'mcp' && currentSetSub === 'custom') {
+    } else if (cat.id === 'mcp' && currentSetSub === 'custom') {
       const g = await loadAppSettings()
       const list = g.mcp?.custom ?? []
       panel(t('panel.mcp.custom'), t('panel.sub.mcp.custom'), `
