@@ -289,12 +289,13 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     if (!res.ok) throw new Error(res.error ?? 'LLM 调用失败')
 
     if (!res.toolCalls || res.toolCalls.length === 0) {
-      // #329.5：整理链轮末编排兜底——GLM 5.2 实证会「登记后停下等继续」（提示词两轮压不住）：
-      // 本轮已登记 cloud_organize 任务但从未调过 organize_bookmarks 且模型停下 → 注入推进指令强制再来一轮。
-      const didCreateOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize')
+      // #329.5/#329.7：整理链轮末编排兜底——GLM 5.2 实证会「登记后停下等继续」/「读取结果后直接终答」。
+      // 本轮或此前轮次已登记 cloud_organize 任务但从未调过 organize_bookmarks 且模型停下 → 注入推进指令。
       const didOrganize = used.some((u) => u.name === 'organize_bookmarks')
+      const didCreateOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize')
+        || messages.some((m: any) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.some((tc: any) => tc?.function?.name === 'local_task_create_cloud_organize'))
       if (didCreateOrganize && !didOrganize && round < MAX_TOOL_ROUNDS - 1) {
-        messages.push({ role: 'user', content: '（系统）任务已登记且用户已授权。现在立即调用 organize_bookmarks（不带 confirmToken）生成变更预览 diff，并把 diff 摘要展示给用户。不要输出任何「回复继续」式停顿。' })
+        messages.push({ role: 'user', content: '（系统）整理任务已登记且用户已授权。现在立即调用 local_task_cloud_organize_preview（传 jobId 与 kind）生成变更预览 diff 并展示给用户；若预览已生成（上下文中有 confirmToken），则直接把 diff 摘要展示并询问用户是否确认执行。不要输出任何「回复继续」式停顿，不要把工具调用写成正文。' })
         continue
       }
       let text = res.text ?? ''
@@ -450,5 +451,8 @@ function isLeakyAnswer(text: string): boolean {
   if ((t.match(/不过，/g) ?? []).length >= 3) return true
   if ((t.match(/但根据/g) ?? []).length >= 3) return true
   if (t.includes('"type": "function"') || t.includes('"type":"function"')) return true
+  // #329.7：工具调用文本化（GLM 5.2 实证：tool_result_readpathC:\... 以正文输出）
+  if (/\btool_[a-z_]+\s*path\s*[A-Za-z]:\\/.test(t)) return true
+  if (/^\s*(tool_result_read|organize_bookmarks|search_bookmarks|local_task_[a-z_]+)\s*(path|[\{\[])/i.test(t)) return true
   return false
 }
