@@ -14,7 +14,7 @@ export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancell
 export type ItemStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped' | 'cancelled'
 
 /** v1 任务类型白名单——新类型进此表（download/backup/diagram_batch 规划位） */
-export const TASK_TYPES = ['compile'] as const
+export const TASK_TYPES = ['compile', 'cloud_organize'] as const // #326：云端资源整理（收藏打标签/补描述）——产物在云端，无本地产物
 export type TaskType = (typeof TASK_TYPES)[number]
 
 export interface JobItem {

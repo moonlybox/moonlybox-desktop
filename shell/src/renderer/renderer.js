@@ -411,6 +411,7 @@ const I18N_DICT = {
   'tk.tabItems': { zh: '任务清单', en: 'Items' },
   'tk.tabPages': { zh: '产物', en: 'Outputs' },
   'tk.pagesEmpty': { zh: '暂无本地知识页产物。', en: 'No local knowledge pages yet.' },
+  'tk.cloudNoPages': { zh: '对云端资源进行整理，无本地产物。', en: 'Cloud resources were organized; no local outputs.' },
   'dir.noReadme': { zh: '此目录暂无 README.md 说明。', en: 'No README.md in this directory.' },
   'ui.ok': { zh: '确定', en: 'OK' },
   'lib.backfillDone': { zh: '补传完成：扫描 {s} 篇，成功 {p} 篇', en: 'Backfill done: {s} scanned, {p} pushed' },
@@ -2897,7 +2898,9 @@ async function renderWork(nav, arg, label2) {
     const j = JSON.parse(r.text).job
     const startedHtml = (() => { const d = j.startedAt ? new Date(j.startedAt) : null; return d && !isNaN(d) ? `<div class="muted" style="font-size:11px;width:100%" id="tk-started">${t('tk.startedAt')} ${d.toLocaleString()}</div>` : '<div id="tk-started" style="display:none"></div>' })()
     // #310.27：详情双 tab——「任务清单」（源文档维度）与「产物」（done 产物维度）平行
-    const donePages = j.items.filter((it) => it.status === 'done' && it.outPath)
+    // #326：云端整理任务（cloud_organize）——产物在云端，无本地产物：产物页帧恒 0 + 说明文案
+    const isCloud = j.type === 'cloud_organize'
+    const donePages = isCloud ? [] : j.items.filter((it) => it.status === 'done' && it.outPath)
     w.innerHTML = `
       <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
         <strong style="font-size:14px" id="tk-head">${esc(j.title)}</strong>
@@ -2913,10 +2916,10 @@ async function renderWork(nav, arg, label2) {
       <div style="padding:6px 18px 0;display:flex;gap:6px" id="tk-tabs">
         <button id="tk-tab-items" style="font-size:12px;padding:3px 12px;border:0;border-radius:8px;cursor:pointer;background:var(--active-bg);color:var(--active-fg);font-weight:600">${t('tk.tabItems')}</button>
         <button id="tk-tab-pages" style="font-size:12px;padding:3px 12px;border:0;border-radius:8px;cursor:pointer;background:transparent;color:inherit">${t('tk.tabPages')} (${donePages.length})</button>
-      </div>
+      </div>${''}
       <div style="flex:1;overflow-y:auto;padding:0 18px 16px" id="tk-list">${j.items.map(itemRow).join('') || `<div class="muted tk-empty-hint" style="padding:10px 0">${t('tk.empty')}</div>`}</div>
       <div style="flex:1;overflow-y:auto;padding:6px 18px 16px;display:none" id="tk-pages">
-        ${donePages.length ? `<div style="display:flex;align-items:center;gap:10px;padding:4px 0 8px;position:sticky;top:0;background:var(--bg,#fff);z-index:1">
+        ${isCloud ? `<div class="muted" style="padding:14px 0;font-size:12.5px">${t('tk.cloudNoPages')}</div>` : donePages.length ? `<div style="display:flex;align-items:center;gap:10px;padding:4px 0 8px;position:sticky;top:0;background:var(--bg,#fff);z-index:1">
           <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" id="tkp-selall" /> ${t('tk.selectAll')}</label>
           <button class="btn ghost" id="tkp-del" style="font-size:12px;padding:2px 10px;margin-left:auto">${t('tk.delSelected')}</button>
         </div>` : ''}

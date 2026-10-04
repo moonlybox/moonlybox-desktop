@@ -33,6 +33,35 @@ export function localTaskToolDefs(): Array<{ name: string; title?: string; descr
       },
     },
     {
+      name: 'local_task_create_cloud_organize',
+      // #326：云端整理任务登记——产物在云端，「任务」页可见进度；小月在对话内逐条执行 MCP 工具并上报进度
+      title: '创建云端整理任务（收藏打标签/补描述）',
+      description: '用户要求批量整理云端收藏（打标签/补描述）时，先用本工具创建「云端整理」任务（任务页可见），再在对话中逐条执行 search_bookmarks→organize_bookmarks/update_bookmark，每完成一条用 local_task_update_cloud_organize 上报进度。参数 kind=tags（打标签）|descriptions（补描述）；total=本轮要处理的收藏条数（来自 search 结果数）。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['tags', 'descriptions'], description: '整理类型' },
+          total: { type: 'number', description: '本轮待处理条数' },
+        },
+        required: ['kind', 'total'],
+      },
+    },
+    {
+      name: 'local_task_update_cloud_organize',
+      title: '上报云端整理进度',
+      description: '云端整理任务每完成一条（或失败一条）调用本工具上报；all=true 表示全部完成（任务收口）。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: '任务 ID（创建时返回）' },
+          done: { type: 'number', description: '本次新增完成条数' },
+          failed: { type: 'number', description: '本次新增失败条数（可省）' },
+          all: { type: 'boolean', description: 'true=全部处理完毕，任务收口' },
+        },
+        required: ['id', 'done'],
+      },
+    },
+    {
       name: 'local_task_status',
       title: '查询任务',
       description: '查询本地任务状态与进度。参数 id=任务 ID（local_task_create_compile 返回）；不传 id=列出最近任务（用户问「任务进度/之前那个任务」时用它）。',
@@ -119,6 +148,53 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
       return JSON.stringify({ ok: true, jobId: job.id, total: Math.min(paths.length, 500), model: label ?? null, message: `任务已创建（${Math.min(paths.length, 500)} 篇），后台执行中——进度可在「任务」页查看` })
     } catch (e: any) {
       return JSON.stringify({ ok: false, error: `任务创建失败：${String(e?.message ?? e)}` })
+    }
+  }
+  if (name === 'local_task_create_cloud_organize') {
+    // #326：云端整理任务——登记进「任务」页（产物在云端，无本地产物）；执行体=小月对话内的 MCP 工具循环
+    try {
+      const kind = args.kind === 'descriptions' ? 'descriptions' : 'tags'
+      const total = Math.max(1, Math.min(50, Number(args.total ?? 0) || 0))
+      const { createJob } = await import('./tasks')
+      const label = kind === 'tags' ? '云端整理 · 收藏打标签' : '云端整理 · 收藏补描述'
+      // items 用占位行（无本地路径——path 即云端收藏处理序号），进度条/清单照常工作
+      const job = createJob('cloud_organize', label, Array.from({ length: total }, (_, i) => ({ path: `cloud:#${i + 1}` })), undefined)
+      return JSON.stringify({
+        ok: true,
+        jobId: job.id,
+        total,
+        message: `云端整理任务已创建（${total} 条）：先 search_bookmarks 圈定范围，再逐条执行 ${kind === 'tags' ? 'organize_bookmarks（确认制：先 diff 征得用户同意）' : 'update_bookmark'}；每完成一条用 local_task_update_cloud_organize 上报进度，全部完成后 all=true 收口。产物在云端，任务页「产物」页帧显示无本地产物说明。`,
+      })
+    } catch (e: any) {
+      return JSON.stringify({ ok: false, error: `任务创建失败：${String(e?.message ?? e)}` })
+    }
+  }
+  if (name === 'local_task_update_cloud_organize') {
+    try {
+      const { getJob, updateJob, updateItem } = await import('./tasks')
+      const job = getJob(String(args.id ?? ''))
+      if (!job || job.type !== 'cloud_organize') return JSON.stringify({ ok: false, error: '云端整理任务不存在' })
+      if (job.status === 'completed' || job.status === 'cancelled') return JSON.stringify({ ok: false, error: `任务已结束（${job.status}）` })
+      if (job.status === 'queued') updateJob(job.id, { status: 'running', startedAt: new Date().toISOString() })
+      const done = Math.max(0, Number(args.done ?? 0) || 0)
+      const failed = Math.max(0, Number(args.failed ?? 0) || 0)
+      // 推进指针：把最早的 pending 项标记 done/failed（占位行按序消费）
+      let d = done, f = failed
+      for (const it of job.items) {
+        if (it.status !== 'pending') continue
+        if (d > 0) { updateItem(job.id, it.path, { status: 'done' }); d-- }
+        else if (f > 0) { updateItem(job.id, it.path, { status: 'failed', error: '云端写入失败' }); f-- }
+        else break
+      }
+      const fresh = getJob(job.id)!
+      const pending = fresh.items.filter((it) => it.status === 'pending').length
+      if (args.all === true || pending === 0) {
+        updateJob(fresh.id, { status: 'completed', finishedAt: new Date().toISOString() })
+        return JSON.stringify({ ok: true, finished: true, progress: fresh.progress, message: `任务完成：${fresh.progress.done}/${fresh.progress.total} 条已整理（产物在云端收藏中）` })
+      }
+      return JSON.stringify({ ok: true, finished: false, progress: fresh.progress, remaining: pending })
+    } catch (e: any) {
+      return JSON.stringify({ ok: false, error: `进度上报失败：${String(e?.message ?? e)}` })
     }
   }
   if (name === 'local_task_status') {
