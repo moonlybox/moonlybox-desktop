@@ -270,11 +270,18 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     { role: 'user', content: question },
   ]
   const used: Array<{ name: string; ok: boolean }> = []
+  let createRescued = false // #331.26：本次调用已系统代为登记（幂等锚）
+
+  // #331.26：预算下限自适应——整理链 system（16k+ 字符）本身就超默认预算 6000，首轮即「预算将尽」
+  // break→工具循环/文本化拦截全被绞死（真机：create 文本化上屏复现，沙箱 repro 8039/6000 实锤）。
+  // 预算下限=max(配置值, systemTokens×1.25+2000)——system 是常量，不占「可运转」预算
+  const systemTokens = Math.ceil(String(system ?? '').length / 3)
+  const budgetFloor = Math.max(deps.ctxBudget ?? CTX_BUDGET_DEFAULT, Math.ceil(systemTokens * 1.25) + 2000)
 
   let budgetWarned = false
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     // #317.2：token 预算制判停（轮数硬顶只是兜底）——85% 注入「收尾」指令；100% 强制出最终回答
-    const CTX_BUDGET = deps.ctxBudget ?? CTX_BUDGET_DEFAULT
+    const CTX_BUDGET = budgetFloor
     const tk = ctxTokens(messages)
     if (tk >= CTX_BUDGET) {
       say(`（上下文预算将尽：${tk}/${CTX_BUDGET} token——汇总已有结果作答）`)
@@ -338,7 +345,8 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       // 这是**合法登记意图**的文本化，不能进自纠重写（重写 2 轮烧完原样上屏=任务永远建不出来）；
       // 正确动作=系统代为登记：提取 items JSON→调真实 create→注入推进令继续方案+写入
       const createTextMatch = text.match(/local_task_create_cloud_organize[\s\S]{0,40}?items?\s*(\[[\s\S]*)$/i)
-      if (createTextMatch && !didCreateOrganize) {
+      // #331.26：代登记幂等——repro 实证模型复读 create 文本时会重复建任务（10 次）；一次调用只代登记一次
+      if (createTextMatch && !didCreateOrganize && !createRescued) {
         try {
           // #331.25：真机样本（title 含 markdown 破损 `"}](` 序列）实测：非贪婪/括号配对都会被破损
           // title 内的 `]` 提前截断→JSON 不合法→拦截 miss。降级策略=纯 id 抽取（ULID 26 位硬锚，
@@ -362,12 +370,18 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
             let regData: any = {}
             try { regData = JSON.parse(reg) } catch {}
             if (regData?.ok) {
+              createRescued = true
               say(`（系统代为登记任务 ${regData.jobId}，${regData.total} 条）`)
               messages.push({ role: 'user', content: `（系统）你的 create 调用被写成了正文文本，系统已代你登记任务（${regData.total} 条）。**不要重复登记**。立即基于上方清单生成${kind === 'tags' ? '标签' : '描述'}方案，然后**只输出 items JSON 数组**（[{"id":"...","description":"..."} 或 {"id":"...","tagsAdd":["..."]}]），覆盖全部 ${regData.total} 条。` })
               continue
             }
           }
         } catch { /* JSON 解析失败→落回自纠 */ }
+      }
+      // #331.26：已代登记后再复读 create 文本→不再自纠（重写无用），直接注入推进令要方案
+      if (createTextMatch && createRescued) {
+        messages.push({ role: 'user', content: '（系统）任务已登记，禁止重复输出登记调用。**只输出 items JSON 数组**（[{"id":"...","description":"一句描述"}]，覆盖全部条目），不要输出任何其他文字。' })
+        continue
       }
       // #329.21：items JSON 优先于泄漏自纠——JSON 方案是合法终答（即使带工具名前缀），
       // 先 parse；命中则直接托管执行，绝不能进 isLeakyAnswer 自纠（自纠重写会破坏 JSON=托管被吞）
