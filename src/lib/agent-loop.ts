@@ -420,6 +420,12 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         const execOk = !/\{?\s*\"ok\"\s*:\s*false/.test(text.slice(0, 80)) && !text.startsWith('工具执行失败')
         if (execOk && (meta.name === 'update_bookmark' || meta.name === 'organize_bookmarks')) {
           try {
+            // #331.16：登记兜底（工具调用路径）——organize 成功但无未完结任务=模型跳过登记，
+            // 系统按 args.items 自动补登记（任务页可见性硬保证，不依赖模型自觉）
+            if (meta.name === 'organize_bookmarks') {
+              const planItems = Array.isArray((args as any)?.items) ? (args as any).items : []
+              await ensureCloudOrganizeJob(planItems).catch(() => {})
+            }
             // #331.9：快照兜底（工具调用路径）——模型正常 tool_calls 直通执行时任务 items 仍是占位，
             // 按 args.items 顺序回填标题（此前只有文本化 runItemsPlan 路径有回填）
             if (meta.name === 'organize_bookmarks') {
@@ -516,6 +522,19 @@ function parseItemsPlan(text: string): Array<{ id: string; tagsAdd?: string[]; t
 }
 
 /** #329.14：items 方案系统托管执行——预览→token→执行→收口，返回汇报文本 */
+/** #331.16：任务登记兜底（两路径共用）——模型跳过 local_task_create_cloud_organize 直接执行时，
+ * 系统自动补登记（用户裁决：AI 整理必须在任务页可见可查，不登记不得执行）。已有未完结任务则复用。 */
+async function ensureCloudOrganizeJob(plan: Array<{ id: string; tagsAdd?: string[]; tagsRemove?: string[]; description?: string }>): Promise<void> {
+  if (!plan.length) return
+  const { allJobs, createJob } = await import('./tasks')
+  const open = allJobs().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
+  if (open) return
+  const kind = plan.some((p) => p.tagsAdd?.length || p.tagsRemove?.length) ? 'tags' : 'descriptions'
+  const label = kind === 'tags' ? `收藏打标签 · ${plan.length} 条（自动登记）` : `收藏补描述 · ${plan.length} 条（自动登记）`
+  createJob('cloud_organize', label, plan.map((p, i) => ({ path: `cloud:#${i + 1}` })), undefined)
+}
+
 /** #331.9：任务快照兜底（两路径共用）——items 仍有无 title 占位（cloud:#N）时按 plan 序回填标题（id 精确匹配） */
 async function snapshotJobTitlesFromPlan(plan: Array<{ id: string; tagsAdd?: string[]; tagsRemove?: string[]; description?: string }>): Promise<void> {
   if (!plan.length) return
@@ -589,6 +608,8 @@ async function runItemsPlan(
   chat?: typeof import('../lib/llm').byokChatMessages,
 ): Promise<string> {
   try {
+    // #331.16：登记兜底——模型跳过 create 直接执行时系统自动补登记（任务页可见性硬保证）
+    try { await ensureCloudOrganizeJob(plan) } catch { /* 登记失败不阻塞执行 */ }
     // #331：标签收敛轮（两轮编译式）——execute 前把草稿标签对齐既有体系（LLM 算力收敛）
     if (chat) {
       try {
