@@ -460,8 +460,19 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
             if (job) {
               if (job.status === 'queued') updateJob(job.id, { status: 'running', startedAt: new Date().toISOString() })
               const fresh = getJob(job.id)!
-              const pending = fresh.items.find((it) => it.status === 'pending')
-              if (pending) updateItem(job.id, pending.path, { status: 'done' })
+              // #331.20：organize 是批量写入（一次调用 applied=N 条）——按 items 条数推进等量 pending
+              //（此前只推 1 格→批量写入后进度停在「完成第一个」）；update_bookmark 逐条仍推 1 格
+              let advance = 1
+              if (meta.name === 'organize_bookmarks') {
+                advance = Array.isArray((args as any)?.items) ? (args as any).items.length : 1
+              }
+              let n = advance
+              for (const it of fresh.items) {
+                if (it.status !== 'pending') continue
+                if (n <= 0) break
+                updateItem(job.id, it.path, { status: 'done' })
+                n--
+              }
               const after = getJob(job.id)!
               if (after.items.every((it) => it.status !== 'pending')) {
                 updateJob(job.id, { status: 'completed', finishedAt: new Date().toISOString() })
@@ -566,7 +577,9 @@ async function snapshotJobTitlesFromPlan(plan: Array<{ id: string; tagsAdd?: str
   if (!job || !job.items.some((it) => !it.title)) return
   const planIds = new Set(plan.map((p) => p.id))
   const { callTool } = await import('./moonlink')
-  const sr = await callTool('search_bookmarks', { limit: 200 })
+  // #331.20：回填拉取上限 200→500（收藏 >200 时老条目被 created_at desc 窗截掉→序号残留；
+  // API 上限 500，与 organize 校验同参）
+  const sr = await callTool('search_bookmarks', { limit: 500 })
   const st = sr?.content?.map((c: any) => c.text ?? '').join('') ?? ''
   const sd = JSON.parse(st)
   const byId = new Map<string, string>()
@@ -648,7 +661,7 @@ async function runItemsPlan(
       if (job2) {
         const isDesc = job2.title.includes('描述')
         const { callTool: cT2 } = await import('./moonlink')
-        const sr2 = await cT2('search_bookmarks', isDesc ? { noDescription: true, limit: 200 } : { untagged: true, limit: 200 })
+        const sr2 = await cT2('search_bookmarks', isDesc ? { noDescription: true, limit: 500 } : { untagged: true, limit: 500 })
         const st2 = sr2?.content?.map((c: any) => c.text ?? '').join('') ?? ''
         const sd2 = JSON.parse(st2)
         const targetIds = new Set<string>((sd2.bookmarks ?? []).map((b: any) => b.id))
