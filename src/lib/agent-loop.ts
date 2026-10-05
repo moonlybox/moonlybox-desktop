@@ -294,6 +294,18 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       const didOrganize = used.some((u) => u.name === 'organize_bookmarks')
       const didCreateOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize')
         || messages.some((m: any) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.some((tc: any) => tc?.function?.name === 'local_task_create_cloud_organize'))
+      // #331.19：编排注入前先试 parse——text 已是可解析 items（带工具名前缀也算）时直接托管执行，
+      // 不注入不重写（多一轮「只输出 JSON」注入=多一次 LLM 往返=多一次抖动窗口；真机本轮实测多轮空转）
+      const directPlan = parseItemsPlan(res.text ?? '')
+      if (directPlan && directPlan.length > 0) {
+        const exec = await runItemsPlan(directPlan, say, used, chat)
+        if (typeof exec !== 'string') {
+          // #331.19：目标校验拒绝→注入实时清单再走一轮（模型基于新鲜数据重新生成 items）
+          messages.push({ role: 'user', content: `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。` })
+          continue
+        }
+        return { answer: exec, toolCalls: used }
+      }
       // #331.12：幻觉执行拦截——模型没调 organize 却给出「执行结果话术」（0 条变更/没生效/已写入）：
       // 生产取证（access.log+DB）实证这是编造。命中→不采信 answer，强制注入要求输出 items JSON（托管真执行）。
       const hallucinatedExec = !didOrganize && /0 条变更|没有生效|没生效|写入没|未生效|变更条数为? ?0/i.test(res.text ?? '')
@@ -322,6 +334,11 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       const prePlan = parseItemsPlan(text)
       if (prePlan) {
         const exec = await runItemsPlan(prePlan, say, used, chat)
+        if (typeof exec !== 'string') {
+          // #331.19：目标校验拒绝→注入实时清单再走一轮
+          messages.push({ role: 'user', content: `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。` })
+          continue
+        }
         return { answer: exec, toolCalls: used }
       }
       // #317.F12：推理泄漏检测+一次自纠——system 纪律失守时兜底（判窄不判宽，避免误伤正常长答）
@@ -343,6 +360,11 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       const jsonPlan = parseItemsPlan(text)
       if (jsonPlan) {
         const exec = await runItemsPlan(jsonPlan, say, used, chat)
+        if (typeof exec !== 'string') {
+          // #331.19：目标校验拒绝→注入实时清单再走一轮
+          messages.push({ role: 'user', content: `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。` })
+          continue
+        }
         return { answer: exec, toolCalls: used }
       }
       return { answer: text, toolCalls: used }
@@ -606,7 +628,7 @@ async function runItemsPlan(
   say: (line: string) => void,
   used: Array<{ name: string; ok: boolean }>,
   chat?: typeof import('../lib/llm').byokChatMessages,
-): Promise<string> {
+): Promise<string | { __rejected: true; freshList: string[]; isDesc: boolean }> {
   try {
     // #331.16：登记兜底——模型跳过 create 直接执行时系统自动补登记（任务页可见性硬保证）
     try { await ensureCloudOrganizeJob(plan) } catch { /* 登记失败不阻塞执行 */ }
@@ -632,10 +654,12 @@ async function runItemsPlan(
         const targetIds = new Set<string>((sd2.bookmarks ?? []).map((b: any) => b.id))
         const valid = plan.filter((p) => targetIds.has(p.id))
         // #331.17：收紧——部分命中也拒绝（混入旧条目会导致任务详情与真实写入错位；强制重新圈定）
-        // #331.18：拒绝时随附实时清单（id|标题）——下一步直接基于新鲜数据生成，不再吃旧缓存
+        // #331.19：拒绝**不 return 死文本**——返回 freshList 由调用方注入 messages 再走一轮
+        //（基于新鲜数据重新生成 items；return 终止整链，模型没机会修正）
         if (valid.length < plan.length) {
           const fresh = (sd2.bookmarks ?? []).map((b: any) => `${b.id} | ${String(b.title ?? '').slice(0, 40)}`)
-          return `目标校验未通过：本次提交的 ${plan.length} 条中只有 ${valid.length} 条属于当前待整理清单（${isDesc ? '缺描述' : '未打标签'}），方案混入了旧对话条目。以下为当前实时待整理清单（${fresh.length} 条），请直接基于它重新生成 items：\n${fresh.join('\n')}`
+          say(`（目标校验：方案混入旧对话条目（命中 ${valid.length}/${plan.length}），注入实时清单 ${fresh.length} 条重新生成方案）`)
+          return { __rejected: true, freshList: fresh, isDesc }
         }
       }
     } catch { /* 校验失败不阻塞执行 */ }
