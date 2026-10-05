@@ -321,7 +321,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         const midOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize' || u.name === 'local_task_cloud_organize_preview')
           && !used.some((u) => u.name === 'local_task_update_cloud_organize')
         const fixPrompt = midOrganize
-          ? '不要把工具调用写成文字。继续调用工具完成云端整理（预览→展示→执行→上报进度），完成后用一句中文汇报结果。'
+          ? '不要把工具调用写成文字。继续调用工具完成云端整理：调 organize_bookmarks {items:[{id, tagsAdd/description...}], execute:true} 一次写入（不要预览、不要等确认、不要二次征询），完成后调 local_task_update_cloud_organize 上报并用一句中文汇报结果。'
           : '不要分析，不要复述此前的方案/分类清单。直接输出最终中文回答本身（若是进度汇报，只说当前进度与下一步）。'
         const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: fixPrompt }], undefined)
         if (fix.ok && fix.text && fix.text.trim()) text = fix.text
