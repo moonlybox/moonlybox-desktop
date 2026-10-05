@@ -350,9 +350,13 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         // GLM 5.2 实证会把工具调用写成正文然后停；此时正确动作是回工具链，不是重说一遍
         const midOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize' || u.name === 'local_task_cloud_organize_preview')
           && !used.some((u) => u.name === 'local_task_update_cloud_organize')
+        // #331.22：幻觉上报（无 create 却输出 update/all=true 文本）→引导从扫描开始走全链
+        const hallucinatedReport = /local_task_update[a-z_]*(all|jobid)/i.test(text) && !midOrganize
         const fixPrompt = midOrganize
-          ? '不要把工具调用写成文字。继续调用工具完成云端整理：调 organize_bookmarks {items:[{id, tagsAdd/description...}], execute:true} 一次写入（不要预览、不要等确认、不要二次征询），完成后调 local_task_update_cloud_organize 上报并用一句中文汇报结果。'
-          : '不要分析，不要复述此前的方案/分类清单。直接输出最终中文回答本身（若是进度汇报，只说当前进度与下一步）。'
+          ? '不要把工具调用写成文字。继续调用工具完成云端整理：调 organize_bookmarks {items:[{id, tagsAdd/description...}], execute:true} 一次写入（不要预览、不要等确认、不要二次征询），完成后用一句中文汇报结果（进度由系统自动记账，无需上报）。'
+          : hallucinatedReport
+            ? '你刚才把「上报进度」当成了第一步，还编造了任务 ID——任务根本不存在。正确流程：①search_bookmarks 实时圈定（untagged=true 或 noDescription=true）②local_task_create_cloud_organize 登记（传 items:[{id,title}]）③生成方案④organize_bookmarks {items, execute:true} 写入。现在从①开始执行。'
+            : '不要分析，不要复述此前的方案/分类清单。直接输出最终中文回答本身（若是进度汇报，只说当前进度与下一步）。'
         const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: fixPrompt }], undefined)
         if (fix.ok && fix.text && fix.text.trim()) text = fix.text
       }
@@ -786,5 +790,7 @@ function isLeakyAnswer(text: string): boolean {
   // #331.15：organize_bookmarksexecutetrue 粘连变体（工具名紧邻 execute，无边界）——
   // 注意判窄：仅工具名直接粘连 execute 时命中，避免误伤正常文本（误伤=自纠白烧两轮 LLM，e2e 假死教训）
   if (/^\s*organize_bookmarks\s*execute\s*:?\s*(true|false)/i.test(t)) return true
+  // #331.22：上报工具文本化+幻觉 jobId（真机：首轮无任何 scan/create 直接「update...alltruejobIdtask_...」）
+  if (/^\s*local_task_(update|status)[a-z_]*\s*(all|done|jobid|id)/i.test(t)) return true
   return false
 }
