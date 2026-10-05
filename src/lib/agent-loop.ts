@@ -595,6 +595,30 @@ async function runItemsPlan(
         plan = await convergeTags(plan, say, chat)
       } catch { /* 收敛失败→按草稿执行（不阻塞） */ }
     }
+    // #331.13：目标集合校验（机制层，补描述缺陷根治）——模型会从对话上文抄旧 items（id 属于旧批次），
+    // 对已处理条目重复写入、真目标一条不碰。执行前实时查目标集合（cloud:#N 任务最近 job 的 kind
+    // 对应 untagged/noDescription），plan.id 与目标集交集为 0 → 拒绝执行并抛出可诊断错误。
+    try {
+      const { allJobs: aJ2 } = await import('./tasks')
+      const job2 = aJ2().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
+        .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
+      if (job2) {
+        const isDesc = job2.title.includes('描述')
+        const { callTool: cT2 } = await import('./moonlink')
+        const sr2 = await cT2('search_bookmarks', isDesc ? { noDescription: true, limit: 200 } : { untagged: true, limit: 200 })
+        const st2 = sr2?.content?.map((c: any) => c.text ?? '').join('') ?? ''
+        const sd2 = JSON.parse(st2)
+        const targetIds = new Set<string>((sd2.bookmarks ?? []).map((b: any) => b.id))
+        const valid = plan.filter((p) => targetIds.has(p.id))
+        if (valid.length === 0) {
+          return `目标校验未通过：本次提交的 ${plan.length} 条中没有一条属于当前待整理清单（${isDesc ? '缺描述' : '未打标签'}）。这通常意味着方案来自旧对话而非本轮扫描。请回复「重新整理」，我会基于最新清单重新生成方案。`
+        }
+        if (valid.length < plan.length) {
+          say(`（目标校验：剔除 ${plan.length - valid.length} 条不属于当前待整理清单的旧条目，保留 ${valid.length} 条）`)
+          plan = valid
+        }
+      }
+    } catch { /* 校验失败不阻塞执行 */ }
     // #331.6/#331.9：快照兜底（文本化路径）——与工具调用路径共用 snapshotJobTitlesFromPlan
     try { await snapshotJobTitlesFromPlan(plan) } catch { /* 回填失败不阻塞执行 */ }
     say(`⚙ organize_bookmarks（items ×${plan.length}，直通执行）`)

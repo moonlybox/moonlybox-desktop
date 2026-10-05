@@ -48,8 +48,8 @@ export function localTaskToolDefs(): Array<{ name: string; title?: string; descr
     },
     {
       name: 'local_task_update_cloud_organize',
-      title: '上报云端整理进度',
-      description: '云端整理任务每完成一条（或失败一条）调用本工具上报；all=true 表示全部完成（任务收口）。',
+      title: '查询云端整理进度',
+      description: '查询云端整理任务的实时进度。进度由系统按 organize_bookmarks 真实写入自动记账，不需要也不接受手动上报（完成写入后自动推进、全满自动收口）。',
       inputSchema: {
         type: 'object',
         properties: {
@@ -236,31 +236,24 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
     }
   }
   if (name === 'local_task_update_cloud_organize') {
+    // #331.13：手动上报废武功——进度只认真实写入（organize_bookmarks 成功→agentLoop 自动推进 done，
+    // 全满自动收口）。此前模型可凭空报 done=N/all=true 把 pending 推成 done（幻觉收口：详情显示完成、
+    // 云端零写入——真机三轮实证）。本工具降级为只读进度查询，返回系统记账的真实进度。
     try {
-      const { getJob, updateJob, updateItem } = await import('./tasks')
+      const { getJob } = await import('./tasks')
       const job = getJob(String(args.id ?? ''))
       if (!job || job.type !== 'cloud_organize') return JSON.stringify({ ok: false, error: '云端整理任务不存在' })
-      if (job.status === 'completed' || job.status === 'cancelled') return JSON.stringify({ ok: false, error: `任务已结束（${job.status}）` })
-      if (job.status === 'queued') updateJob(job.id, { status: 'running', startedAt: new Date().toISOString() })
-      const done = Math.max(0, Number(args.done ?? 0) || 0)
-      const failed = Math.max(0, Number(args.failed ?? 0) || 0)
-      // 推进指针：把最早的 pending 项标记 done/failed（占位行按序消费）
-      let d = done, f = failed
-      for (const it of job.items) {
-        if (it.status !== 'pending') continue
-        if (d > 0) { updateItem(job.id, it.path, { status: 'done' }); d-- }
-        else if (f > 0) { updateItem(job.id, it.path, { status: 'failed', error: '云端写入失败' }); f-- }
-        else break
-      }
-      const fresh = getJob(job.id)!
+      const fresh = job
       const pending = fresh.items.filter((it) => it.status === 'pending').length
-      if (args.all === true || pending === 0) {
-        updateJob(fresh.id, { status: 'completed', finishedAt: new Date().toISOString() })
-        return JSON.stringify({ ok: true, finished: true, progress: fresh.progress, message: `任务完成：${fresh.progress.done}/${fresh.progress.total} 条已整理（产物在云端收藏中）` })
-      }
-      return JSON.stringify({ ok: true, finished: false, progress: fresh.progress, remaining: pending })
+      return JSON.stringify({
+        ok: true,
+        finished: fresh.status === 'completed',
+        progress: fresh.progress,
+        remaining: pending,
+        message: `进度由系统按真实写入自动记账（当前 ${fresh.progress.done}/${fresh.progress.total}，待处理 ${pending}）。无需也不接受手动上报——完成 organize_bookmarks 写入后系统会自动推进。`,
+      })
     } catch (e: any) {
-      return JSON.stringify({ ok: false, error: `进度上报失败：${String(e?.message ?? e)}` })
+      return JSON.stringify({ ok: false, error: `进度查询失败：${String(e?.message ?? e)}` })
     }
   }
   if (name === 'local_task_status') {
