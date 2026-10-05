@@ -631,12 +631,9 @@ async function runItemsPlan(
         const sd2 = JSON.parse(st2)
         const targetIds = new Set<string>((sd2.bookmarks ?? []).map((b: any) => b.id))
         const valid = plan.filter((p) => targetIds.has(p.id))
-        if (valid.length === 0) {
-          return `目标校验未通过：本次提交的 ${plan.length} 条中没有一条属于当前待整理清单（${isDesc ? '缺描述' : '未打标签'}）。这通常意味着方案来自旧对话而非本轮扫描。请回复「重新整理」，我会基于最新清单重新生成方案。`
-        }
+        // #331.17：收紧——部分命中也拒绝（混入旧条目会导致任务详情与真实写入错位；强制重新圈定）
         if (valid.length < plan.length) {
-          say(`（目标校验：剔除 ${plan.length - valid.length} 条不属于当前待整理清单的旧条目，保留 ${valid.length} 条）`)
-          plan = valid
+          return `目标校验未通过：本次提交的 ${plan.length} 条中只有 ${valid.length} 条属于当前待整理清单（${isDesc ? '缺描述' : '未打标签'}），方案混入了旧对话条目。请回复「重新整理」，我会基于最新清单重新生成方案。`
         }
       }
     } catch { /* 校验失败不阻塞执行 */ }
@@ -690,6 +687,9 @@ function isLeakyAnswer(text: string): boolean {
   // / organize_bookmarksitems[...] ——工具名与参数无边界拼接，\b 失效，用直接拼接匹配）
   if (/\btool_[a-z_]+\s*path\s*[A-Za-z]:\\/.test(t)) return true
   if (/^\s*[a-z_]*bookmark[a-z_]*(id|path|\{|\[)/i.test(t)) return true
-  if (/^\s*(tool_result_read|organize_bookmarks|search_bookmarks|add_bookmark|add_sticky|add_todo|[a-z_]*_task[a-z_]*)(path|id|ids|items|execute\s*:?\s*(true|false)|\{|\[)/i.test(t)) return true
+  if (/^\s*(tool_result_read|organize_bookmarks|search_bookmarks|add_bookmark|add_sticky|add_todo|[a-z_]*_task[a-z_]*)(path|id|ids|items|\{|\[)/i.test(t)) return true
+  // #331.15：organize_bookmarksexecutetrue 粘连变体（工具名紧邻 execute，无边界）——
+  // 注意判窄：仅工具名直接粘连 execute 时命中，避免误伤正常文本（误伤=自纠白烧两轮 LLM，e2e 假死教训）
+  if (/^\s*organize_bookmarks\s*execute\s*:?\s*(true|false)/i.test(t)) return true
   return false
 }
