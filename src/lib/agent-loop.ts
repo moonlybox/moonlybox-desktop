@@ -496,23 +496,15 @@ async function runItemsPlan(
   used: Array<{ name: string; ok: boolean }>,
 ): Promise<string> {
   try {
-    say(`⚙ organize_bookmarks（items ×${plan.length}，自动托管）`)
+    say(`⚙ organize_bookmarks（items ×${plan.length}，直通执行）`)
     const { callTool } = await import('./moonlink')
-    const body: any = { items: plan }
-    const pv = await callTool('organize_bookmarks', body)
-    const pvText = pv?.content?.map((c: any) => c.text ?? '').join('') ?? ''
-    let pvData: any
-    try { pvData = JSON.parse(pvText) } catch { return `预览失败：${pvText.slice(0, 120)}` }
-    if (pvData.ok === false) return `预览失败：${pvData.message ?? '未知错误'}`
-    const token = pvData.confirmToken
-    if (!token) return `无变更可执行（${pvData.changed ?? 0} 条差异）。`
-    used.push({ name: 'organize_bookmarks', ok: true })
-    const ex = await callTool('organize_bookmarks', { items: plan, confirmToken: token })
+    // #329.20：execute:true 直通（用户裁决取消两段式）——单次调用直接写入
+    const ex = await callTool('organize_bookmarks', { items: plan, execute: true })
     const exText = ex?.content?.map((c: any) => c.text ?? '').join('') ?? ''
     let exData: any = {}
     try { exData = JSON.parse(exText) } catch {}
-    const okEx = exData?.ok !== false
-    used.push({ name: 'organize_bookmarks', ok: okEx })
+    if (exData?.ok === false) return `执行失败：${exData.message ?? exText.slice(0, 120)}`
+    used.push({ name: 'organize_bookmarks', ok: true })
     // 收口：最近 cloud_organize 任务推满
     try {
       const { allJobs, updateJob, updateItem } = await import('./tasks')
@@ -526,9 +518,7 @@ async function runItemsPlan(
         updateJob(job.id, { status: 'completed', finishedAt: new Date().toISOString() })
       }
     } catch { /* 收口失败不影响主结果 */ }
-    return okEx
-      ? `✅ 整理完成：${plan.length} 条收藏已按方案写入标签（云端已生效）。可在「任务」页查看记录，收藏页刷新即可看到新标签。`
-      : `执行失败：${exText.slice(0, 120)}`
+    return `✅ 整理完成：${plan.length} 条收藏已按方案写入标签（云端已生效）。可在「任务」页查看记录，收藏页刷新即可看到新标签。`
   } catch (e: any) {
     return `托管执行失败：${String(e?.message ?? e)}`
   }
