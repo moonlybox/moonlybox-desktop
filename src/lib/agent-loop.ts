@@ -271,12 +271,16 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   ]
   const used: Array<{ name: string; ok: boolean }> = []
   let createRescued = false // #331.26：本次调用已系统代为登记（幂等锚）
+  let rejectCount = 0 // #331.28：校验拒绝计数（≥2 次放行降级——防 kind 推断错导致死循环到 MAX）
 
   // #331.26：预算下限自适应——整理链 system（16k+ 字符）本身就超默认预算 6000，首轮即「预算将尽」
   // break→工具循环/文本化拦截全被绞死（真机：create 文本化上屏复现，沙箱 repro 8039/6000 实锤）。
   // 预算下限=max(配置值, systemTokens×1.25+2000)——system 是常量，不占「可运转」预算
   const systemTokens = Math.ceil(String(system ?? '').length / 3)
-  const budgetFloor = Math.max(deps.ctxBudget ?? CTX_BUDGET_DEFAULT, Math.ceil(systemTokens * 1.25) + 2000)
+  // #331.27：+8000（#331.26 的 2000 不够——真机复盘：轮 3 模型输出 17 条方案 JSON 后，
+  // messages≈system10k+history5k+方案1.5k 已逼近 floor→轮 4（托管轮）被预算 break 绞死→
+  // 方案文本原样上屏。多轮工具链每轮注入 500~2000 字符，运行余量按 8k 给）
+  const budgetFloor = Math.max(deps.ctxBudget ?? CTX_BUDGET_DEFAULT, Math.ceil(systemTokens * 1.25) + 8000)
 
   let budgetWarned = false
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -311,6 +315,13 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       if (directPlan && directPlan.length > 0) {
         const exec = await runItemsPlan(directPlan, say, used, chat)
         if (typeof exec !== 'string') {
+          rejectCount++
+          // #331.28：拒绝≥2 次=系统性不一致（kind 推断错/云端状态抖动）——放行降级：
+          // 直接按方案 id 执行（organize 幂等，已处理条目返回无变更=无害），绝不让整链绞死在 MAX
+          if (rejectCount >= 2) {
+            say(`（目标校验连续拒绝 ${rejectCount} 次——按方案直执行降级放行）`)
+            const exec2 = await runItemsPlan(directPlan, say, used, chat, true)
+          }
           // #331.19：目标校验拒绝→注入实时清单再走一轮（模型基于新鲜数据重新生成 items）
           messages.push({ role: 'user', content: `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。` })
           continue
@@ -724,6 +735,7 @@ async function runItemsPlan(
   say: (line: string) => void,
   used: Array<{ name: string; ok: boolean }>,
   chat?: typeof import('../lib/llm').byokChatMessages,
+  bypassValidate = false, // #331.28：连续拒绝后降级放行（跳过校验直接执行，防死循环绞死整链）
 ): Promise<string | { __rejected: true; freshList: string[]; isDesc: boolean }> {
   try {
     // #331.16：登记兜底——模型跳过 create 直接执行时系统自动补登记（任务页可见性硬保证）
@@ -733,22 +745,35 @@ async function runItemsPlan(
     // 对已处理条目重复写入、真目标一条不碰。执行前实时查目标集合（cloud:#N 任务最近 job 的 kind
     // 对应 untagged/noDescription），plan.id 与目标集交集为 0 → 拒绝执行并抛出可诊断错误。
     try {
+      if (bypassValidate) throw new Error('skip-validate') // #331.28 降级放行
       const { allJobs: aJ2 } = await import('./tasks')
       const job2 = aJ2().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
         .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
       if (job2) {
-        const isDesc = job2.title.includes('描述')
+        // #331.28：目标集合 kind 从**方案本身**推断（不从旧任务 title 猜）——真机实锤：残留未完结
+        // tags 任务时，补描述方案被按 untagged 集合校验→命中 0/17→**校验拒绝死循环到 MAX**（上屏无任务）。
+        // 方案含 description=补描述；含 tagsAdd/tagsRemove=打标签；双形态方案=两集合并集
+        const isDesc = plan.some((p) => typeof p.description === 'string' && p.description.length > 0)
+        const isTags = plan.some((p) => Array.isArray(p.tagsAdd) || Array.isArray(p.tagsRemove))
         const { callTool: cT2 } = await import('./moonlink')
-        const sr2 = await cT2('search_bookmarks', isDesc ? { noDescription: true, limit: 500 } : { untagged: true, limit: 500 })
-        const st2 = sr2?.content?.map((c: any) => c.text ?? '').join('') ?? ''
-        const sd2 = JSON.parse(st2)
-        const targetIds = new Set<string>((sd2.bookmarks ?? []).map((b: any) => b.id))
+        const targetIds = new Set<string>()
+        const targetRows: any[] = []
+        if (isDesc) {
+          const sr2 = await cT2('search_bookmarks', { noDescription: true, limit: 500 })
+          const sd2 = JSON.parse(sr2?.content?.map((c: any) => c.text ?? '').join('') ?? '{}')
+          for (const b of (sd2.bookmarks ?? [])) { targetIds.add(b.id); targetRows.push(b) }
+        }
+        if (isTags || (!isDesc && !isTags)) {
+          const sr3 = await cT2('search_bookmarks', { untagged: true, limit: 500 })
+          const sd3 = JSON.parse(sr3?.content?.map((c: any) => c.text ?? '').join('') ?? '{}')
+          for (const b of (sd3.bookmarks ?? [])) { if (!targetIds.has(b.id)) { targetIds.add(b.id); targetRows.push(b) } }
+        }
         const valid = plan.filter((p) => targetIds.has(p.id))
         // #331.17：收紧——部分命中也拒绝（混入旧条目会导致任务详情与真实写入错位；强制重新圈定）
         // #331.19：拒绝**不 return 死文本**——返回 freshList 由调用方注入 messages 再走一轮
         //（基于新鲜数据重新生成 items；return 终止整链，模型没机会修正）
         if (valid.length < plan.length) {
-          const fresh = (sd2.bookmarks ?? []).map((b: any) => `${b.id} | ${String(b.title ?? '').slice(0, 40)}`)
+          const fresh = targetRows.map((b: any) => `${b.id} | ${String(b.title ?? '').slice(0, 40)}`)
           say(`（目标校验：方案混入旧对话条目（命中 ${valid.length}/${plan.length}），注入实时清单 ${fresh.length} 条重新生成方案）`)
           return { __rejected: true, freshList: fresh, isDesc }
         }
