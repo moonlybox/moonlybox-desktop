@@ -319,7 +319,7 @@ const I18N_DICT = {
   'xy.prompts': { zh: '常用指令', en: 'Quick prompts' },
   'xy.p1': { zh: '整理我的收藏，对未打标签的收藏打上合适的标签', en: 'Organize my bookmarks: add suitable tags to untagged ones' },
   'xy.p2': { zh: '给没有描述的收藏补充描述', en: 'Fill in descriptions for bookmarks that have none' },
-  'xy.p3': { zh: '新增一个备忘标签，标签内容：……', en: 'Create a memo tag, content: …' },
+  'xy.p3': { zh: '新增一个便签，内容：……', en: 'Create a sticky note, content: …' },
   'xy.p4': { zh: '新建一条待办，一周后到期，内容是……，项目是……，目标是……', en: 'New todo due in a week — what: …, project: …, goal: …' },
   'xy.p5': { zh: '帮我找关于……的收藏', en: 'Find my bookmarks about …' },
   'xy.historySep': { zh: '—— 以上为历史 ——', en: '—— history above ——' },
