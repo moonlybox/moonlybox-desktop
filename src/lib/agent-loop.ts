@@ -460,18 +460,32 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
             if (job) {
               if (job.status === 'queued') updateJob(job.id, { status: 'running', startedAt: new Date().toISOString() })
               const fresh = getJob(job.id)!
-              // #331.20：organize 是批量写入（一次调用 applied=N 条）——按 items 条数推进等量 pending
-              //（此前只推 1 格→批量写入后进度停在「完成第一个」）；update_bookmark 逐条仍推 1 格
-              let advance = 1
-              if (meta.name === 'organize_bookmarks') {
-                advance = Array.isArray((args as any)?.items) ? (args as any).items.length : 1
-              }
-              let n = advance
-              for (const it of fresh.items) {
-                if (it.status !== 'pending') continue
-                if (n <= 0) break
-                updateItem(job.id, it.path, { status: 'done' })
-                n--
+              // #331.21：按 per-item 回执精确记账（架构定案：回写状态逐项）——organize 成功响应
+              // results=[{id, ok, error?}]，ok 的 id 对应 item 推 done、失败推 failed+原因；
+              // 无回执（旧服务端/逐条 update_bookmark）回退条数推进
+              const results = Array.isArray((result as any)?.content)
+                ? (() => { try { const d = JSON.parse((result as any).content.map((c: any) => c.text ?? '').join('')); return Array.isArray(d?.results) ? d.results : null } catch { return null } })()
+                : null
+              if (meta.name === 'organize_bookmarks' && results) {
+                const byId = new Map(fresh.items.map((it) => [it.path, it]))
+                for (const r of results) {
+                  const it = byId.get(r.id)
+                  if (!it || it.status !== 'pending') continue
+                  if (r.ok) updateItem(job.id, it.path, { status: 'done' })
+                  else updateItem(job.id, it.path, { status: 'failed', error: String(r.error ?? '云端写入失败').slice(0, 120) })
+                }
+              } else {
+                let advance = 1
+                if (meta.name === 'organize_bookmarks') {
+                  advance = Array.isArray((args as any)?.items) ? (args as any).items.length : 1
+                }
+                let n = advance
+                for (const it of fresh.items) {
+                  if (it.status !== 'pending') continue
+                  if (n <= 0) break
+                  updateItem(job.id, it.path, { status: 'done' })
+                  n--
+                }
               }
               const after = getJob(job.id)!
               if (after.items.every((it) => it.status !== 'pending')) {
@@ -565,7 +579,13 @@ async function ensureCloudOrganizeJob(plan: Array<{ id: string; tagsAdd?: string
   if (open) return
   const kind = plan.some((p) => p.tagsAdd?.length || p.tagsRemove?.length) ? 'tags' : 'descriptions'
   const label = kind === 'tags' ? `收藏打标签 · ${plan.length} 条（自动登记）` : `收藏补描述 · ${plan.length} 条（自动登记）`
-  createJob('cloud_organize', label, plan.map((p, i) => ({ path: `cloud:#${i + 1}` })), undefined)
+  let modelLabel: string | undefined
+  try {
+    const { compileModelLabel } = await import('./compile-model')
+    modelLabel = compileModelLabel() || undefined
+  } catch { /* 模型快照失败不阻塞登记 */ }
+  // #331.21：自动登记也落资源名称（path=id, title 由回填补）——与 create items 形态一致
+  createJob('cloud_organize', label, plan.map((p) => ({ path: p.id, title: undefined as any })), modelLabel)
 }
 
 /** #331.9：任务快照兜底（两路径共用）——items 仍有无 title 占位（cloud:#N）时按 plan 序回填标题（id 精确匹配） */
@@ -584,9 +604,14 @@ async function snapshotJobTitlesFromPlan(plan: Array<{ id: string; tagsAdd?: str
   const sd = JSON.parse(st)
   const byId = new Map<string, string>()
   for (const b of sd.bookmarks ?? []) if (planIds.has(b.id)) byId.set(b.id, String(b.title ?? '').slice(0, 60))
-  for (let i = 0; i < job.items.length; i++) {
-    const it = job.items[i]
+  for (const it of job.items) {
     if (it.title) continue
+    // #331.21：登记即含名（path=id 形态）——按 path=id 直配；cloud:#N 占位（旧回退）按 plan 序
+    if (!/^cloud:#\d+$/.test(it.path)) {
+      const t = byId.get(it.path)
+      if (t) updateItem(job.id, it.path, { title: t })
+      continue
+    }
     const m = /^cloud:#(\d+)$/.exec(it.path)
     if (m) {
       const t = byId.get(plan[Number(m[1]) - 1]?.id ?? '')
@@ -645,12 +670,7 @@ async function runItemsPlan(
   try {
     // #331.16：登记兜底——模型跳过 create 直接执行时系统自动补登记（任务页可见性硬保证）
     try { await ensureCloudOrganizeJob(plan) } catch { /* 登记失败不阻塞执行 */ }
-    // #331：标签收敛轮（两轮编译式）——execute 前把草稿标签对齐既有体系（LLM 算力收敛）
-    if (chat) {
-      try {
-        plan = await convergeTags(plan, say, chat)
-      } catch { /* 收敛失败→按草稿执行（不阻塞） */ }
-    }
+    // #331：标签收敛轮已移入分批循环（#331.21：逐批快照叠加——每批执行前对齐最新既有标签）
     // #331.13：目标集合校验（机制层，补描述缺陷根治）——模型会从对话上文抄旧 items（id 属于旧批次），
     // 对已处理条目重复写入、真目标一条不碰。执行前实时查目标集合（cloud:#N 任务最近 job 的 kind
     // 对应 untagged/noDescription），plan.id 与目标集交集为 0 → 拒绝执行并抛出可诊断错误。
@@ -678,15 +698,33 @@ async function runItemsPlan(
     } catch { /* 校验失败不阻塞执行 */ }
     // #331.6/#331.9：快照兜底（文本化路径）——与工具调用路径共用 snapshotJobTitlesFromPlan
     try { await snapshotJobTitlesFromPlan(plan) } catch { /* 回填失败不阻塞执行 */ }
-    say(`⚙ organize_bookmarks（items ×${plan.length}，直通执行）`)
     const { callTool } = await import('./moonlink')
-    // #329.20：execute:true 直通（用户裁决取消两段式）——单次调用直接写入
-    const ex = await callTool('organize_bookmarks', { items: plan, execute: true })
-    const exText = ex?.content?.map((c: any) => c.text ?? '').join('') ?? ''
+    // #331.21：分批执行（用户架构定案：打标签/补描述=分批+逐批快照叠加+逐项回执）
+    // 批大小 10——每批：convergeTags（重新拉既有标签=新快照，含前批产出）→execute→per-item 回执记账
+    const BATCH = 10
+    const batches: Array<typeof plan> = []
+    for (let i = 0; i < plan.length; i += BATCH) batches.push(plan.slice(i, i + BATCH))
+    const allResults: Array<{ id: string; ok: boolean; error?: string }> = []
     let exData: any = {}
-    try { exData = JSON.parse(exText) } catch {}
-    if (exData?.ok === false) return `执行失败：${exData.message ?? exText.slice(0, 120)}`
-    used.push({ name: 'organize_bookmarks', ok: true })
+    for (let bi = 0; bi < batches.length; bi++) {
+      let batch = batches[bi]
+      // 逐批快照叠加：每批执行前重新收敛（既有标签含前批写入的新标签）
+      if (chat && bi > 0) {
+        try { batch = await convergeTags(batch, say, chat) } catch { /* 收敛失败按草稿执行 */ }
+      } else if (chat && bi === 0) {
+        try { batch = await convergeTags(batch, say, chat) } catch {}
+      }
+      say(`⚙ organize_bookmarks（批次 ${bi + 1}/${batches.length}，${batch.length} 条，直通执行）`)
+      const ex = await callTool('organize_bookmarks', { items: batch, execute: true })
+      const exText = ex?.content?.map((c: any) => c.text ?? '').join('') ?? ''
+      let bd: any = {}
+      try { bd = JSON.parse(exText) } catch {}
+      if (bd?.ok === false) return `执行失败（批次 ${bi + 1}/${batches.length}）：${bd.message ?? exText.slice(0, 120)}`
+      exData = bd
+      if (Array.isArray(bd?.results)) allResults.push(...bd.results)
+      used.push({ name: 'organize_bookmarks', ok: true })
+    }
+    if (allResults.length) exData = { ...exData, results: allResults, applied: allResults.filter((r) => r.ok).length }
     // 收口：最近 cloud_organize 任务推满
     try {
       const { allJobs, updateJob, updateItem } = await import('./tasks')
@@ -694,8 +732,26 @@ async function runItemsPlan(
         .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
       if (job) {
         if (job.status === 'queued') updateJob(job.id, { status: 'running', startedAt: new Date().toISOString() })
-        for (const it of job.items) {
-          if (it.status === 'pending') updateItem(job.id, it.path, { status: 'done' })
+        // #331.21：收口按 per-item 回执精确记账（ok→done；failed→failed+原因）；
+        // 无回执回退全推 done（旧行为）
+        const resList = Array.isArray(exData?.results) ? exData.results : null
+        if (resList) {
+          const byId = new Map(job.items.map((it) => [it.path, it]))
+          for (const r of resList) {
+            const it = byId.get(r.id)
+            if (!it || it.status !== 'pending') continue
+            if (r.ok) updateItem(job.id, it.path, { status: 'done' })
+            else updateItem(job.id, it.path, { status: 'failed', error: String(r.error ?? '云端写入失败').slice(0, 120) })
+          }
+          const after = (await import('./tasks')).getJob(job.id)!
+          if (after.items.some((it) => it.status === 'pending')) {
+            // 有未覆盖条目（校验剔除等）——按 pending 补 done（保守：留既有语义）
+            for (const it of after.items) if (it.status === 'pending') updateItem(job.id, it.path, { status: 'done' })
+          }
+        } else {
+          for (const it of job.items) {
+            if (it.status === 'pending') updateItem(job.id, it.path, { status: 'done' })
+          }
         }
         updateJob(job.id, { status: 'completed', finishedAt: new Date().toISOString() })
       }

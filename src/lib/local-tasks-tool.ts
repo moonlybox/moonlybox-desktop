@@ -41,9 +41,21 @@ export function localTaskToolDefs(): Array<{ name: string; title?: string; descr
         type: 'object',
         properties: {
           kind: { type: 'string', enum: ['tags', 'descriptions'], description: '整理类型' },
-          total: { type: 'number', description: '本轮待处理条数' },
+          total: { type: 'number', description: '本轮待处理条数（无 items 时必填）' },
+          items: {
+            type: 'array',
+            description: '#331.21：登记即含资源名称（用户架构定案：任务落库时就要含资源名称，否则无法核对清单）——本轮实时圈定的清单 [{id, title}]，title≤60 字',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: '收藏 id（来自本轮 search_bookmarks）' },
+                title: { type: 'string', description: '资源名称快照（来自本轮 search 结果的 title）' },
+              },
+              required: ['id', 'title'],
+            },
+          },
         },
-        required: ['kind', 'total'],
+        required: ['kind'],
       },
     },
     {
@@ -172,7 +184,6 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
     // #326：云端整理任务——登记进「任务」页（产物在云端，无本地产物）；执行体=小月对话内的 MCP 工具循环
     try {
       const kind = args.kind === 'descriptions' ? 'descriptions' : 'tags'
-      const total = Math.max(1, Math.min(50, Number(args.total ?? 0) || 0))
       const { createJob } = await import('./tasks')
       const label = kind === 'tags' ? '云端整理 · 收藏打标签' : '云端整理 · 收藏补描述'
       // #329.17：任务详情显示整理所用模型——resolveCompileModel 取当前对话可用模型快照
@@ -181,8 +192,14 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
         const { compileModelLabel } = await import('./compile-model')
         modelLabel = compileModelLabel() || undefined
       } catch { /* 快照失败不阻塞登记 */ }
-      // items 用占位行（无本地路径——path 即云端收藏处理序号），进度条/清单照常工作
-      const job = createJob('cloud_organize', label, Array.from({ length: total }, (_, i) => ({ path: `cloud:#${i + 1}` })), modelLabel)
+      // #331.21：登记即含资源名称（用户架构定案）——items:[{id,title}] 优先（path=id、title=名称快照）；
+      // 无 items 回退 total 占位（cloud:#N，后续回填）
+      const argItems = Array.isArray((args as any).items) ? (args as any).items : []
+      const jobItems = argItems.length > 0
+        ? argItems.slice(0, 50).map((it: any) => ({ path: String(it.id), title: String(it.title ?? '').slice(0, 60) }))
+        : Array.from({ length: Math.max(1, Math.min(50, Number(args.total ?? 0) || 0)) }, (_, i) => ({ path: `cloud:#${i + 1}` }))
+      const total = jobItems.length
+      const job = createJob('cloud_organize', label, jobItems, modelLabel)
       return JSON.stringify({
         ok: true,
         jobId: job.id,

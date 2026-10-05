@@ -2780,7 +2780,9 @@ async function renderWork(nav, arg, label2) {
     // 行渲染（状态→样式语义色）
     const itemRow = (it) => {
       // #330：资源名称快照优先——items.title（登记/圈定时的资源名称快照）> 文件名 > cloud:#N 转换
+      // #331.21：path=收藏 id 形态且无 title（回填缺失）→「收藏 <短id>」兜底（不裸显 ulid）
       let name = (it.title && String(it.title).trim()) || String(it.path).split(/[\\/]/).pop()
+      if (!it.title && /^[0-9A-HJKMNP-TV-Z]{26}$/i.test(String(it.path))) name = '收藏 ' + String(it.path).slice(-6)
       if (!it.title && /^cloud:#\d+$/.test(name)) name = t('tk.cloudItem').replace('{n}', name.slice(7))
       const color = { done: 'var(--ok,#34d399)', failed: 'var(--danger,#e56969)', running: 'var(--accent,#818cf8)', skipped: 'inherit', cancelled: 'inherit', pending: 'inherit' }[it.status] ?? 'inherit'
       const badgeBg = { done: 'rgba(52,211,153,.12)', failed: 'rgba(229,105,105,.14)', running: 'rgba(129,140,248,.14)' }[it.status] ?? 'transparent'
