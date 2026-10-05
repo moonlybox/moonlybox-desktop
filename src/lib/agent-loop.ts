@@ -333,6 +333,27 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       if (hallucinatedExec) {
         text = '如实说明：本轮批量写入实际没有执行（写入工具未被真正调用，此前报告的「变更结果」不可信）。你的收藏数据没有变化。我现在立即真实执行一次写入。'
       }
+      // #331.24：create 文本化拦截（真机 chat_muvm1llh63e9en：模型把 create 连同 17 条 items
+      // 一起写成正文「local_task_create_cloud_organizeitems[...]typecloud_organize」）——
+      // 这是**合法登记意图**的文本化，不能进自纠重写（重写 2 轮烧完原样上屏=任务永远建不出来）；
+      // 正确动作=系统代为登记：提取 items JSON→调真实 create→注入推进令继续方案+写入
+      const createTextMatch = text.match(/local_task_create_cloud_organize\s*(?:kind\s*)?(?:descriptions|tags)?\s*items?\s*(\[[\s\S]*?\])\s*(?:type\s*\w+)?$/i)
+      if (createTextMatch && !didCreateOrganize) {
+        try {
+          const items = JSON.parse(createTextMatch[1])
+          if (Array.isArray(items) && items.length > 0 && items.every((it: any) => it && typeof it.id === 'string')) {
+            const kind = text.includes('descriptions') ? 'descriptions' : 'tags'
+            const reg = await deps.localTools?.['local_task_create_cloud_organize']?.({ kind, items }) ?? ''
+            let regData: any = {}
+            try { regData = JSON.parse(reg) } catch {}
+            if (regData?.ok) {
+              say(`（系统代为登记任务 ${regData.jobId}，${regData.total} 条）`)
+              messages.push({ role: 'user', content: `（系统）你的 create 调用被写成了正文文本，系统已代你登记任务（${regData.total} 条）。**不要重复登记**。立即基于上方清单生成${kind === 'tags' ? '标签' : '描述'}方案，然后**只输出 items JSON 数组**（[{"id":"...","description":"..."} 或 {"id":"...","tagsAdd":["..."]}]），覆盖全部 ${regData.total} 条。` })
+              continue
+            }
+          }
+        } catch { /* JSON 解析失败→落回自纠 */ }
+      }
       // #329.21：items JSON 优先于泄漏自纠——JSON 方案是合法终答（即使带工具名前缀），
       // 先 parse；命中则直接托管执行，绝不能进 isLeakyAnswer 自纠（自纠重写会破坏 JSON=托管被吞）
       const prePlan = parseItemsPlan(text)
