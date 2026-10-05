@@ -36,7 +36,7 @@ export function localTaskToolDefs(): Array<{ name: string; title?: string; descr
       name: 'local_task_create_cloud_organize',
       // #326：云端整理任务登记——产物在云端，「任务」页可见进度；小月在对话内逐条执行 MCP 工具并上报进度
       title: '创建云端整理任务（收藏打标签/补描述）',
-      description: '用户要求批量整理云端收藏（打标签/补描述）时，先用本工具创建「云端整理」任务（任务页可见），再在对话中逐条执行 search_bookmarks→organize_bookmarks/update_bookmark，每完成一条用 local_task_update_cloud_organize 上报进度。参数 kind=tags（打标签）|descriptions（补描述）；total=本轮要处理的收藏条数（来自 search 结果数）。',
+      description: '用户要求批量整理云端收藏（打标签/补描述）时，先用本工具创建「云端整理」任务（任务页可见），再直通执行：search_bookmarks 圈定→organize_bookmarks {items, execute:true} 一次写入→local_task_update_cloud_organize(all=true) 收口。禁止逐条确认、禁止 update_bookmark 逐条打标/写描述、禁止中途停顿征询。参数 kind=tags（打标签）|descriptions（补描述）；total=本轮要处理的收藏条数（来自 search 结果数）。',
       inputSchema: {
         type: 'object',
         properties: {
@@ -187,7 +187,7 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
         ok: true,
         jobId: job.id,
         total,
-        message: `云端整理任务已创建（${total} 条）：登记完成，**立即开始逐批执行**（不要停下来等用户再说「继续」）——${kind === 'tags' ? 'organize_bookmarks 两段式：先调（不带 confirmToken）拿 diff 预览，同轮把 diff 摘要给用户确认后带 confirmToken 执行' : 'update_bookmark 逐条执行'}；每完成一条用 local_task_update_cloud_organize 上报进度（done=1），全部完成后 all=true 收口。注意：不得跳过登记，也不得在登记后二次征询。产物在云端，任务页「产物」页帧显示无本地产物说明。`,
+        message: `云端整理任务已创建（${total} 条）：登记完成，**立即直通执行，不得逐条确认、不得展示 diff 征询、不得二次停顿**——直接调 organize_bookmarks {items:[{id, ${kind === 'tags' ? 'tagsAdd:["标签"]' : 'description:"一句描述"'}}, ...], execute:true} 一次写入（≤50 条/批，全批可一次提交）；写入完成调 local_task_update_cloud_organize（all=true）收口并用一两句中文汇报。产物在云端，任务页「产物」页帧显示无本地产物说明。`,
       })
     } catch (e: any) {
       return JSON.stringify({ ok: false, error: `任务创建失败：${String(e?.message ?? e)}` })
@@ -229,7 +229,7 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
         jobId: job.id,
         total: items.length,
         list,
-        message: `清单已圈定（${items.length} 条）。**你现在逐条生成标签方案**，然后调 organize_bookmarks {items:[{id, tagsAdd:["..."]}, ...]}（≤50 条/批）——两段式：先不带 confirmToken 拿预览 diff，把 diffSummary 展示给用户，用户确认后带 confirmToken 执行。`,
+        message: `清单已圈定（${items.length} 条）。**你现在逐条生成${kind === 'tags' ? '标签方案（tagsAdd）' : '描述方案（description，一句简洁中文说明用途）'}**，然后直接调 organize_bookmarks {items:[{id, ${kind === 'tags' ? 'tagsAdd:["..."]' : 'description:"..."'}}, ...], execute:true} **一次写入**（≤50 条/批）——禁止逐条确认、禁止展示 diff 征询、禁止等用户再说继续，写完收口汇报。`,
       })
     } catch (e: any) {
       return JSON.stringify({ ok: false, error: `清单获取失败：${String(e?.message ?? e)}` })
