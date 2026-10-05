@@ -407,6 +407,12 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         const execOk = !/\{?\s*\"ok\"\s*:\s*false/.test(text.slice(0, 80)) && !text.startsWith('工具执行失败')
         if (execOk && (meta.name === 'update_bookmark' || meta.name === 'organize_bookmarks')) {
           try {
+            // #331.9：快照兜底（工具调用路径）——模型正常 tool_calls 直通执行时任务 items 仍是占位，
+            // 按 args.items 顺序回填标题（此前只有文本化 runItemsPlan 路径有回填）
+            if (meta.name === 'organize_bookmarks') {
+              const planItems = Array.isArray((args as any)?.items) ? (args as any).items : []
+              await snapshotJobTitlesFromPlan(planItems).catch(() => {})
+            }
             const { allJobs, getJob, updateJob, updateItem } = await import('./tasks')
             const job = allJobs().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
               .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
@@ -497,6 +503,31 @@ function parseItemsPlan(text: string): Array<{ id: string; tagsAdd?: string[]; t
 }
 
 /** #329.14：items 方案系统托管执行——预览→token→执行→收口，返回汇报文本 */
+/** #331.9：任务快照兜底（两路径共用）——items 仍有无 title 占位（cloud:#N）时按 plan 序回填标题（id 精确匹配） */
+async function snapshotJobTitlesFromPlan(plan: Array<{ id: string; tagsAdd?: string[]; tagsRemove?: string[]; description?: string }>): Promise<void> {
+  if (!plan.length) return
+  const { allJobs, updateItem } = await import('./tasks')
+  const job = allJobs().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
+  if (!job || !job.items.some((it) => !it.title)) return
+  const planIds = new Set(plan.map((p) => p.id))
+  const { callTool } = await import('./moonlink')
+  const sr = await callTool('search_bookmarks', { limit: 200 })
+  const st = sr?.content?.map((c: any) => c.text ?? '').join('') ?? ''
+  const sd = JSON.parse(st)
+  const byId = new Map<string, string>()
+  for (const b of sd.bookmarks ?? []) if (planIds.has(b.id)) byId.set(b.id, String(b.title ?? '').slice(0, 60))
+  for (let i = 0; i < job.items.length; i++) {
+    const it = job.items[i]
+    if (it.title) continue
+    const m = /^cloud:#(\d+)$/.exec(it.path)
+    if (m) {
+      const t = byId.get(plan[Number(m[1]) - 1]?.id ?? '')
+      if (t) updateItem(job.id, it.path, { title: t })
+    }
+  }
+}
+
 /** #331：标签收敛轮——草稿标签全集 vs 既有标签（list_tags），LLM 输出映射（同名归一/下位→上位/同义合并/新标签限词），改写 items */
 export async function convergeTags(
   plan: Array<{ id: string; tagsAdd?: string[]; tagsRemove?: string[]; description?: string }>,
@@ -551,30 +582,8 @@ async function runItemsPlan(
         plan = await convergeTags(plan, say, chat)
       } catch { /* 收敛失败→按草稿执行（不阻塞） */ }
     }
-    // #331.6：快照兜底（执行前）——模型没走 preview 直接执行时任务 items 还是 cloud:#N 占位：
-    // 按 plan 顺序+清单标题回填（id 精确匹配），任务进行中即显示资源名称而非序号
-    try {
-      const { allJobs: aJ, updateJob: uJ, updateItem: uI } = await import('./tasks')
-      const job0 = aJ().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
-        .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
-      if (job0 && job0.items.some((it) => !it.title)) {
-        const planIds = new Set(plan.map((p) => p.id))
-        const { callTool: cT } = await import('./moonlink')
-        const sr = await cT('search_bookmarks', { limit: 200 })
-        const st = sr?.content?.map((c: any) => c.text ?? '').join('') ?? ''
-        const sd = JSON.parse(st)
-        const byId = new Map<string, string>()
-        for (const b of sd.bookmarks ?? []) if (planIds.has(b.id)) byId.set(b.id, String(b.title ?? '').slice(0, 60))
-        for (const it of job0.items) {
-          if (it.title) continue
-          const m = /^cloud:#(\d+)$/.exec(it.path)
-          if (m) {
-            const t = byId.get(plan[Number(m[1]) - 1]?.id ?? '')
-            if (t) uI(job0.id, it.path, { title: t })
-          }
-        }
-      }
-    } catch { /* 回填失败不阻塞执行 */ }
+    // #331.6/#331.9：快照兜底（文本化路径）——与工具调用路径共用 snapshotJobTitlesFromPlan
+    try { await snapshotJobTitlesFromPlan(plan) } catch { /* 回填失败不阻塞执行 */ }
     say(`⚙ organize_bookmarks（items ×${plan.length}，直通执行）`)
     const { callTool } = await import('./moonlink')
     // #329.20：execute:true 直通（用户裁决取消两段式）——单次调用直接写入
