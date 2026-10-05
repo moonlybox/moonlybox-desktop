@@ -395,6 +395,26 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         const text = toolResultText(result)
         say(`  → ${text.slice(0, 160)}`)
         const content2 = meta.name === 'tool_result_read' ? text : injectToolResult(deps.vaultRoot ?? '', meta.name, text)
+        // #329.19：云端整理进度自动上报——模型用 update_bookmark/organize_bookmarks 逐条写入成功时，
+        // 系统自动推进最近 cloud_organize 任务进度（不依赖模型记得上报；失败/跳过不计）
+        const execOk = !/\{?\s*\"ok\"\s*:\s*false/.test(text.slice(0, 80)) && !text.startsWith('工具执行失败')
+        if (execOk && (meta.name === 'update_bookmark' || meta.name === 'organize_bookmarks')) {
+          try {
+            const { allJobs, getJob, updateJob, updateItem } = await import('./tasks')
+            const job = allJobs().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
+              .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
+            if (job) {
+              if (job.status === 'queued') updateJob(job.id, { status: 'running', startedAt: new Date().toISOString() })
+              const fresh = getJob(job.id)!
+              const pending = fresh.items.find((it) => it.status === 'pending')
+              if (pending) updateItem(job.id, pending.path, { status: 'done' })
+              const after = getJob(job.id)!
+              if (after.items.every((it) => it.status !== 'pending')) {
+                updateJob(job.id, { status: 'completed', finishedAt: new Date().toISOString() })
+              }
+            }
+          } catch { /* 进度上报失败不影响主执行 */ }
+        }
         return { id: tc.id, name: meta.name, content: content2, ok: true }
       } catch (e) {
         const err = String((e as Error).message ?? e)
@@ -530,8 +550,10 @@ function isLeakyAnswer(text: string): boolean {
   if ((t.match(/不过，/g) ?? []).length >= 3) return true
   if ((t.match(/但根据/g) ?? []).length >= 3) return true
   if (t.includes('"type": "function"') || t.includes('"type":"function"')) return true
-  // #329.7：工具调用文本化（GLM 5.2 实证：tool_result_readpathC:\... 以正文输出）
+  // #329.7/#329.18：工具调用文本化（GLM 5.2 实证：tool_result_readpathC:\ / update_bookmarkid...tagsAdd[...]
+  // / organize_bookmarksitems[...] ——工具名与参数无边界拼接，\b 失效，用直接拼接匹配）
   if (/\btool_[a-z_]+\s*path\s*[A-Za-z]:\\/.test(t)) return true
-  if (/^\s*(tool_result_read|organize_bookmarks|search_bookmarks|local_task_[a-z_]+)\s*(path|[\{\[])/i.test(t)) return true
+  if (/^\s*[a-z_]*bookmark[a-z_]*(id|path|\{|\[)/i.test(t)) return true
+  if (/^\s*(tool_result_read|organize_bookmarks|search_bookmarks|add_bookmark|add_sticky|add_todo|[a-z_]*_task[a-z_]*)(path|id|ids|items|\{|\[)/i.test(t)) return true
   return false
 }
