@@ -632,8 +632,10 @@ async function runItemsPlan(
         const targetIds = new Set<string>((sd2.bookmarks ?? []).map((b: any) => b.id))
         const valid = plan.filter((p) => targetIds.has(p.id))
         // #331.17：收紧——部分命中也拒绝（混入旧条目会导致任务详情与真实写入错位；强制重新圈定）
+        // #331.18：拒绝时随附实时清单（id|标题）——下一步直接基于新鲜数据生成，不再吃旧缓存
         if (valid.length < plan.length) {
-          return `目标校验未通过：本次提交的 ${plan.length} 条中只有 ${valid.length} 条属于当前待整理清单（${isDesc ? '缺描述' : '未打标签'}），方案混入了旧对话条目。请回复「重新整理」，我会基于最新清单重新生成方案。`
+          const fresh = (sd2.bookmarks ?? []).map((b: any) => `${b.id} | ${String(b.title ?? '').slice(0, 40)}`)
+          return `目标校验未通过：本次提交的 ${plan.length} 条中只有 ${valid.length} 条属于当前待整理清单（${isDesc ? '缺描述' : '未打标签'}），方案混入了旧对话条目。以下为当前实时待整理清单（${fresh.length} 条），请直接基于它重新生成 items：\n${fresh.join('\n')}`
         }
       }
     } catch { /* 校验失败不阻塞执行 */ }
