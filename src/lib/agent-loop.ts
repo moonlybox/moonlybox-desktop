@@ -308,7 +308,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       // 先 parse；命中则直接托管执行，绝不能进 isLeakyAnswer 自纠（自纠重写会破坏 JSON=托管被吞）
       const prePlan = parseItemsPlan(text)
       if (prePlan) {
-        const exec = await runItemsPlan(prePlan, say, used)
+        const exec = await runItemsPlan(prePlan, say, used, chat)
         return { answer: exec, toolCalls: used }
       }
       // #317.F12：推理泄漏检测+一次自纠——system 纪律失守时兜底（判窄不判宽，避免误伤正常长答）
@@ -329,7 +329,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       // #329.14：items JSON 就地执行——编排轮收到的纯 JSON 方案，系统托管完成 预览→token→执行→收口
       const jsonPlan = parseItemsPlan(text)
       if (jsonPlan) {
-        const exec = await runItemsPlan(jsonPlan, say, used)
+        const exec = await runItemsPlan(jsonPlan, say, used, chat)
         return { answer: exec, toolCalls: used }
       }
       return { answer: text, toolCalls: used }
@@ -497,12 +497,60 @@ function parseItemsPlan(text: string): Array<{ id: string; tagsAdd?: string[]; t
 }
 
 /** #329.14：items 方案系统托管执行——预览→token→执行→收口，返回汇报文本 */
+/** #331：标签收敛轮——草稿标签全集 vs 既有标签（list_tags），LLM 输出映射（同名归一/下位→上位/同义合并/新标签限词），改写 items */
+export async function convergeTags(
+  plan: Array<{ id: string; tagsAdd?: string[]; tagsRemove?: string[]; description?: string }>,
+  say: (line: string) => void,
+  chat: typeof import('../lib/llm').byokChatMessages,
+): Promise<Array<{ id: string; tagsAdd?: string[]; tagsRemove?: string[]; description?: string }>> {
+  const draft = Array.from(new Set(plan.flatMap((p) => p.tagsAdd ?? [])))
+  if (draft.length === 0) return plan
+  const { callTool } = await import('./moonlink')
+  const lt = await callTool('list_tags', {})
+  const ltText = lt?.content?.map((c: any) => c.text ?? '').join('') ?? ''
+  let existing: string[] = []
+  try { existing = (JSON.parse(ltText)?.tags ?? []).map((t: any) => String(t.name ?? t)) } catch {}
+  if (existing.length === 0) return plan
+  const sys = [
+    '你是标签体系收敛器。用户云端已有一套标签（existing），现在有一个新打标签方案的草稿标签（draft）。',
+    '把 draft 中每个标签映射为最终标签，规则（按序判定）：',
+    '1. 与 existing 中某标签语义相同（含大小写/中英/同义词）→ 映射为该既有标签（原文）；',
+    '2. 是 existing 中某标签的下位概念（如「临床输血」⊂「输血医学」）或交叉概念 → 映射为概括性更高的既有标签（就高不就低）；',
+    '3. draft 内部同义/包含 → 合并到更概括的那个（新造词统一到同一种表述）；',
+    '4. existing 完全未覆盖的新主题 → 保留草稿标签，但规范化措辞（简洁名词，≤6 字优先）。',
+    '每条收藏打 1~2 个标签，禁止为单个标签再细分出多个近义标签。',
+    '只输出 JSON：{"map": {"草稿标签": "最终标签", ...}}，不要任何其他文字。',
+  ].join('\n')
+  const res = await chat([
+    { role: 'system', content: sys },
+    { role: 'user', content: `existing=${JSON.stringify(existing)}\n\ndraft=${JSON.stringify(draft)}` },
+  ], undefined)
+  const text = (res as any)?.choices?.[0]?.message?.content ?? (res as any)?.content ?? ''
+  const m = String(text).match(/\{[\s\S]*\}/)
+  if (!m) return plan
+  const map = JSON.parse(m[0])?.map as Record<string, string> | undefined
+  if (!map || Object.keys(map).length === 0) return plan
+  const out = plan.map((p) => ({
+    ...p,
+    tagsAdd: p.tagsAdd ? Array.from(new Set(p.tagsAdd.map((t) => (map[t] ?? t).trim()).filter(Boolean))) : undefined,
+  }))
+  say(`（标签收敛：${draft.length} 个草稿标签 → ${Array.from(new Set(out.flatMap((p) => p.tagsAdd ?? []))).length} 个最终标签，已对齐既有体系）`)
+  return out
+}
+
 async function runItemsPlan(
   plan: Array<{ id: string; tagsAdd?: string[]; tagsRemove?: string[]; description?: string }>,
   say: (line: string) => void,
   used: Array<{ name: string; ok: boolean }>,
+  chat?: typeof import('../lib/llm').byokChatMessages,
 ): Promise<string> {
   try {
+    // #331：标签收敛轮（两轮编译式）——execute 前把草稿标签对齐既有体系（LLM 算力收敛）
+    if (chat) {
+      try {
+        plan = await convergeTags(plan, say, chat)
+      } catch { /* 收敛失败→按草稿执行（不阻塞） */ }
+    }
     say(`⚙ organize_bookmarks（items ×${plan.length}，直通执行）`)
     const { callTool } = await import('./moonlink')
     // #329.20：execute:true 直通（用户裁决取消两段式）——单次调用直接写入
