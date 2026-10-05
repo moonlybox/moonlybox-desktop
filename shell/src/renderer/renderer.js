@@ -2779,9 +2779,9 @@ async function renderWork(nav, arg, label2) {
     const IST = { pending: t('tk.iPending'), running: t('tk.iRunning'), done: t('tk.iDone'), failed: t('tk.iFail'), skipped: t('tk.iSkip'), cancelled: t('tk.iCancel') }
     // 行渲染（状态→样式语义色）
     const itemRow = (it) => {
-      let name = String(it.path).split(/[\\/]/).pop()
-      // #329.3：云端整理占位行名——「cloud:#N」→「收藏 #N」（用户可读；任务详情/产物说明已有 tk.cloudNoPages）
-      if (/^cloud:#\d+$/.test(name)) name = t('tk.cloudItem').replace('{n}', name.slice(7))
+      // #330：资源名称快照优先——items.title（登记/圈定时的资源名称快照）> 文件名 > cloud:#N 转换
+      let name = (it.title && String(it.title).trim()) || String(it.path).split(/[\\/]/).pop()
+      if (!it.title && /^cloud:#\d+$/.test(name)) name = t('tk.cloudItem').replace('{n}', name.slice(7))
       const color = { done: 'var(--ok,#34d399)', failed: 'var(--danger,#e56969)', running: 'var(--accent,#818cf8)', skipped: 'inherit', cancelled: 'inherit', pending: 'inherit' }[it.status] ?? 'inherit'
       const badgeBg = { done: 'rgba(52,211,153,.12)', failed: 'rgba(229,105,105,.14)', running: 'rgba(129,140,248,.14)' }[it.status] ?? 'transparent'
       const spin = it.status === 'running' ? '<span style="display:inline-block;animation:tkspin 1s linear infinite">◐</span> ' : ''

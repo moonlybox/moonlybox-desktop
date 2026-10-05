@@ -21,6 +21,8 @@ export interface JobItem {
   /** 源文档绝对路径 */
   path: string
   status: ItemStatus
+  /** #330：资源名称快照——任务详情直接显示名称，不依赖 ID/路径关联（云端收藏=标题；本地文档=标题/文件名）。后续任务类型一律遵循快照原则 */
+  title?: string
   /** 源内容 sha256（ledger 判定键——已整理判定=hash 命中，非路径命中） */
   srcHash?: string
   /** 产物相对 vault 路径（done 时有） */
@@ -101,7 +103,7 @@ export function getJob(id: string): LocalJob | null {
   return readStore().jobs.find((j) => j.id === id) ?? null
 }
 
-export function createJob(type: TaskType, title: string, items: Array<{ path: string; srcHash?: string }>, modelLabel?: string): LocalJob {
+export function createJob(type: TaskType, title: string, items: Array<{ path: string; srcHash?: string; title?: string }>, modelLabel?: string): LocalJob {
   const now = new Date().toISOString()
   const job: LocalJob = {
     id: genId(),
@@ -113,7 +115,7 @@ export function createJob(type: TaskType, title: string, items: Array<{ path: st
     updatedAt: now,
     modelLabel,
     progress: { done: 0, total: items.length },
-    items: items.map((it) => ({ path: it.path, srcHash: it.srcHash, status: 'pending' })),
+    items: items.map((it) => ({ path: it.path, srcHash: it.srcHash, title: it.title, status: 'pending' })),
   }
   const store = readStore()
   store.jobs.push(job)

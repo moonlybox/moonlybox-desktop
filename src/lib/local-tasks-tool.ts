@@ -157,7 +157,11 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
       const { createJob } = await import('./tasks')
       const { runJob } = await import('./compile-runner')
       const label = compileModelLabel() ?? undefined
-      const job = createJob('compile', `知识整理 · ${paths.length} 篇`, (paths as string[]).slice(0, 500).map((p) => ({ path: String(p) })), label)
+      // #330：资源名称快照——items 记录文档名（去扩展名），任务详情直接显示名称不靠路径
+      const job = createJob('compile', `知识整理 · ${paths.length} 篇`, (paths as string[]).slice(0, 500).map((p) => {
+        const base = String(p).split(/[\\/]/).pop() ?? String(p)
+        return { path: String(p), title: base.replace(/\.[^.]+$/, '').slice(0, 60) }
+      }), label)
       void runJob(job.id).catch(() => {})
       return JSON.stringify({ ok: true, jobId: job.id, total: Math.min(paths.length, 500), model: label ?? null, message: `任务已创建（${Math.min(paths.length, 500)} 篇），后台执行中——进度可在「任务」页查看` })
     } catch (e: any) {
@@ -209,6 +213,16 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
       const items: Array<any> = sData.bookmarks ?? []
       if (!items.length) return JSON.stringify({ ok: true, message: '没有符合条件的收藏', total: 0 })
       updateJob(job.id, { status: 'running', startedAt: new Date().toISOString() })
+      // #330：资源名称快照——把圈定到的收藏标题写进任务 items（任务详情直接显示名称，不靠 ID 关联）
+      try {
+        const { getJob: gJ, updateItem: uI } = await import('./tasks')
+        const cur = gJ(job.id)!
+        const pend = cur.items.filter((it) => it.status === 'pending')
+        items.slice(0, pend.length).forEach((b: any, i: number) => {
+          const t = String(b.title ?? '').trim()
+          if (t && pend[i]) uI(job.id, pend[i].path, { title: t.slice(0, 60) })
+        })
+      } catch { /* 快照失败不阻塞清单返回 */ }
       const list = items.map((b: any, i: number) => `${i + 1}. id=${b.id} | ${String(b.title ?? '').slice(0, 50)} | ${String(b.description ?? b.note ?? '').slice(0, 60)}`)
       return JSON.stringify({
         ok: true,
