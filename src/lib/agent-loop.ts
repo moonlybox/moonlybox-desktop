@@ -337,10 +337,25 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       // 一起写成正文「local_task_create_cloud_organizeitems[...]typecloud_organize」）——
       // 这是**合法登记意图**的文本化，不能进自纠重写（重写 2 轮烧完原样上屏=任务永远建不出来）；
       // 正确动作=系统代为登记：提取 items JSON→调真实 create→注入推进令继续方案+写入
-      const createTextMatch = text.match(/local_task_create_cloud_organize\s*(?:kind\s*)?(?:descriptions|tags)?\s*items?\s*(\[[\s\S]*?\])\s*(?:type\s*\w+)?$/i)
+      const createTextMatch = text.match(/local_task_create_cloud_organize[\s\S]{0,40}?items?\s*(\[[\s\S]*)$/i)
       if (createTextMatch && !didCreateOrganize) {
         try {
-          const items = JSON.parse(createTextMatch[1])
+          // #331.25：真机样本（title 含 markdown 破损 `"}](` 序列）实测：非贪婪/括号配对都会被破损
+          // title 内的 `]` 提前截断→JSON 不合法→拦截 miss。降级策略=纯 id 抽取（ULID 26 位硬锚，
+          // 对 title 破损/重复条目免疫；同 id 自动去重=正确行为）——title 缺失由 create 兜底+回填补
+          let items: any[] | null = null
+          try { items = JSON.parse(createTextMatch[1]) } catch { items = null }
+          if (!Array.isArray(items)) {
+            const re = /"id"\s*:\s*"([0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26})"/g
+            const seen = new Set<string>()
+            const rescued: any[] = []
+            for (const m of createTextMatch[1].matchAll(re)) {
+              if (seen.has(m[1])) continue
+              seen.add(m[1])
+              rescued.push({ id: m[1] })
+            }
+            if (rescued.length) items = rescued
+          }
           if (Array.isArray(items) && items.length > 0 && items.every((it: any) => it && typeof it.id === 'string')) {
             const kind = text.includes('descriptions') ? 'descriptions' : 'tags'
             const reg = await deps.localTools?.['local_task_create_cloud_organize']?.({ kind, items }) ?? ''
