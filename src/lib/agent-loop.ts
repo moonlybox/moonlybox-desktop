@@ -551,6 +551,30 @@ async function runItemsPlan(
         plan = await convergeTags(plan, say, chat)
       } catch { /* 收敛失败→按草稿执行（不阻塞） */ }
     }
+    // #331.6：快照兜底（执行前）——模型没走 preview 直接执行时任务 items 还是 cloud:#N 占位：
+    // 按 plan 顺序+清单标题回填（id 精确匹配），任务进行中即显示资源名称而非序号
+    try {
+      const { allJobs: aJ, updateJob: uJ, updateItem: uI } = await import('./tasks')
+      const job0 = aJ().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
+        .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
+      if (job0 && job0.items.some((it) => !it.title)) {
+        const planIds = new Set(plan.map((p) => p.id))
+        const { callTool: cT } = await import('./moonlink')
+        const sr = await cT('search_bookmarks', { limit: 200 })
+        const st = sr?.content?.map((c: any) => c.text ?? '').join('') ?? ''
+        const sd = JSON.parse(st)
+        const byId = new Map<string, string>()
+        for (const b of sd.bookmarks ?? []) if (planIds.has(b.id)) byId.set(b.id, String(b.title ?? '').slice(0, 60))
+        for (const it of job0.items) {
+          if (it.title) continue
+          const m = /^cloud:#(\d+)$/.exec(it.path)
+          if (m) {
+            const t = byId.get(plan[Number(m[1]) - 1]?.id ?? '')
+            if (t) uI(job0.id, it.path, { title: t })
+          }
+        }
+      }
+    } catch { /* 回填失败不阻塞执行 */ }
     say(`⚙ organize_bookmarks（items ×${plan.length}，直通执行）`)
     const { callTool } = await import('./moonlink')
     // #329.20：execute:true 直通（用户裁决取消两段式）——单次调用直接写入
