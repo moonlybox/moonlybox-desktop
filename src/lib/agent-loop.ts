@@ -669,6 +669,6 @@ function isLeakyAnswer(text: string): boolean {
   // / organize_bookmarksitems[...] ——工具名与参数无边界拼接，\b 失效，用直接拼接匹配）
   if (/\btool_[a-z_]+\s*path\s*[A-Za-z]:\\/.test(t)) return true
   if (/^\s*[a-z_]*bookmark[a-z_]*(id|path|\{|\[)/i.test(t)) return true
-  if (/^\s*(tool_result_read|organize_bookmarks|search_bookmarks|add_bookmark|add_sticky|add_todo|[a-z_]*_task[a-z_]*)(path|id|ids|items|\{|\[)/i.test(t)) return true
+  if (/^\s*(tool_result_read|organize_bookmarks|search_bookmarks|add_bookmark|add_sticky|add_todo|[a-z_]*_task[a-z_]*)(path|id|ids|items|execute\s*:?\s*(true|false)|\{|\[)/i.test(t)) return true
   return false
 }
