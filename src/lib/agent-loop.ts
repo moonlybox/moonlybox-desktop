@@ -294,16 +294,29 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       const didOrganize = used.some((u) => u.name === 'organize_bookmarks')
       const didCreateOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize')
         || messages.some((m: any) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.some((tc: any) => tc?.function?.name === 'local_task_create_cloud_organize'))
+      // #331.12：幻觉执行拦截——模型没调 organize 却给出「执行结果话术」（0 条变更/没生效/已写入）：
+      // 生产取证（access.log+DB）实证这是编造。命中→不采信 answer，强制注入要求输出 items JSON（托管真执行）。
+      const hallucinatedExec = !didOrganize && /0 条变更|没有生效|没生效|写入没|未生效|变更条数为? ?0/i.test(res.text ?? '')
       if (didCreateOrganize && !didOrganize && round < MAX_TOOL_ROUNDS - 1) {
         // #329.14：终局编排——模型绕圈（读清单/翻页/复读）不给 items 方案时，收走工具、要求纯 JSON 输出
         //（分类决策=LLM 强项；机械调用=系统托管）。下一轮 finish=stop 的 text 若是 items JSON 就地执行（见 return 前拦截）。
         const askedJson = messages.some((m: any) => m.role === 'user' && String(m.content ?? '').includes('只输出 items JSON'))
         if (!askedJson) {
-          messages.push({ role: 'user', content: '（系统）不要再调用任何工具。基于上方清单（local_task_cloud_organize_preview 或 search 结果），**只输出 items JSON 数组**：[{"id":"收藏id","tagsAdd":["标签1","标签2"]}, ...]，覆盖全部待整理条目，每条 1~2 个标签。不要输出任何其他文字、解释或 Markdown 代码块标记。' })
+          messages.push({
+            role: 'user',
+            content: hallucinatedExec
+              ? '（系统）检测到你报告了执行结果，但本轮并没有真正调用 organize_bookmarks 工具——那是编造的。不要再调用任何工具。基于上方清单（local_task_cloud_organize_preview 或 search 结果），**只输出 items JSON 数组**：[{"id":"收藏id","description":"一句描述","tagsAdd":["标签1"]}, ...]，覆盖全部待整理条目。不要输出任何其他文字、解释或 Markdown 代码块标记。'
+              : '（系统）不要再调用任何工具。基于上方清单（local_task_cloud_organize_preview 或 search 结果），**只输出 items JSON 数组**：[{"id":"收藏id","tagsAdd":["标签1","标签2"]}, ...]，覆盖全部待整理条目，每条 1~2 个标签。不要输出任何其他文字、解释或 Markdown 代码块标记。',
+          })
           continue
         }
       }
+      // #331.12：注入后模型仍不输出合法 JSON→兜底改写在 let text 声明后做（见下 let text 后 hallucinatedExec 分支）
       let text = res.text ?? ''
+      // #331.12：注入后模型仍不输出合法 JSON→兜底改写 answer，不让幻觉话术上屏
+      if (hallucinatedExec) {
+        text = '如实说明：本轮批量写入实际没有执行（写入工具未被真正调用，此前报告的「变更结果」不可信）。你的收藏数据没有变化。回复「继续」，我立刻真实执行一次写入。'
+      }
       // #329.21：items JSON 优先于泄漏自纠——JSON 方案是合法终答（即使带工具名前缀），
       // 先 parse；命中则直接托管执行，绝不能进 isLeakyAnswer 自纠（自纠重写会破坏 JSON=托管被吞）
       const prePlan = parseItemsPlan(text)
