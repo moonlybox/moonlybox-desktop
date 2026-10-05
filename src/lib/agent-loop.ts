@@ -293,6 +293,10 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       // 本轮或此前轮次已登记 cloud_organize 任务但从未调过 organize_bookmarks 且模型停下 → 注入推进指令。
       const didOrganize = used.some((u) => u.name === 'organize_bookmarks')
       const didCreateOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize')
+      // #331.23：圈定兜底——模型只做只读 search（noDescription/untagged 圈定）就收口推脱
+      //（真机：补描述连续 3 轮「已重新圈定…回复继续我再写入」死循环，create/organize 全跳过）。
+      // 圈定了清单却没执行=编排该接管（与 #329.14 didCreateOrganize 编排同款，放宽到「圈定即算」）
+      const didScope = used.some((u) => u.name === 'search_bookmarks' || u.name === 'local_task_cloud_organize_preview')
         || messages.some((m: any) => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.some((tc: any) => tc?.function?.name === 'local_task_create_cloud_organize'))
       // #331.19：编排注入前先试 parse——text 已是可解析 items（带工具名前缀也算）时直接托管执行，
       // 不注入不重写（多一轮「只输出 JSON」注入=多一次 LLM 往返=多一次抖动窗口；真机本轮实测多轮空转）
@@ -309,7 +313,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       // #331.12：幻觉执行拦截——模型没调 organize 却给出「执行结果话术」（0 条变更/没生效/已写入）：
       // 生产取证（access.log+DB）实证这是编造。命中→不采信 answer，强制注入要求输出 items JSON（托管真执行）。
       const hallucinatedExec = !didOrganize && /0 条变更|没有生效|没生效|写入没|未生效|变更条数为? ?0/i.test(res.text ?? '')
-      if (didCreateOrganize && !didOrganize && round < MAX_TOOL_ROUNDS - 1) {
+      if ((didCreateOrganize || didScope) && !didOrganize && round < MAX_TOOL_ROUNDS - 1) {
         // #329.14：终局编排——模型绕圈（读清单/翻页/复读）不给 items 方案时，收走工具、要求纯 JSON 输出
         //（分类决策=LLM 强项；机械调用=系统托管）。下一轮 finish=stop 的 text 若是 items JSON 就地执行（见 return 前拦截）。
         const askedJson = messages.some((m: any) => m.role === 'user' && String(m.content ?? '').includes('只输出 items JSON'))
@@ -327,7 +331,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       let text = res.text ?? ''
       // #331.12：注入后模型仍不输出合法 JSON→兜底改写 answer，不让幻觉话术上屏
       if (hallucinatedExec) {
-        text = '如实说明：本轮批量写入实际没有执行（写入工具未被真正调用，此前报告的「变更结果」不可信）。你的收藏数据没有变化。回复「继续」，我立刻真实执行一次写入。'
+        text = '如实说明：本轮批量写入实际没有执行（写入工具未被真正调用，此前报告的「变更结果」不可信）。你的收藏数据没有变化。我现在立即真实执行一次写入。'
       }
       // #329.21：items JSON 优先于泄漏自纠——JSON 方案是合法终答（即使带工具名前缀），
       // 先 parse；命中则直接托管执行，绝不能进 isLeakyAnswer 自纠（自纠重写会破坏 JSON=托管被吞）
