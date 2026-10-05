@@ -171,8 +171,14 @@ export async function runLocalTaskTool(name: string, args: Record<string, unknow
       const total = Math.max(1, Math.min(50, Number(args.total ?? 0) || 0))
       const { createJob } = await import('./tasks')
       const label = kind === 'tags' ? '云端整理 · 收藏打标签' : '云端整理 · 收藏补描述'
+      // #329.17：任务详情显示整理所用模型——resolveCompileModel 取当前对话可用模型快照
+      let modelLabel: string | undefined
+      try {
+        const { compileModelLabel } = await import('./compile-model')
+        modelLabel = compileModelLabel() || undefined
+      } catch { /* 快照失败不阻塞登记 */ }
       // items 用占位行（无本地路径——path 即云端收藏处理序号），进度条/清单照常工作
-      const job = createJob('cloud_organize', label, Array.from({ length: total }, (_, i) => ({ path: `cloud:#${i + 1}` })), undefined)
+      const job = createJob('cloud_organize', label, Array.from({ length: total }, (_, i) => ({ path: `cloud:#${i + 1}` })), modelLabel)
       return JSON.stringify({
         ok: true,
         jobId: job.id,

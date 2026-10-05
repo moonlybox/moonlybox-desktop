@@ -366,7 +366,9 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
             if (attempt === 1) out = `本地执行失败：${String(e?.message ?? e)}`
           }
         }
-        return { id: tc.id, name: tc.function.name, content: injectToolResult(deps.vaultRoot ?? '', tc.function.name, out), ok: !out.startsWith('本地执行失败') }
+        // #329.17：tool_result_read 的结果免落盘截断——它本身就是「读全文」工具，再截断=永远读不到全文
+        const content = tc.function.name === 'tool_result_read' ? out : injectToolResult(deps.vaultRoot ?? '', tc.function.name, out)
+        return { id: tc.id, name: tc.function.name, content, ok: !out.startsWith('本地执行失败') }
       }
       if (!meta) return { id: tc.id, name: tc.function.name, content: `未知工具：${tc.function.name}`, ok: false }
 
@@ -392,7 +394,8 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         if (!result) throw lastErr ?? new Error('工具执行失败')
         const text = toolResultText(result)
         say(`  → ${text.slice(0, 160)}`)
-        return { id: tc.id, name: meta.name, content: injectToolResult(deps.vaultRoot ?? '', meta.name, text), ok: true }
+        const content2 = meta.name === 'tool_result_read' ? text : injectToolResult(deps.vaultRoot ?? '', meta.name, text)
+        return { id: tc.id, name: meta.name, content: content2, ok: true }
       } catch (e) {
         const err = String((e as Error).message ?? e)
         say(`  → 失败：${err.slice(0, 120)}`)
