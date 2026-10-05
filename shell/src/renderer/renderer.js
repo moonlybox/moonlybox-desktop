@@ -4060,6 +4060,11 @@ function showWorkspaceDialog() {
 // ---------- 小月对话绑定（从旧 renderer 迁移） ----------
 let kernelEventBound = false
 let activeXyId = null // #317.F2：当前活跃 xiaoyue RPC id（模块级——bindChat 重入不丢）
+// #329.16：终答渲染账本——模块级！bindChat 每次重入建新闭包，闭包内账本=行流（旧闭包）与
+// done 兜底（新 askWith 闭包）各记一本账→兜底永远查无→补渲染=双份（真机多轮实证的最终根因）
+let lastAiText = ''
+const aiRendered = new Set()
+const normKey = (x) => String(x).replace(/[\s\\]+/g, '')
 const rpcCmdById = new Map() // #317.F2：rpc id→cmd（行门控只针对 xiaoyue）
 // #317.MDI：行归属路由——rpcId→chatId；每会话行缓冲（非聚焦会话的行暂存，切回重放清空）
 const xyRpcChat = new Map()
@@ -4068,12 +4073,9 @@ function bindChat(chatInfo) {
   const meta = chatInfo?.meta
   // #288 对话 UI：log() 升级为结构化消息渲染——行前缀分类（用户气泡/AI 气泡 Markdown/工具折叠条/思考折叠条/活动小字）。
   // daemon 协议不变（console.log 行级流），渲染分类全在 renderer 侧。
-  const logEl = () => $('log')
-  const normKey = (x) => String(x).replace(/[\s\\]+/g, '') // #329.10：终答去重键（形态归一）
+  const logEl = () => $('log') // #329.16：normKey/lastAiText/aiRendered 提升模块级
   // 当前聚合态：连续相关行并入同一容器（AI 气泡 / 工具折叠 / 思考折叠）
   let cur = { type: null, el: null, text: '' }
-  let lastAiText = '' // #329.5：最后一条 AI 气泡原始文本（兜底判重用——DOM textContent 经 markdown 渲染≠原文）
-  const aiRendered = new Set() // #329.10：已渲染终答账本（norm 后键）——兜底与行流共享去重
   const scroll = () => { const el = logEl(); if (el) el.scrollTop = el.scrollHeight }
   const flushCur = () => {
     if (!cur.type || !cur.el) return
