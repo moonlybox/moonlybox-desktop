@@ -304,6 +304,13 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         }
       }
       let text = res.text ?? ''
+      // #329.21：items JSON 优先于泄漏自纠——JSON 方案是合法终答（即使带工具名前缀），
+      // 先 parse；命中则直接托管执行，绝不能进 isLeakyAnswer 自纠（自纠重写会破坏 JSON=托管被吞）
+      const prePlan = parseItemsPlan(text)
+      if (prePlan) {
+        const exec = await runItemsPlan(prePlan, say, used)
+        return { answer: exec, toolCalls: used }
+      }
       // #317.F12：推理泄漏检测+一次自纠——system 纪律失守时兜底（判窄不判宽，避免误伤正常长答）
       // #317.F14：自纠循环（上限 2 次）——首版修正令 200 字被 4B 模型当新题目展开分析（真机：重写回复本身
       // 又是 2000 字「检查是否符合…草拟…」），改极短硬令+多轮兜底
