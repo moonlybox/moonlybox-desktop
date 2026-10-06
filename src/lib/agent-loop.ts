@@ -317,11 +317,11 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         const exec = await runItemsPlan(directPlan, say, used, chat)
         if (typeof exec !== 'string') {
           rejectCount++
-          // #331.28：拒绝≥2 次=系统性不一致（kind 推断错/云端状态抖动）——放行降级：
-          // 直接按方案 id 执行（organize 幂等，已处理条目返回无变更=无害），绝不让整链绞死在 MAX
-          if (rejectCount >= 2) {
-            say(`（目标校验连续拒绝 ${rejectCount} 次——按方案直执行降级放行）`)
-            const exec2 = await runItemsPlan(directPlan, say, used, chat, true)
+          // #331.32：对照 Hermes 3 strikes——全无效连续 3 次=degenerate，停为 partial
+          //（降级放行=放弃校验执行未核对清单，违背「落库含名可核对」定案；partial+如实文案更诚实）
+          if (rejectCount >= 3) {
+            say(`（连续 ${rejectCount} 次方案与实时清单完全不符——按部分结果停止）`)
+            return { answer: '（方案与当前待整理清单反复不符，已停止本轮执行。云端数据未变动，请重新发起整理指令。）', toolCalls: used }
           }
           // #331.19：目标校验拒绝→注入实时清单再走一轮（模型基于新鲜数据重新生成 items）
           messages.push({ role: 'user', content: `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。` })
@@ -401,6 +401,12 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       if (prePlan) {
         const exec = await runItemsPlan(prePlan, say, used, chat)
         if (typeof exec !== 'string') {
+          // #331.32：3 strikes（同 directPlan 处）
+          rejectCount++
+          if (rejectCount >= 3) {
+            say(`（连续 ${rejectCount} 次方案与实时清单完全不符——按部分结果停止）`)
+            return { answer: '（方案与当前待整理清单反复不符，已停止本轮执行。云端数据未变动，请重新发起整理指令。）', toolCalls: used }
+          }
           // #331.19：目标校验拒绝→注入实时清单再走一轮
           messages.push({ role: 'user', content: `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。` })
           continue
@@ -438,6 +444,12 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       if (jsonPlan) {
         const exec = await runItemsPlan(jsonPlan, say, used, chat)
         if (typeof exec !== 'string') {
+          // #331.32：3 strikes（同 directPlan 处）
+          rejectCount++
+          if (rejectCount >= 3) {
+            say(`（连续 ${rejectCount} 次方案与实时清单完全不符——按部分结果停止）`)
+            return { answer: '（方案与当前待整理清单反复不符，已停止本轮执行。云端数据未变动，请重新发起整理指令。）', toolCalls: used }
+          }
           // #331.19：目标校验拒绝→注入实时清单再走一轮
           messages.push({ role: 'user', content: `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。` })
           continue
@@ -743,7 +755,7 @@ async function runItemsPlan(
   say: (line: string) => void,
   used: Array<{ name: string; ok: boolean }>,
   chat?: typeof import('../lib/llm').byokChatMessages,
-  bypassValidate = false, // #331.28：连续拒绝后降级放行（跳过校验直接执行，防死循环绞死整链）
+
 ): Promise<string | { __rejected: true; freshList: string[]; isDesc: boolean }> {
   try {
     // #331.16：登记兜底——模型跳过 create 直接执行时系统自动补登记（任务页可见性硬保证）
@@ -753,7 +765,6 @@ async function runItemsPlan(
     // 对已处理条目重复写入、真目标一条不碰。执行前实时查目标集合（cloud:#N 任务最近 job 的 kind
     // 对应 untagged/noDescription），plan.id 与目标集交集为 0 → 拒绝执行并抛出可诊断错误。
     try {
-      if (bypassValidate) throw new Error('skip-validate') // #331.28 降级放行
       const { allJobs: aJ2 } = await import('./tasks')
       const job2 = aJ2().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
         .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
@@ -776,14 +787,22 @@ async function runItemsPlan(
           const sd3 = JSON.parse(sr3?.content?.map((c: any) => c.text ?? '').join('') ?? '{}')
           for (const b of (sd3.bookmarks ?? [])) { if (!targetIds.has(b.id)) { targetIds.add(b.id); targetRows.push(b) } }
         }
-        const valid = plan.filter((p) => targetIds.has(p.id))
-        // #331.17：收紧——部分命中也拒绝（混入旧条目会导致任务详情与真实写入错位；强制重新圈定）
-        // #331.19：拒绝**不 return 死文本**——返回 freshList 由调用方注入 messages 再走一轮
-        //（基于新鲜数据重新生成 items；return 终止整链，模型没机会修正）
-        if (valid.length < plan.length) {
-          const fresh = targetRows.map((b: any) => `${b.id} | ${String(b.title ?? '').slice(0, 40)}`)
-          say(`（目标校验：方案混入旧对话条目（命中 ${valid.length}/${plan.length}），注入实时清单 ${fresh.length} 条重新生成方案）`)
-          return { __rejected: true, freshList: fresh, isDesc }
+        // #331.32（P2 校验 Hermes 化，对照 turn_tool_validation 混合批次语义）：
+        // 「voiding the turn discards real work」——无效条目剔除并**作为 error result 回执**，
+        // 有效条目照常执行；不再整批拒绝重走（死循环+freshList 注入链路退役）。
+        // 任务详情错位（#331.17 原案）由「剔除条目不进 items+回执只记有效条目」保证——
+        // 序号不再因剔除重排（valid 列表即 items 列表）。
+        const invalid = plan.filter((p) => !targetIds.has(p.id))
+        if (invalid.length > 0) {
+          const valid = plan.filter((p) => targetIds.has(p.id))
+          if (valid.length === 0) {
+            // 全无效=真混批（GLM 抄旧清单）——Hermes 语义：error result 回注让模型自纠
+            say(`（目标校验：方案 0/${plan.length} 命中当前待整理集合——注入实时清单让模型重新圈定）`)
+            const fresh = targetRows.map((b: any) => `${b.id} | ${String(b.title ?? '').slice(0, 40)}`)
+            return { __rejected: true, freshList: fresh, isDesc }
+          }
+          say(`（目标校验：剔除 ${invalid.length} 条已失效条目（不在当前待整理集合），其余 ${valid.length} 条照常执行）`)
+          plan = valid
         }
       }
     } catch { /* 校验失败不阻塞执行 */ }
