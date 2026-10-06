@@ -429,7 +429,8 @@ export async function runAgentTools(
         },
         search_memory: async (args: Record<string, unknown>) => {
           const hits = localMemorySearch(defaultVaultRoot(), String(args.query ?? ''))
-          return JSON.stringify({ ok: true, count: hits.length, memories: hits })
+          // #331.41：与云端 MCP 同口径（total 字段；本地全量返回无截断，total===count）
+          return JSON.stringify({ ok: true, count: hits.length, total: hits.length, hasMore: false, memories: hits })
         },
       }
     : {}
