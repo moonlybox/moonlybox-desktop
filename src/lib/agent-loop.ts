@@ -297,6 +297,10 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       say(`（上下文预算 85%：${tk}/${CTX_BUDGET}——请尽快收尾）`)
       messages.push({ role: 'system', content: '上下文预算即将用尽：请在本轮决定后直接给出最终回答，不要再发起新的工具调用（除非绝对必要）。' })
     }
+    // #331.33：任务状态每轮注入（todo_tool format_for_injection 语义——当前态覆盖式 system 行，
+    // 上轮注入的旧行由本行取代语义：模型以最后一条为准）
+    const jobState = await formatOrganizeJobForInjection()
+    if (jobState) messages.push({ role: 'system', content: jobState })
     const res = await chat(messages, openaiTools)
     if (!res.ok) throw new Error(res.error ?? 'LLM 调用失败')
 
@@ -645,6 +649,25 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
 }
 
 /** #329.14：解析 items 方案 JSON（宽容：剥 markdown 围栏/前后杂文） */
+// #331.33（P3 状态单源，对照 tools/todo_tool.py format_for_injection）：
+// 任务状态不活在对话里——每轮把未完结整理任务的当前态注入为 system 消息，
+// 模型从注入读（清单/已处理/批进度），不从对话历史抄（#8 旧批次抄用/#11 旧查询/#14 停滞的病根）。
+async function formatOrganizeJobForInjection(): Promise<string | null> {
+  try {
+    const { allJobs } = await import('./tasks')
+    const job = allJobs().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
+      .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
+    if (!job) return null
+    const kind = job.title.includes('描述') ? '补描述' : '打标签'
+    const done = job.items.filter((it) => it.status === 'done').length
+    const failed = job.items.filter((it) => it.status === 'failed').length
+    const pending = job.items.filter((it) => it.status === 'pending').length
+    const pendingList = job.items.filter((it) => it.status === 'pending').slice(0, 30)
+      .map((it) => `${it.path} | ${String(it.title ?? '').slice(0, 30)}`).join('\n')
+    return `【当前整理任务状态（以此为准，禁止复用对话上文中的旧清单/旧方案/旧 ID）】${job.title}（${kind}）：已写入 ${done}、失败 ${failed}、待处理 ${pending}。待处理清单：\n${pendingList}`
+  } catch { return null }
+}
+
 function parseItemsPlan(text: string): Array<{ id: string; tagsAdd?: string[]; tagsRemove?: string[]; description?: string }> | null {
   const t = (text ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
   const m = t.match(/\[\s*\{[\s\S]*\}\s*\]/)
