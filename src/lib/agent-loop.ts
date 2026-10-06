@@ -7,7 +7,18 @@ import { ensureToolDescription } from './mcp-custom'
  * 纪律：
  *  - 工具单源=远程 moonlink（29 工具 tools/list 消费，本地零复制，原则⑤同轨配额）
  *  - 写操作确认制：destructiveHint 或非 readOnly 的工具执行前需用户 Y 确认（read/list/search 自动过）
- *  - 循环上限 6 轮（防失控）；每轮工具调用打活动流（⚙ 前缀）
+ *  - 循环上限 12 轮（防失控，判停主力=token 预算制）；每轮工具调用打活动流（⚙ 前缀）
+ *
+ * #331.39（P6 模块化，对照 Hermes main 31 个 turn_*.py 阶段模块）——主循环固定阶段顺序：
+ *   STAGE 0 装配（tool assembly）      ：远程/内置工具并列+schema 清洗+引导生成
+ *   STAGE 1 api_call                  ：预算判停（压缩/收尾）+任务状态注入+LLM 调用
+ *   STAGE 2 response_intake           ：无 toolCalls 轮——方案直通/编排注入/幻觉/create
+ *                                       拦截/nudge/JSON 方案就地执行/终答
+ *   STAGE 3 tool_round                ：有 toolCalls 轮——自愈→确认→执行→per-item 记账
+ *                                       →分桶并发→结果回注→收尾指令
+ *   STAGE 4 stop_gates（循环外）       ：预算/轮数判停后的无工具汇总终答
+ * 补丁归属规则：新增拦截/兜底/注入必须挂在唯一 STAGE 锚下（「该插在哪层」问题消失）；
+ * 跨阶段共享状态仅限主函数显式声明的计数器（createRescued/rejectCount/nudges/compressCount）。
  */
 
 const MAX_TOOL_ROUNDS = 12 // #317.2：硬顶防失控（轮数不再是最小预算——判停主力=token 预算制）
@@ -16,6 +27,42 @@ const CTX_BUDGET_DEFAULT = 6000
 const ctxTokens = (messages: import('../lib/llm').ChatMessage[]): number =>
   messages.reduce((a, m) => a + Math.ceil(String(m.content ?? '').length / 3) + (Array.isArray(m.tool_calls) ? 120 : 0), 0)
 const CONFIRM_Y = new Set(['y', 'Y', 'yes', 'Yes', '是', '好'])
+
+// #331.39（P6，STAGE 0 装配）：工具感知引导生成（原 agentLoop 内联段抽出，行为不变）。
+// #317.9 根治：旧 system 硬编码工具清单漏工具误导小模型；分类规则=名称语义分桶
+//（列出/查询类显式点名）；无工具则不注入（零幻觉引导）。
+function buildToolGuide(tools: McpTool[]): string {
+  const has = (n: string) => tools.some((t) => t.name === n)
+  const caps: string[] = []
+  const pick = (...names: string[]) => names.filter(has).join('/')
+  if (has('add_todo') || has('list_todos')) caps.push(`待办：记待办 ${pick('add_todo')}、查待办 ${pick('list_todos')}（含按状态过滤）、完成/改/删 ${pick('complete_todo', 'update_todo', 'delete_todo')}、转便签 ${pick('convert_todo_to_sticky')}`)
+  if (has('add_sticky') || has('list_stickies')) caps.push(`便签：记便签 ${pick('add_sticky')}、看便签 ${pick('list_stickies')}、改/删 ${pick('update_sticky', 'delete_sticky')}`)
+  if (has('add_bookmark')) caps.push(`收藏：收藏网页 ${pick('add_bookmark')}、查收藏 ${pick('search_bookmarks')}、整理 ${pick('organize_bookmarks', 'update_bookmark')}`)
+  if (has('add_memory') || has('search_memory')) caps.push(`记忆：存 ${pick('add_memory')}、查 ${pick('search_memory')}`)
+  if (has('search_library')) caps.push(`书房：查文档 ${pick('search_library')}、看索引 ${pick('list_library_index')}、主题 ${pick('search_topics')}`)
+  if (has('web_search')) caps.push(`联网：搜索 web_search、读网页 ${pick('fetch_url')}`)
+  if (has('local_task_create_compile')) caps.push(`知识整理：local_task_list_uncompiled 扫描→确认→local_task_create_compile 后台任务；进度 local_task_status`)
+  if (has('skill_list')) caps.push(`技能：skill_list 列出、skill_view 读全文`)
+  // #317.P2b：易混工具对分工表（小模型路由高频混淆点——一行分工，只有对应工具在装配里才注入）
+  if (has('search_library') && has('search_topics') && has('search_memory'))
+    caps.push(`检索分工：search_library=查文档原文、search_topics=查主题跨文档关联、search_memory=查你的画像/已知事实`)
+  if (has('add_sticky') && has('save_note') && has('extract_archive'))
+    caps.push(`保存分工：add_sticky=记一条短想法、save_note=存成段内容为文档、extract_archive=把网页存进书房`)
+  if (has('search_library') && has('raw_get'))
+    caps.push(`溯源：search_library 命中后要看某篇全文/历史版本用 raw_get`)
+  const customs = tools.filter((t) => t.name.startsWith('mcp_') || t.name.includes('__')) as unknown as Array<{ name: string; description?: string; title?: string; server?: string }>
+  if (customs.length) {
+    // #317.P2：引导行带短描述（与 openaiTools 同源兜底）——路由链双层有信息
+    const items = customs.map((t) => {
+      const d = (t.description ?? t.title ?? '').trim()
+      return d ? `${t.name}（${d.slice(0, 40)}）` : t.name
+    })
+    caps.push(`自定义 MCP：${items.slice(0, 6).join('、')}${items.length > 6 ? ` 等 ${items.length} 个` : ''}`)
+  }
+  return caps.length
+    ? `\n【当前可用工具】\n${caps.map((c) => '- ' + c).join('\n')}\n用户问题只要可能由上述某工具回答（尤其是「列出/查看/有多少/我的…」类查询），先调工具再回答；不确定就选最接近的一个试，不要凭空说「没有该功能」。上述工具同时通过 API 的 tools 参数提供——一律可用，禁止向用户复述工具清单、禁止声称「某工具未在工具列表中定义/不存在」。工具返回空结果（0 条/空列表）就如实回答没有，不要转为创建/修改等写操作——用户没要求新建就不要新建。`
+    : ''
+}
 
 function needsConfirm(tool: McpTool, args?: Record<string, unknown>): boolean {
   // #329.4：organize_bookmarks 两段式——预览（不带 confirmToken）不弹确认条（dry_run 无副作用）；
@@ -228,38 +275,8 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   say(`（已接入工具 ${tools.length} 个${builtinNames.size ? `，含内置 ${builtinNames.size} 个` : ''}：${tools.map((t) => t.name).slice(0, 12).join('、')}${tools.length > 12 ? ` 等` : ''}）`)
 
   // #317.9：工具感知引导（Hermes 同款 tool-aware）——按**实际装配**的工具生成能力清单追加为第二条 system。
-  // 根治：xiaoyue.ts 旧 system 硬编码工具清单（漏 list_todos 等）误导小模型「没有列出待办的功能」。
-  // 分类规则：名称语义分桶（列出/查询类显式点名——小模型最易漏）；无工具则不注入（零幻觉引导）。
-  const has = (n: string) => tools.some((t) => t.name === n)
-  const caps: string[] = []
-  const pick = (...names: string[]) => names.filter(has).join('/')
-  if (has('add_todo') || has('list_todos')) caps.push(`待办：记待办 ${pick('add_todo')}、查待办 ${pick('list_todos')}（含按状态过滤）、完成/改/删 ${pick('complete_todo', 'update_todo', 'delete_todo')}、转便签 ${pick('convert_todo_to_sticky')}`)
-  if (has('add_sticky') || has('list_stickies')) caps.push(`便签：记便签 ${pick('add_sticky')}、看便签 ${pick('list_stickies')}、改/删 ${pick('update_sticky', 'delete_sticky')}`)
-  if (has('add_bookmark')) caps.push(`收藏：收藏网页 ${pick('add_bookmark')}、查收藏 ${pick('search_bookmarks')}、整理 ${pick('organize_bookmarks', 'update_bookmark')}`)
-  if (has('add_memory') || has('search_memory')) caps.push(`记忆：存 ${pick('add_memory')}、查 ${pick('search_memory')}`)
-  if (has('search_library')) caps.push(`书房：查文档 ${pick('search_library')}、看索引 ${pick('list_library_index')}、主题 ${pick('search_topics')}`)
-  if (has('web_search')) caps.push(`联网：搜索 web_search、读网页 ${pick('fetch_url')}`)
-  if (has('local_task_create_compile')) caps.push(`知识整理：local_task_list_uncompiled 扫描→确认→local_task_create_compile 后台任务；进度 local_task_status`)
-  if (has('skill_list')) caps.push(`技能：skill_list 列出、skill_view 读全文`)
-  // #317.P2b：易混工具对分工表（小模型路由高频混淆点——一行分工，只有对应工具在装配里才注入）
-  if (has('search_library') && has('search_topics') && has('search_memory'))
-    caps.push(`检索分工：search_library=查文档原文、search_topics=查主题跨文档关联、search_memory=查你的画像/已知事实`)
-  if (has('add_sticky') && has('save_note') && has('extract_archive'))
-    caps.push(`保存分工：add_sticky=记一条短想法、save_note=存成段内容为文档、extract_archive=把网页存进书房`)
-  if (has('search_library') && has('raw_get'))
-    caps.push(`溯源：search_library 命中后要看某篇全文/历史版本用 raw_get`)
-  const customs = tools.filter((t) => t.name.startsWith('mcp_') || t.name.includes('__')) as unknown as Array<{ name: string; description?: string; title?: string; server?: string }>
-  if (customs.length) {
-    // #317.P2：引导行带短描述（与 openaiTools 同源兜底）——路由链双层有信息
-    const items = customs.map((t) => {
-      const d = (t.description ?? t.title ?? '').trim()
-      return d ? `${t.name}（${d.slice(0, 40)}）` : t.name
-    })
-    caps.push(`自定义 MCP：${items.slice(0, 6).join('、')}${items.length > 6 ? ` 等 ${items.length} 个` : ''}`)
-  }
-  const toolGuide = caps.length
-    ? `\n【当前可用工具】\n${caps.map((c) => '- ' + c).join('\n')}\n用户问题只要可能由上述某工具回答（尤其是「列出/查看/有多少/我的…」类查询），先调工具再回答；不确定就选最接近的一个试，不要凭空说「没有该功能」。上述工具同时通过 API 的 tools 参数提供——一律可用，禁止向用户复述工具清单、禁止声称「某工具未在工具列表中定义/不存在」。工具返回空结果（0 条/空列表）就如实回答没有，不要转为创建/修改等写操作——用户没要求新建就不要新建。`
-    : ''
+  // #331.39（P6）：抽为模块级纯函数 buildToolGuide（归属 STAGE 0 装配）
+  const toolGuide = buildToolGuide(tools)
 
   // #317.F12：回复纪律常驻——4B 级模型关思考后会把内部分析/草稿直接写进回复（真机：自我介绍输出整段
   // 「好的，用户让我…首先我需要…可能的回复是…」）——system 层先压一遍
@@ -287,6 +304,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   let budgetWarned = false
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     // #317.2：token 预算制判停（轮数硬顶只是兜底）——85% 注入「收尾」指令；100% 强制出最终回答
+    // ===== STAGE 1 api_call（#331.39 P6 锚）：预算判停→压缩→状态注入→LLM 调用 =====
     const CTX_BUDGET = budgetFloor
     const tk = ctxTokens(messages)
     if (tk >= CTX_BUDGET) {
@@ -315,6 +333,8 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     const res = await chat(messages, openaiTools)
     if (!res.ok) throw new Error(res.error ?? 'LLM 调用失败')
 
+    // ===== STAGE 2 response_intake（#331.39 P6 锚）：无 toolCalls 轮的全部拦截面 =====
+    // 顺序固定：directPlan 直通 → 编排注入 → 幻觉拦截 → create 代登记 → prePlan → nudge → jsonPlan → 终答
     if (!res.toolCalls || res.toolCalls.length === 0) {
       // #329.5/#329.7：整理链轮末编排兜底——GLM 5.2 实证会「登记后停下等继续」/「读取结果后直接终答」。
       // 本轮或此前轮次已登记 cloud_organize 任务但从未调过 organize_bookmarks 且模型停下 → 注入推进指令。
@@ -471,6 +491,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       return { answer: text, toolCalls: used }
     }
 
+    // ===== STAGE 3 tool_round（#331.39 P6 锚）：自愈→确认→执行→记账→并发桶→回注 =====
     // assistant(tool_calls) 必须原样回注
     messages.push({ role: 'assistant', content: res.text ?? null, tool_calls: res.toolCalls })
 
@@ -647,6 +668,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     // （真机：list_todos 返回空后输出 500 字英文 "Wait, let's see..."）。紧贴工具结果下指令压住：
     messages.push({ role: 'system', content: '工具结果已返回（上面最后一条 tool 消息）。现在直接给用户写最终回答：一两句话、中文、面向用户；如果结果是空列表就明确说没有。禁止：分析这轮对话本身、复述任何指令文本、输出推理过程（"Wait/首先/需要确认"式文字）、提出调用更多工具。' })
   }
+  // ===== STAGE 4 stop_gates（#331.39 P6 锚）：判停后的无工具汇总终答 =====
   // #317.2：预算/轮数判停——不再丢一句占位话，改为一次无工具 LLM 调用汇总已有结果
   try {
     messages.push({ role: 'system', content: '工具调用阶段结束（上下文预算或轮次已到）。请基于以上已获得的工具结果，直接给出面向用户的最终回答；未完成的部分如实说明。' })
