@@ -90,3 +90,26 @@ describe('syncMoonMemory 游标增量（mock fetchPage）', () => {
     expect(moonMemoryStats(vault).rows).toBe(2) // 旧副本不丢
   })
 })
+
+describe('档位开关（moonRecallEnabled）', () => {
+  test('builtin 档=关；缺省/moonrecall 档=开；sync 在关档时 skipped', async () => {
+    const { moonRecallEnabled } = await import('../src/lib/memory-moon')
+    const { saveSettings } = await import('../src/lib/settings')
+    const fs2 = await import('node:fs')
+    // E2E HOME 隔离：XDG_CONFIG_HOME 已设 /tmp/tkhome-moon/.config
+    saveSettings({ memory: { enabled: true, mode: 'builtin', injectLimit: 5000 } } as any)
+    expect(moonRecallEnabled()).toBe(false)
+    saveSettings({ memory: { enabled: true, mode: 'builtin_moonrecall', injectLimit: 5000 } } as any)
+    expect(moonRecallEnabled()).toBe(true)
+    // 缺省（无 mode 字段）= 存量兼容开
+    fs2.default.rmSync('/tmp/tkhome-moon/.config/moonlybox/settings.json', { force: true })
+    saveSettings({ memory: { enabled: true, injectLimit: 5000 } } as any)
+    expect(moonRecallEnabled()).toBe(true)
+    const { syncMoonMemory } = await import('../src/lib/memory-moon')
+    saveSettings({ memory: { enabled: true, mode: 'builtin', injectLimit: 5000 } } as any)
+    expect(moonRecallEnabled()).toBe(false)
+    const r2 = await syncMoonMemory('/tmp/tkhome-moon/vault')
+    expect(r2.mode).toBe('skipped')
+    expect(r2.ok).toBe(false)
+  })
+})

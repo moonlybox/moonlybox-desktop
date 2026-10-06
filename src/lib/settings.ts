@@ -84,8 +84,9 @@ export interface SettingsSchema {
   }
   memory: {
     enabled: boolean // 长期记忆开关
-    /** #281 定稿：记忆模式唯一=本机内置+月忆增强；mode 字段=单选项下拉落点（现唯一取值 builtin_moonrecall，为将来受限扩展的挂载点） */
-    mode?: string
+    /** XY-C5 形态 4：双档——'builtin_moonrecall'（本机内置+月忆增强，缺省值：存量无 mode 字段按此）
+     *  | 'builtin'（仅本机内置，无月忆参与记忆检索：不下行同步、不混合注入；syncToMoon 上行不受此档控制） */
+    mode?: 'builtin' | 'builtin_moonrecall'
     injectLimit: number // 记忆注入上限（字符），默认 5000
     /** #284：同步到月忆——本机沉淀的记忆条目同时上行云端 quick-capture 候选池（确认制，用户在云端确认后才进正式记忆） */
     syncToMoon?: boolean

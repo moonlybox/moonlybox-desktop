@@ -20,9 +20,17 @@ import { apiGet } from './api'
 import { tokenize } from './memory-local'
 
 /** 开关（config.json moonRecall.enabled，默认开） */
+/**
+ * 月忆增强总闸：settings.memory.mode 选了「仅本机内置」(builtin) → 关（不下行同步、不混合注入）；
+ * 缺省（无 mode 字段）与 'builtin_moonrecall' → 开（存量用户无感升级）。
+ * config.moonRecall.enabled=false 是服务级强制总闸（优先于档位）。
+ */
 export function moonRecallEnabled(): boolean {
   const { loadConfig } = require('./config') as typeof import('./config')
-  return loadConfig().moonRecall?.enabled !== false
+  if (loadConfig().moonRecall?.enabled === false) return false
+  const { loadSettings } = require('./settings') as typeof import('./settings')
+  const mode = loadSettings().memory?.mode
+  return mode !== 'builtin' // 缺省 undefined = builtin_moonrecall（#281 存量兼容）
 }
 
 interface MoonRow {

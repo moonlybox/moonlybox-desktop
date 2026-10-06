@@ -544,6 +544,9 @@ const I18N_DICT = {
   'mm.syncDesc': { zh: '本机沉淀的记忆条目同时上行到云端月忆候选池，你确认后才进入云端正式记忆（跨设备可用）', en: 'Local memory entries also upload to the cloud candidate pool; they enter cloud Memories only after your confirmation (cross-device)' },
   'mm.modeLabel': { zh: '记忆模式', en: 'Memory Mode' },
   'mm.modeBuiltin': { zh: '本机内置 + 月忆（MoonRecall）增强', en: 'Local built-in + Memories (MoonRecall) enhanced' },
+'mm.modeLocalOnly': { zh: '仅本机内置', en: 'Local built-in only' },
+'mm.moonEnableConfirm': { zh: '启用「月忆增强」后，你在云端月忆中沉淀的记忆会同步到本机并参与小月的记忆检索（只读，不改变本机记忆内容）。确定授权启用吗？', en: 'Enabling Memories (MoonRecall) enhancement will sync your cloud Memories to this device for XiaoYue\'s memory retrieval (read-only; local memory stays untouched). Authorize?' },
+'mm.moonEnableOk': { zh: '授权启用', en: 'Authorize' },
   'mm.modeDesc': { zh: '本机记忆层恒在（MEMORY.md/USER.md，明文可编辑、不出本机），月忆作为云端增强跨设备可用。', en: 'Local memory is always on (MEMORY.md/USER.md, plain-text, stays on this device); cloud Memories add cross-device access.' },
   'mm.limitLabel': { zh: '记忆注入上限（字符）', en: 'Memory injection limit (chars)' },
   'mm.limitDesc': { zh: '每次对话注入小月的记忆上下文上限，超出按新旧保留截断。默认 5000。', en: 'Max memory context injected per chat; overflow trimmed oldest-first. Default 5000.' },
@@ -2691,7 +2694,8 @@ async function renderWork(nav, arg, label2) {
           <button type="button" class="toggle ${mm.syncToMoon !== false ? 'on' : ''}" id="sp-mm-sync"></button></div>
         <div class="set-field"><label>${t('mm.modeLabel')}</label>
           <select id="sp-mm-mode" class="set-select set-select-sm">
-            <option value="builtin_moonrecall" selected>${t('mm.modeBuiltin')}</option>
+            <option value="builtin" ${mm.mode === 'builtin' ? 'selected' : ''}>${t('mm.modeLocalOnly')}</option>
+            <option value="builtin_moonrecall" ${mm.mode !== 'builtin' ? 'selected' : ''}>${t('mm.modeBuiltin')}</option>
           </select>
           <div class="set-desc" style="margin-top:4px">${t('mm.modeDesc')}</div>
         </div>
@@ -2711,7 +2715,13 @@ async function renderWork(nav, arg, label2) {
       $('sp-mm-save').onclick = async () => {
         const st = $('sp-mm-status'); st.className = 'set-status'; st.textContent = t('ui.saving')
         const limit = Math.max(500, Math.floor(Number($('sp-mm-limit').value) || 5000))
-        const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').classList.contains('on'), mode: $('sp-mm-mode').value, injectLimit: limit, syncToMoon: $('sp-mm-sync').classList.contains('on') } })
+        // XY-C5 形态 4：首次启用月忆增强（builtin → builtin_moonrecall）需前端 UI 确认授权（云端记忆下沉本机参与检索）；取消=回退「仅本机内置」
+        const nextMode = $('sp-mm-mode').value
+        if (nextMode === 'builtin_moonrecall' && mm.mode === 'builtin') {
+          const ok = await mbConfirm(t('mm.moonEnableConfirm'), t('mm.moonEnableOk'))
+          if (!ok) { $('sp-mm-mode').value = 'builtin'; st.textContent = t('ui.saved'); return }
+        }
+        const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').classList.contains('on'), mode: nextMode, injectLimit: limit, syncToMoon: $('sp-mm-sync').classList.contains('on') } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? t('ui.saved') : (r.error ?? t('ui.saveFail'))
       }
