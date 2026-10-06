@@ -208,7 +208,7 @@ import { skillToolDefs, skillsIndex, viewSkill } from '../lib/skills'
 import { webToolDefs, runWebTool } from '../lib/web-tools'
 import { docToolDefs, runDocTool } from '../lib/doc-tools'
 import { listAllCustomTools, callCustomTool, enabledCustomServers } from '../lib/mcp-custom'
-import { getWorkspace, loadChat, appendTurn as wsAppendTurn, isUnderDirs, chatTurnsForContext, primaryDir } from '../lib/workspaces'
+import { getWorkspace, loadChat, appendTurn as wsAppendTurn, isUnderDirs, chatTurnsForContext, compressTurnsForContext, primaryDir } from '../lib/workspaces'
 import { localTaskToolDefs, runLocalTaskTool } from '../lib/local-tasks-tool'
 import { readToolResult } from '../lib/tool-result-store'
 import * as fs from 'node:fs'
@@ -251,7 +251,9 @@ export async function runAgentTools(
   const wsMain = wsRec ? primaryDir(wsRec) : undefined
   if (opts.chatId) {
     // 恢复历史（daemon 重启后 chat-context 内存会话丢——从盘回灌）
-    const turns = chatTurnsForContext(opts.chatId)
+    // #331.36（P4.5）：回灌前过压缩闸（超阈值→更早轮确定性摘要+保留最近轮）——
+    // 旧清单/旧方案文本跨轮累积在此截断（「常用指令用旧查询结果」的数据源残留）
+    const turns = compressTurnsForContext(chatTurnsForContext(opts.chatId))
     if (turns.length) {
       const { getSession, clearSession } = await import('../lib/chat-context')
       clearSession(opts.chatId)

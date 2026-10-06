@@ -228,3 +228,31 @@ export function deleteChat(id: string): boolean {
 export function chatTurnsForContext(id: string): ChatTurn[] {
   return loadChat(id)?.turns ?? []
 }
+
+// #331.36（P4.5 会话回灌压缩闸，对照 Hermes turn_context_compaction「压缩作用于会话持久层、跨轮生效」；
+// chat-context 的 [CONTEXT_SUMMARY] 只服务 CLI 非工具模式——工具模式回灌此前全量无压缩，
+// 旧清单/旧方案文本跨轮累积=「常用指令用旧查询结果」的数据源残留）。
+// 有意偏离（与 P4 同款登记）：dropped 轮不调 LLM 生成式摘要——确定性提取每轮首行+字数，
+// 零成本零方差；[CONTEXT_SUMMARY] 前缀通道 xiaoyue history 过滤已预留。
+const CTX_BUDGET_TOKENS = 6000
+const COMPRESS_TRIGGER_RATIO = 0.9
+const COMPRESS_KEEP_RATIO = 0.4
+export function compressTurnsForContext(turns: ChatTurn[]): ChatTurn[] {
+  const approxTokens = (t: ChatTurn) => Math.ceil(t.content.length / 3)
+  const total = turns.reduce((a, t) => a + approxTokens(t), 0)
+  if (turns.length < 4 || total < COMPRESS_TRIGGER_RATIO * CTX_BUDGET_TOKENS) return turns
+  const keepBudget = COMPRESS_KEEP_RATIO * CTX_BUDGET_TOKENS
+  const kept: ChatTurn[] = []
+  let keptTokens = 0
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const tk = approxTokens(turns[i])
+    if (keptTokens + tk > keepBudget) break
+    kept.unshift(turns[i])
+    keptTokens += tk
+  }
+  const dropped = turns.slice(0, turns.length - kept.length)
+  if (dropped.length < 2) return turns
+  const digest = dropped.map((t) => `- ${t.role === 'user' ? '问' : '答'}：${t.content.split('\n')[0].slice(0, 80)}${t.content.length > 80 ? `…（${t.content.length} 字）` : ''}`).join('\n')
+  const summary: ChatTurn = { role: 'assistant', content: `［历史摘要］此前 ${dropped.length} 轮对话已压缩：\n${digest}\n（以上为要点提取；当前云端实际状态以工具实时查询为准）` }
+  return [summary, ...kept]
+}
