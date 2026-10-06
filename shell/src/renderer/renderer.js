@@ -471,6 +471,9 @@ const I18N_DICT = {
   'xy.addDir': { zh: '增加工作目录', en: 'Add Work Folder' },
   'xy.delWsConfirm': { zh: '删除工作空间「{t}」？其下对话将变为无工作空间对话（历史保留）。', en: 'Delete workspace "{t}"? Its chats become workspace-free (history kept).' },
   'xy.newWsTitle': { zh: '新建工作空间', en: 'New Workspace' },
+  'xy.editWsTitle': { zh: '编辑工作空间', en: 'Edit Workspace' },
+  'xy.wsSave': { zh: '保存', en: 'Save' },
+  'xy.wsSaved': { zh: '✓ 已保存', en: '✓ Saved' },
   'xy.wsName': { zh: '名称（必填）', en: 'Name (required)' },
   'xy.wsNamePh': { zh: '例：毕业论文', en: 'e.g. Thesis' },
   'xy.wsDirs': { zh: '工作目录（必选，可多个）', en: 'Work folders (required, multiple allowed)' },
@@ -3993,20 +3996,17 @@ async function renderXiaoyueList() {
       const rect = row.getBoundingClientRect()
       menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:132px;box-shadow:0 8px 24px rgba(0,0,0,.35);visibility:hidden'
       document.body.appendChild(menu)
-      menu.innerHTML = `<div class="xy-mi-add" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px">${t('xy.addDir')}</div><div class="xy-mi-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err)">删除工作空间</div>`
+      // #331.45：「增加工作目录」升级为「编辑工作空间」（名称+目录列表增删/设主，同新建弹窗形态）
+      menu.innerHTML = `<div class="xy-mi-edit" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px">${t('xy.editWsTitle')}</div><div class="xy-mi-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err)">删除工作空间</div>`
       const mh = menu.offsetHeight
       const below = rect.bottom + 2 + mh <= window.innerHeight - 8
       menu.style.left = `${Math.min(rect.right - 140, window.innerWidth - 148)}px`
       menu.style.top = `${below ? rect.bottom + 2 : rect.top - mh - 2}px`
       menu.style.visibility = ''
-      menu.querySelector('.xy-mi-add').onclick = async (e2) => {
+      menu.querySelector('.xy-mi-edit').onclick = (e2) => {
         e2.stopPropagation()
         closeCtxMenu(menu)
-        const r = await window.moonlybox.pickFolder()
-        const dir = r?.ok ? r.path : null
-        if (!dir) return
-        await window.moonlybox.rpc('workspace', { op: 'update', id: ws.id, addDir: dir }, 10_000)
-        await renderXiaoyueList()
+        showWorkspaceDialog({ id: ws.id, name: ws.name, dirs: [...ws.dirs], primaryIndex: ws.primaryIndex ?? 0 })
       }
       menu.querySelector('.xy-mi-del').onclick = async (e2) => {
         e2.stopPropagation()
@@ -4027,23 +4027,25 @@ async function renderXiaoyueList() {
   }
 }
 
-function showWorkspaceDialog() {
+// #331.45：双形态——无参=新建（原行为）；传 ws=编辑（名称预填/现有目录列表/增删改，保存走 update diff）
+function showWorkspaceDialog(ws) { // #331.45：ws 缺省=新建形态；传 {id,name,dirs,primaryIndex}=编辑形态
+  const editing = !!ws
   const dlg = document.createElement('dialog')
   dlg.innerHTML = `
     <div class="dlg-body" style="min-width:420px">
-      <div class="sc-title" style="font-size:15px;font-weight:600;margin-bottom:12px">${t('xy.newWsTitle')}</div>
-      <div class="set-field"><label>${t('xy.wsName')}</label><input id="ws-name" placeholder="${t('xy.wsNamePh')}" /></div>
+      <div class="sc-title" style="font-size:15px;font-weight:600;margin-bottom:12px">${editing ? t('xy.editWsTitle') : t('xy.newWsTitle')}</div>
+      <div class="set-field"><label>${t('xy.wsName')}</label><input id="ws-name" placeholder="${t('xy.wsNamePh')}" value="${editing ? String(ws.name).replace(/"/g, '&quot;') : ''}" /></div>
       <div class="set-field"><label>${t('xy.wsDirs')}</label>
         <div id="ws-dirs" style="margin:4px 0 6px;display:flex;flex-direction:column;gap:4px"></div>
         <button class="btn ghost" id="ws-add-dir">${t('xy.addDirBtn')}</button>
       </div>
-      <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="ws-create">${t('xy.create')}</button><button class="btn ghost" id="ws-cancel">${t('ui.cancel')}</button></div>
+      <div class="set-row" style="justify-content:flex-end;margin-top:14px"><button class="btn" id="ws-create">${editing ? t('xy.wsSave') : t('xy.create')}</button><button class="btn ghost" id="ws-cancel">${t('ui.cancel')}</button></div>
       <div class="set-status" id="ws-status"></div>
     </div>`
   document.body.appendChild(dlg)
   dlg.showModal()
-  const dirs = []
-  let primaryIdx = 0
+  const dirs = editing ? [...ws.dirs] : []
+  let primaryIdx = editing ? (ws.primaryIndex ?? 0) : 0
   // #282.2：目录独立行渲染——每行全路径+主目录标记+设主/删除按钮（主目录=fs 相对路径解析基准）
   const renderDirs = () => {
     const box = dlg.querySelector('#ws-dirs')
@@ -4087,6 +4089,39 @@ function showWorkspaceDialog() {
     const st = dlg.querySelector('#ws-status')
     if (!name) { st.className = 'set-status err'; st.textContent = t('xy.wsNameReq'); return }
     if (!dirs.length) { st.className = 'set-status err'; st.textContent = t('xy.wsDirsReq'); return }
+    // #331.45：编辑态=update 逐项 diff（name/addDir×N/removeDir×N/setPrimary 变更才传）
+    if (editing) {
+      const origDirs = ws.dirs
+      const adds = dirs.filter((d) => !origDirs.includes(d))
+      const removes = origDirs.filter((d) => !dirs.includes(d))
+      const nameChanged = name !== ws.name
+      const primaryChanged = primaryIdx !== (ws.primaryIndex ?? 0) || (adds.length || removes.length ? dirs[primaryIdx] !== origDirs[ws.primaryIndex ?? 0] : false)
+      if (!nameChanged && !adds.length && !removes.length && !primaryChanged) { dlg.close(); dlg.remove(); return }
+      // 顺序纪律：先删（服务端会自行修正 primaryIndex）→再加→改名单独→最后 setPrimary（弹窗最终态
+      // 下标在删加完成后才与服务端一致——逐项 diff 中途下标会漂移，setPrimary 必须最后）
+      let ok = true
+      const up = (args) => window.moonlybox.rpc('workspace', { op: 'update', id: ws.id, ...args }, 10_000)
+      for (const d of removes) { if (!ok) break
+        const r = await up({ removeDir: d })
+        if (r.event !== 'done' || r.code !== 0) ok = false
+      }
+      for (const d of adds) { if (!ok) break
+        const r = await up({ addDir: d })
+        if (r.event !== 'done' || r.code !== 0) ok = false
+      }
+      if (ok && nameChanged) {
+        const r = await up({ name })
+        if (r.event !== 'done' || r.code !== 0) ok = false
+      }
+      // 删加后服务端 dirs 顺序=原序-删+尾加；弹窗最终列表顺序与其一致（渲染同源），primaryIdx 可直接用
+      if (ok && primaryChanged) {
+        const r = await up({ setPrimary: primaryIdx })
+        if (r.event !== 'done' || r.code !== 0) ok = false
+      }
+      if (ok) { dlg.close(); dlg.remove(); await renderXiaoyueList(); if (xyActiveWorkspace === ws.id) await renderWork('xiaoyue') }
+      else { st.className = 'set-status err'; st.textContent = t('xy.createFail') }
+      return
+    }
     const r = await window.moonlybox.rpc('workspace', { op: 'create', name, dirs, primaryIndex: primaryIdx }, 15_000)
     if (r.event === 'done' && r.code === 0) {
       dlg.close(); dlg.remove()
