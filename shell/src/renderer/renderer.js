@@ -461,6 +461,8 @@ const I18N_DICT = {
   'xy.newWs': { zh: '＋ 工作空间', en: '＋ Workspace' },
   'xy.newChat': { zh: '＋ 对话', en: '＋ Chat' },
   'xy.delMenu': { zh: '删除', en: 'Delete' },
+  'xy.renameMenu': { zh: '重命名', en: 'Rename' },
+  'xy.renameTitle': { zh: '重命名对话', en: 'Rename Chat' },
   'xy.delChatConfirm': { zh: '删除对话「{t}」？', en: 'Delete chat "{t}"?' },
   'xy.freeGroup': { zh: '💬 对话', en: '💬 Chats' },
   'xy.noWs': { zh: '无工作空间', en: 'No workspace' },
@@ -3434,7 +3436,12 @@ async function renderWork(nav, arg, label2) {
       } catch {}
       if (!genValid()) return
       // #310.4/.6：embed=1——AppShell 嵌入模式（#253.36）+PublicPageShell 嵌入模式（#310.9）——云端主菜单与页面自有头/脚都隐藏
-      await wv.loadURL(`${webBase}/${arg === 'terms' ? 'terms' : 'feedback'}?mb_theme=${resolveThemeDark()}&embed=1`)
+      // #331.44：wv.src 初始已是本目标 URL——同 URL 再 loadURL=打断进行中的导航（真机 ERR_ABORTED
+      // 上屏，React 路由守卫先跳 /login 又被打断）。仅当当前页≠目标页才 loadURL，相同则 reload
+      //（reload 不打断：token/lang 注入后重载生效）
+      const targetUrl = `${webBase}/${arg === 'terms' ? 'terms' : 'feedback'}?mb_theme=${resolveThemeDark()}&embed=1`
+      if ((wv.getURL() || '') === targetUrl) { wv.reload(); return }
+      await wv.loadURL(targetUrl)
     })
     wv.addEventListener('did-finish-load', () => {
       if (!genValid()) return
@@ -3578,6 +3585,41 @@ function mbConfirm(message, okText = '删除') {
     dlg.querySelector('#mbc-cancel').onclick = () => finish(false)
     dlg.showModal()
     dlg.querySelector('#mbc-cancel').focus()
+  })
+}
+
+// #331.43：文本输入模态框（mbConfirm 同范式——模态铁律：禁用原生 prompt/confirm）
+function mbPrompt(message, defaultValue = '', okText = '确定') {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog')
+    dlg.innerHTML = `
+      <div class="dlg-body" style="min-width:360px">
+        <div style="font-size:14px;line-height:1.6;white-space:normal;margin-bottom:12px">${message}</div>
+        <input id="mbp-input" style="display:block;width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg,#0f172a);color:var(--fg,#e2e8f0);font:inherit;margin-bottom:18px" />
+        <div class="set-row" style="justify-content:flex-end;gap:8px">
+          <button class="btn" id="mbp-ok">${okText}</button>
+          <button class="btn ghost" id="mbp-cancel">${t('ui.cancel')}</button>
+        </div>
+      </div>`
+    document.body.appendChild(dlg)
+    let done = false
+    const finish = (v) => {
+      if (done) return
+      done = true
+      dlg.close(); dlg.remove()
+      document.removeEventListener('cancel', onCancel)
+      resolve(v)
+    }
+    const onCancel = () => finish(null)
+    dlg.addEventListener('cancel', onCancel)
+    dlg.addEventListener('close', () => { if (!done) finish(null) }) // 兜底：Esc/close 未走 finish
+    const inp = dlg.querySelector('#mbp-input')
+    inp.value = defaultValue
+    dlg.querySelector('#mbp-ok').onclick = () => finish(String(inp.value).trim())
+    dlg.querySelector('#mbp-cancel').onclick = () => finish(null)
+    inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); finish(String(inp.value).trim()) } }
+    dlg.showModal()
+    inp.focus(); inp.select()
   })
 }
 
@@ -3865,12 +3907,22 @@ async function renderXiaoyueList() {
       const rect = el.getBoundingClientRect()
       menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:96px;box-shadow:0 8px 24px rgba(0,0,0,.35);visibility:hidden'
       document.body.appendChild(menu)
-      menu.innerHTML = `<div class="xy-mi-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err)">${t('xy.delMenu')}</div>`
+      // #331.43：对话「⋯」菜单=重命名+删除（危险项红色沉底，远离主操作）
+      menu.innerHTML = `<div class="xy-mi-rename" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px">${t('xy.renameMenu')}</div><div class="xy-mi-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err)">${t('xy.delMenu')}</div>`
       const mh = menu.offsetHeight
       const below = rect.bottom + 2 + mh <= window.innerHeight - 8
       menu.style.left = `${Math.min(rect.right - 104, window.innerWidth - 112)}px`
       menu.style.top = `${below ? rect.bottom + 2 : rect.top - mh - 2}px`
       menu.style.visibility = ''
+      menu.querySelector('.xy-mi-rename').onclick = async (e2) => {
+        e2.stopPropagation()
+        closeCtxMenu(menu)
+        const nv = await mbPrompt(t('xy.renameTitle'), c.title, t('ui.ok'))
+        if (nv === null || !nv || nv === c.title) return
+        await window.moonlybox.rpc('workspace', { op: 'renameChat', id: c.id, title: nv }, 10_000)
+        if (xyActiveChat === c.id) await renderWork('xiaoyue', { chat: c.id })
+        await renderXiaoyueList()
+      }
       menu.querySelector('.xy-mi-del').onclick = async (e2) => {
         e2.stopPropagation()
         closeCtxMenu(menu)

@@ -33,14 +33,19 @@ const reader = (async function* () {
   }
 })()
 
+// #331.44：rpc 加 id 过滤——迟到帧（前请求超时后才到的 done/log）不再串入当前请求，
+// 根治「一次慢请求超时→后续全部响应错位」的雪崩假 fail（search 的 ORT 冷启动方差可达 30s+）
+const rpcLog: Array<Record<string, unknown>> = [] // 各请求读剩的帧按 id 归档，超时后下一请求先滤历史
 async function rpc(cmd: string, args: Record<string, unknown>, collectMs = 4000): Promise<Array<Record<string, unknown>>> {
-  proc.stdin.write(JSON.stringify({ id: Math.floor(Math.random() * 1e9), cmd, args }) + '\n')
+  const id = Math.floor(Math.random() * 1e9)
+  proc.stdin.write(JSON.stringify({ id, cmd, args }) + '\n')
   await proc.stdin.flush()
   const msgs: Array<Record<string, unknown>> = []
   const deadline = Date.now() + collectMs
   while (Date.now() < deadline) {
     const { value, done } = await reader.next()
     if (done) break
+    if (value.id !== id && value.event !== 'ready') { rpcLog.push(value); continue } // 非本请求帧=迟到串线，缓存不消费
     msgs.push(value)
     if (value.event === 'done' || value.event === 'error') break
   }
@@ -56,7 +61,7 @@ const ping = await rpc('ping', {})
 assert('ping→pong', ping.at(-1)?.text === 'pong')
 
 // search：本地索引命中
-const search = await rpc('search', { q: '血小板输注' }, 30_000)
+const search = await rpc('search', { q: '血小板输注' }, 90_000)
 const doneS = search.at(-1)
 console.log('SEARCH_MSGS:', JSON.stringify(search).slice(0, 400))
 assert('search done', doneS?.event === 'done' && doneS?.code === 0)
