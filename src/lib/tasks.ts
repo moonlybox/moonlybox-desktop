@@ -27,6 +27,9 @@ export interface JobItem {
   srcHash?: string
   /** 产物相对 vault 路径（done 时有） */
   outPath?: string
+  /** #331.38（P5）：方案内容快照（tagsAdd/description 的 JSON 串）——执行前落库（persist-before-
+   * execute：crash 后 jobs.json 含「该写什么」，pending+note=可续跑无需重出方案）；done 后保留备查 */
+  note?: string
   /** #316 第二批：回传云端落库的待准入知识页 ID（回传成功时写——重启恢复不重复回传的判定键） */
   cloudWikiId?: string
   /** #310.46：云端准入回执（syncDown 见到 active 对应 wiki 时打标）——清单显示「✓ 已同步」 */

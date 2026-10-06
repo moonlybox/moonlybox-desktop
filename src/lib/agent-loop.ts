@@ -915,6 +915,18 @@ async function runItemsPlan(
       } else if (chat && bi === 0) {
         try { batch = await convergeTags(batch, say, chat) } catch {}
       }
+      // #331.38（P5 persist-before-execute）：每批执行前把方案内容落库（note 字段）——
+      // crash 后 resume 可见「该写什么」（pending+note=可续跑）；对照 Hermes「Persist the
+      // tool-call turn before any tool side effects」
+      try {
+        const { allJobs: aJn, updateItem: uIn } = await import('./tasks')
+        const jn = aJn().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
+          .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
+        if (jn) for (const it of batch) {
+          const note = it.description ? JSON.stringify({ description: it.description }) : (it.tagsAdd || it.tagsRemove ? JSON.stringify({ tagsAdd: it.tagsAdd, tagsRemove: it.tagsRemove }) : '')
+          if (note) uIn(jn.id, it.id, { note })
+        }
+      } catch { /* 方案落库失败不阻塞执行 */ }
       say(`⚙ organize_bookmarks（批次 ${bi + 1}/${batches.length}，${batch.length} 条，直通执行）`)
       const ex = await callTool('organize_bookmarks', { items: batch, execute: true })
       const exText = ex?.content?.map((c: any) => c.text ?? '').join('') ?? ''
