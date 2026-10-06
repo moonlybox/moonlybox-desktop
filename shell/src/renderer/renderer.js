@@ -2712,18 +2712,26 @@ async function renderWork(nav, arg, label2) {
       `)
       $('sp-mm-on').onclick = (e) => { e.currentTarget.classList.toggle('on'); $('sp-mm-save').click() }
       $('sp-mm-sync').onclick = (e) => { e.currentTarget.classList.toggle('on'); $('sp-mm-save').click() }
-      $('sp-mm-save').onclick = async () => {
-        const st = $('sp-mm-status'); st.className = 'set-status'; st.textContent = t('ui.saving')
-        const limit = Math.max(500, Math.floor(Number($('sp-mm-limit').value) || 5000))
-        // XY-C5 形态 4：首次启用月忆增强（builtin → builtin_moonrecall）需前端 UI 确认授权（云端记忆下沉本机参与检索）；取消=回退「仅本机内置」
+      // XY-C5 形态 4：首次启用月忆增强（builtin → builtin_moonrecall）切档即弹授权确认（云端记忆下沉本机参与检索）；
+      // 确认=落盘并记当前档；取消=下拉回退「仅本机内置」不落盘。降级（→builtin）不弹。
+      const applyModeChange = async () => {
         const nextMode = $('sp-mm-mode').value
         if (nextMode === 'builtin_moonrecall' && mm.mode === 'builtin') {
           const ok = await mbConfirm(t('mm.moonEnableConfirm'), t('mm.moonEnableOk'))
-          if (!ok) { $('sp-mm-mode').value = 'builtin'; st.textContent = t('ui.saved'); return }
+          if (!ok) { $('sp-mm-mode').value = 'builtin'; return false }
         }
+        const st = $('sp-mm-status'); st.className = 'set-status'; st.textContent = t('ui.saving')
+        const limit = Math.max(500, Math.floor(Number($('sp-mm-limit').value) || 5000))
         const r = await saveAppSettings({ memory: { enabled: $('sp-mm-on').classList.contains('on'), mode: nextMode, injectLimit: limit, syncToMoon: $('sp-mm-sync').classList.contains('on') } })
         st.className = r.ok ? 'set-status ok' : 'set-status err'
         st.textContent = r.ok ? t('ui.saved') : (r.error ?? t('ui.saveFail'))
+        if (r.ok) mm.mode = nextMode // 闭包快照同步：防同会话二次切档重复弹/漏弹
+        return !!r.ok
+      }
+      $('sp-mm-mode').addEventListener('change', () => { applyModeChange() })
+      $('sp-mm-save').onclick = async () => {
+        // 统一保存走 applyModeChange（mode 确认逻辑单源；其他字段随存）
+        await applyModeChange()
       }
       // #289 云端候选池：candidate 态实体列表+确认/丢弃（登录态经 daemon apiGet/apiPost；未登录自然报未登录错误）
       const mmBox = $('sp-mm-cand-body')
