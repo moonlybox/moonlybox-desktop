@@ -140,9 +140,30 @@ export async function summarizeDropped(
 }
 
 /** 带重试的 LLM 调用（chat.maxRetries 次，指数退避） */
+// #331.37（P2.5 Auto-Recovery Ladder，对照 Hermes turn_recovery_autorecover.py）：
+// 重试耗尽后不立即失败——临时性错误（5xx/overloaded/timeout）+答案未送达→停驻倒计时重入重试；
+// 永久类（auth/403/billing/格式）永不进梯（「deterministic for this request」）。
+// 调度=jittered 15/30/60/60/60s（Retry-After 优先 cap 120s）；cycles 上限 5。
+const LADDER_REASONS = /5\d\d|overloaded|529|timeout|timed out|ECONNRESET|ECONNREFUSED|socket hang up|fetch failed|network/i
+const NON_LADDER_REASONS = /401|403|404|api key|unauthorized|billing|quota|余额|额度|invalid.*key|content policy|unsupported/i
+const LADDER_BASE_S = 15
+const LADDER_CAP_S = 60
+const LADDER_CYCLES = 5
+const RETRY_AFTER_CAP_S = 120
+function ladderEligible(err: string): boolean {
+  return LADDER_REASONS.test(err) && !NON_LADDER_REASONS.test(err)
+}
+function ladderWaitSeconds(cycle: number, err: string): number {
+  const ra = err.match(/retry[- ]after[^\d]*(\d+)/i)
+  if (ra) return Math.min(RETRY_AFTER_CAP_S, Number(ra[1]))
+  const base = Math.min(LADDER_CAP_S, LADDER_BASE_S * Math.pow(2, cycle - 1))
+  return Math.round(base * (0.85 + Math.random() * 0.3)) // ±15% jitter
+}
+
 export async function chatWithRetry(
   call: () => Promise<{ ok: boolean; error?: string }>,
   onRetry?: (attempt: number, total: number, error: string) => void,
+  onLadder?: (cycle: number, total: number, waitS: number, error: string) => Promise<void> | void,
 ): Promise<{ ok: boolean; error?: string; attempts: number }> {
   const cfg = loadSettings().chat
   if (cfg.retryEnabled === false) { const r1 = await call(); return { ...r1, attempts: 1 } } // #322：总开关关闭=只调一次
@@ -156,6 +177,20 @@ export async function chatWithRetry(
     if (attempt < total) {
       const delay = Math.min(30_000, 1000 * Math.pow(2, attempt - 1))
       await new Promise((r) => setTimeout(r, delay))
+    }
+  }
+  // #331.37：P2.5 ladder——重试耗尽且临时性错误→停驻重入（「the turn parks with a visible
+  // countdown instead of ending in API failed after N retries」）
+  for (let cycle = 1; cycle <= LADDER_CYCLES && ladderEligible(lastErr); cycle++) {
+    const waitS = ladderWaitSeconds(cycle, lastErr)
+    await onLadder?.(cycle, LADDER_CYCLES, waitS, lastErr)
+    await new Promise((r) => setTimeout(r, waitS * 1000))
+    for (let attempt = 1; attempt <= total; attempt++) {
+      const res = await call()
+      if (res.ok) return { ...res, attempts: total + cycle }
+      lastErr = res.error ?? '未知错误'
+      onRetry?.(attempt, total, lastErr)
+      if (attempt < total) await new Promise((r) => setTimeout(r, Math.min(30_000, 1000 * Math.pow(2, attempt - 1))))
     }
   }
   return { ok: false, error: `重试 ${total} 次仍失败：${lastErr}`, attempts: total }

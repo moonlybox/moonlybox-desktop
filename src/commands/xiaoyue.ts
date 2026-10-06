@@ -590,6 +590,10 @@ ${memBlock}` : ''}${skillBlock}`
       // #310.19：max_tokens 16000——思考型模型 tools 协议下 reasoning 吃掉 4000 全额的余量
       () => byokChatMessages(messages, tools as never, 90_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined, localCap, thinking, localTemp),
       (attempt, total, err) => console.log(`（LLM 调用失败，重试 ${attempt}/${total}：${err.slice(0, 80)}）`),
+      // #331.37：P2.5 ladder——重试耗尽后临时性故障停驻倒计时（对照 Hermes「parks with a visible countdown」）
+      async (cycle, totalC, waitS, err) => {
+        console.log(`（服务端暂时无响应（${err.slice(0, 60)}）——${waitS}s 后自动重试（恢复轮 ${cycle}/${totalC}）；无需操作，等待即可）`)
+      },
     )
     // #280.3.2：【真根因修复】toolCalls 必须透传——原 `{ ok, text }` 把 tool_calls 静默丢弃，
     // LLM 请求调工具被无视→循环空转 6 轮→空回答（deepwiki 三轮「无后续输出」的真正根因）
