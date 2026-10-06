@@ -272,6 +272,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   const used: Array<{ name: string; ok: boolean }> = []
   let createRescued = false // #331.26：本次调用已系统代为登记（幂等锚）
   let rejectCount = 0 // #331.28：校验拒绝计数（≥2 次放行降级——防 kind 推断错导致死循环到 MAX）
+  let nudges = 0 // #331.31：nudge 计数（对照 Hermes invalid_tool_retries——3 strikes 停为 partial）
 
   // #331.26：预算下限自适应——整理链 system（16k+ 字符）本身就超默认预算 6000，首轮即「预算将尽」
   // break→工具循环/文本化拦截全被绞死（真机：create 文本化上屏复现，沙箱 repro 8039/6000 实锤）。
@@ -406,24 +407,31 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         }
         return { answer: exec, toolCalls: used }
       }
-      // #317.F12：推理泄漏检测+一次自纠——system 纪律失守时兜底（判窄不判宽，避免误伤正常长答）
-      // #317.F14：自纠循环（上限 2 次）——首版修正令 200 字被 4B 模型当新题目展开分析（真机：重写回复本身
-      // 又是 2000 字「检查是否符合…草拟…」），改极短硬令+多轮兜底
-      for (let fixRound = 0; fixRound < 2 && isLeakyAnswer(text); fixRound++) {
-        say(`（回复夹带了分析过程，正在自动重写 ${fixRound + 1}/2——最终回答以重写后的干净版为准）`)
-        // #329.13：整理链进行中（已登记未收口）→自纠令改为「继续干活」而非「重写文字」——
-        // GLM 5.2 实证会把工具调用写成正文然后停；此时正确动作是回工具链，不是重说一遍
+      // #331.31（P1 nudge 化，对照 Hermes turn_tool_validation/_DROPPED_TOOLCALL_NUDGE）：
+      // 文本化工具调用/推理泄漏→不再走「独立 LLM 重写调用」（重写=多一次推理往返+漂移窗口，
+      // 真机实证「重写两轮烧完原样上屏」）——改为 Hermes 语义：标准 nudge 文案以消息追加→
+      // continue 同一循环，模型带着 nudge 重新生成。3 strikes 计分停（对照 validate_tool_calls
+      // 「a degenerate model still halts at 3」），停为 partial 而非死循环。
+      if (isLeakyAnswer(text)) {
+        nudges++
+        if (nudges >= 3) {
+          say(`（连续 ${nudges} 次回复夹带工具调用文本/分析过程——按部分结果停止）`)
+          return { answer: '（模型连续输出异常格式，本轮已按部分结果停止。请重试或换个说法。）', toolCalls: used }
+        }
+        // #329.13/#331.22 语义收编进 nudge 表：按当前状态选对应 nudge（固定文案，不再每次现拼）
         const midOrganize = used.some((u) => u.name === 'local_task_create_cloud_organize' || u.name === 'local_task_cloud_organize_preview')
           && !used.some((u) => u.name === 'local_task_update_cloud_organize')
-        // #331.22：幻觉上报（无 create 却输出 update/all=true 文本）→引导从扫描开始走全链
         const hallucinatedReport = /local_task_update[a-z_]*(all|jobid)/i.test(text) && !midOrganize
-        const fixPrompt = midOrganize
-          ? '不要把工具调用写成文字。继续调用工具完成云端整理：调 organize_bookmarks {items:[{id, tagsAdd/description...}], execute:true} 一次写入（不要预览、不要等确认、不要二次征询），完成后用一句中文汇报结果（进度由系统自动记账，无需上报）。'
+        const nudge = midOrganize
+          ? '（系统）你的上一条回复把工具调用写成了正文文本。不要输出任何文字——直接发起真正的工具调用继续完成任务：organize_bookmarks {items:[…], execute:true}。完成后用一句中文汇报结果。'
           : hallucinatedReport
-            ? '你刚才把「上报进度」当成了第一步，还编造了任务 ID——任务根本不存在。正确流程：①search_bookmarks 实时圈定（untagged=true 或 noDescription=true）②local_task_create_cloud_organize 登记（传 items:[{id,title}]）③生成方案④organize_bookmarks {items, execute:true} 写入。现在从①开始执行。'
-            : '不要分析，不要复述此前的方案/分类清单。直接输出最终中文回答本身（若是进度汇报，只说当前进度与下一步）。'
-        const fix = await chat([...messages, { role: 'assistant', content: text }, { role: 'user', content: fixPrompt }], undefined)
-        if (fix.ok && fix.text && fix.text.trim()) text = fix.text
+            ? '（系统）你引用的任务/ID 不存在（未登记过）。从第一步开始：先 search_bookmarks 实时圈定，再 local_task_create_cloud_organize 登记任务（传 items:[{id,title}]），然后 organize_bookmarks 写入。直接发起工具调用。'
+            : '（系统）你的回复夹带了内部分析/工具调用文本。直接输出给用户看的最终中文回答本身；若任务未完成，直接发起真正的工具调用。'
+        say(`（回复夹带了分析/工具文本——注入 nudge 重走 ${nudges}/3）`)
+        // role 交替保序（Hermes：APIs reject tool→user——先落 assistant 行再追加 nudge）
+        messages.push({ role: 'assistant', content: text })
+        messages.push({ role: 'user', content: nudge })
+        continue
       }
       // #329.14：items JSON 就地执行——编排轮收到的纯 JSON 方案，系统托管完成 预览→token→执行→收口
       const jsonPlan = parseItemsPlan(text)
