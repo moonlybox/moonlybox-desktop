@@ -145,6 +145,11 @@ let daemon = null
 const pending = new Map() // id → {resolve}
 let nextId = 1
 const eventHooks = [] // (id, event, payload) → void（renderer 订阅）
+// #331.40：daemon 自动重生（对照 Hermes gateway on_all_adapters_down='stay_alive' 语义——
+// 无监督者的桌面形态，failure exit 只会断 UI 通道丢在途消息（#118080），保活+重建优于裸失败）
+let daemonRespawns = 0 // 连续快速崩溃计数（退避 1/2/4s；≥3 次停手弹窗，防 crash 循环）
+let daemonLastExitAt = 0
+let appQuitting = false
 
 // vault 根解析（#253 需求 6）：用户选择持久化 vault.json → 全链（daemon/采集/树）生效
 function configuredVault() {
@@ -208,8 +213,27 @@ function ensureDaemon() {
     daemon = null
     const tail = stderrTail.trim().split('\n').slice(-3).join(' | ').slice(0, 300)
     const msg = `daemon exited (${code})${tail ? '：' + tail : ''}`
-    pending.forEach((p) => p({ event: 'error', message: msg }))
+    // #331.40：在途请求按 Hermes 语义回可读提示（内核已恢复，请重试）——非裸 error
+    pending.forEach((p) => p({ event: 'error', message: appQuitting ? msg : `内核进程已退出，正在自动恢复——请稍候重试。${tail ? '（' + tail + '）' : ''}` }))
     pending.clear()
+    eventHooks.forEach((h) => h(0, 'stderr', `[daemon] ${msg}\n`))
+    // #331.40：自动重生——退避 1/2/4s；10s 内连续 3 次崩溃=crash 循环，停手弹窗（下次用户操作 ensureDaemon 再试）
+    if (appQuitting) return
+    const now = Date.now()
+    if (now - daemonLastExitAt < 10_000) daemonRespawns++
+    else daemonRespawns = 1
+    daemonLastExitAt = now
+    if (daemonRespawns >= 3) {
+      daemonRespawns = 0
+      try { if (win && !win.isDestroyed()) win.webContents.send('kernel:event', { id: 0, event: 'stderr', payload: `[daemon] 内核连续异常退出，已停止自动恢复\n` }) } catch {}
+      dialog.showErrorBox('魔力宝盒', `内核连续异常退出，已停止自动恢复。${tail ? '\n\n' + tail : ''}\n\n请重试操作或重启应用。`)
+      return
+    }
+    const delay = 1000 * Math.pow(2, daemonRespawns - 1)
+    setTimeout(() => {
+      if (appQuitting) return
+      try { ensureDaemon() } catch {}
+    }, delay)
   })
   return daemon
 }
@@ -790,6 +814,8 @@ app.on('will-quit', () => {
 })
 
 // #267：默认（closeToTray=false）关窗=退出应用（托盘不残留）；closeToTray=true 时窗口只 hide 不销毁，本事件不触发
+// #331.40：退出流程置位——daemon exit handler 据此跳过自动重生（应用退出≠内核崩溃）
+app.on('before-quit', () => { appQuitting = true })
 app.on('window-all-closed', () => {
   if (!closeToTrayOn) app.quit()
 })
