@@ -304,10 +304,14 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       say(`（上下文预算 85%：${tk}/${CTX_BUDGET}——请尽快收尾）`)
       messages.push({ role: 'system', content: '上下文预算即将用尽：请在本轮决定后直接给出最终回答，不要再发起新的工具调用（除非绝对必要）。' })
     }
-    // #331.33：任务状态每轮注入（todo_tool format_for_injection 语义——当前态覆盖式 system 行，
-    // 上轮注入的旧行由本行取代语义：模型以最后一条为准）
+    // #331.33：任务状态每轮注入（todo_tool format_for_injection 语义——当前态覆盖式 system 行）
+    // #331.35 复核修正①：移除上一条注入行再 push——真正覆盖式（旧行累积 12 条=膨胀+压缩后语义错位）
     const jobState = await formatOrganizeJobForInjection()
-    if (jobState) messages.push({ role: 'system', content: jobState })
+    if (jobState) {
+      const stale = messages.findIndex((m) => m.role === 'system' && String(m.content ?? '').startsWith('【当前整理任务状态'))
+      if (stale >= 0) messages.splice(stale, 1)
+      messages.push({ role: 'system', content: jobState })
+    }
     const res = await chat(messages, openaiTools)
     if (!res.ok) throw new Error(res.error ?? 'LLM 调用失败')
 
@@ -335,7 +339,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
             return { answer: '（方案与当前待整理清单反复不符，已停止本轮执行。云端数据未变动，请重新发起整理指令。）', toolCalls: used }
           }
           // #331.19：目标校验拒绝→注入实时清单再走一轮（模型基于新鲜数据重新生成 items）
-          messages.push({ role: 'user', content: `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。` })
+          pushUserGuidance(messages, `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。`)
           continue
         }
         return { answer: exec, toolCalls: used }
@@ -348,12 +352,9 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         //（分类决策=LLM 强项；机械调用=系统托管）。下一轮 finish=stop 的 text 若是 items JSON 就地执行（见 return 前拦截）。
         const askedJson = messages.some((m: any) => m.role === 'user' && String(m.content ?? '').includes('只输出 items JSON'))
         if (!askedJson) {
-          messages.push({
-            role: 'user',
-            content: hallucinatedExec
+          pushUserGuidance(messages, hallucinatedExec
               ? '（系统）检测到你报告了执行结果，但本轮并没有真正调用 organize_bookmarks 工具——那是编造的。不要再调用任何工具。基于上方清单（local_task_cloud_organize_preview 或 search 结果），**只输出 items JSON 数组**：[{"id":"收藏id","description":"一句描述","tagsAdd":["标签1"]}, ...]，覆盖全部待整理条目。不要输出任何其他文字、解释或 Markdown 代码块标记。'
-              : '（系统）不要再调用任何工具。基于上方清单（local_task_cloud_organize_preview 或 search 结果），**只输出 items JSON 数组**：[{"id":"收藏id","tagsAdd":["标签1","标签2"]}, ...]，覆盖全部待整理条目，每条 1~2 个标签。不要输出任何其他文字、解释或 Markdown 代码块标记。',
-          })
+              : '（系统）不要再调用任何工具。基于上方清单（local_task_cloud_organize_preview 或 search 结果），**只输出 items JSON 数组**：[{"id":"收藏id","tagsAdd":["标签1","标签2"]}, ...]，覆盖全部待整理条目，每条 1~2 个标签。不要输出任何其他文字、解释或 Markdown 代码块标记。')
           continue
         }
       }
@@ -395,7 +396,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
             if (regData?.ok) {
               createRescued = true
               say(`（系统代为登记任务 ${regData.jobId}，${regData.total} 条）`)
-              messages.push({ role: 'user', content: `（系统）你的 create 调用被写成了正文文本，系统已代你登记任务（${regData.total} 条）。**不要重复登记**。立即基于上方清单生成${kind === 'tags' ? '标签' : '描述'}方案，然后**只输出 items JSON 数组**（[{"id":"...","description":"..."} 或 {"id":"...","tagsAdd":["..."]}]），覆盖全部 ${regData.total} 条。` })
+              pushUserGuidance(messages, `（系统）你的 create 调用被写成了正文文本，系统已代你登记任务（${regData.total} 条）。**不要重复登记**。立即基于上方清单生成${kind === 'tags' ? '标签' : '描述'}方案，然后**只输出 items JSON 数组**（[{"id":"...","description":"..."} 或 {"id":"...","tagsAdd":["..."]}]），覆盖全部 ${regData.total} 条。`)
               continue
             }
           }
@@ -403,7 +404,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
       }
       // #331.26：已代登记后再复读 create 文本→不再自纠（重写无用），直接注入推进令要方案
       if (createTextMatch && createRescued) {
-        messages.push({ role: 'user', content: '（系统）任务已登记，禁止重复输出登记调用。**只输出 items JSON 数组**（[{"id":"...","description":"一句描述"}]，覆盖全部条目），不要输出任何其他文字。' })
+        pushUserGuidance(messages, '（系统）任务已登记，禁止重复输出登记调用。**只输出 items JSON 数组**（[{"id":"...","description":"一句描述"}]，覆盖全部条目），不要输出任何其他文字。')
         continue
       }
       // #329.21：items JSON 优先于泄漏自纠——JSON 方案是合法终答（即使带工具名前缀），
@@ -419,7 +420,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
             return { answer: '（方案与当前待整理清单反复不符，已停止本轮执行。云端数据未变动，请重新发起整理指令。）', toolCalls: used }
           }
           // #331.19：目标校验拒绝→注入实时清单再走一轮
-          messages.push({ role: 'user', content: `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。` })
+          pushUserGuidance(messages, `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。`)
           continue
         }
         return { answer: exec, toolCalls: used }
@@ -447,7 +448,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
         say(`（回复夹带了分析/工具文本——注入 nudge 重走 ${nudges}/3）`)
         // role 交替保序（Hermes：APIs reject tool→user——先落 assistant 行再追加 nudge）
         messages.push({ role: 'assistant', content: text })
-        messages.push({ role: 'user', content: nudge })
+        pushUserGuidance(messages, nudge)
         continue
       }
       // #329.14：items JSON 就地执行——编排轮收到的纯 JSON 方案，系统托管完成 预览→token→执行→收口
@@ -462,7 +463,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
             return { answer: '（方案与当前待整理清单反复不符，已停止本轮执行。云端数据未变动，请重新发起整理指令。）', toolCalls: used }
           }
           // #331.19：目标校验拒绝→注入实时清单再走一轮
-          messages.push({ role: 'user', content: `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。` })
+          pushUserGuidance(messages, `（系统）你提交的方案混入了旧对话条目，已被目标校验拒绝。**当前实时待整理清单（${exec.freshList.length} 条）**：\n${exec.freshList.join('\n')}\n不要调用任何工具，**只输出 items JSON 数组**（[{"id":"...","description":"...","tagsAdd":["..."]}, ...]），必须且仅覆盖上述清单。`)
           continue
         }
         return { answer: exec, toolCalls: used }
@@ -675,6 +676,18 @@ async function formatOrganizeJobForInjection(): Promise<string | null> {
   } catch { return null }
 }
 
+// #331.35 复核修正④：role 交替保序（对照 Hermes 硬不变量「message role alternation——
+// never two user messages in a row」）——尾部 user 行时并入（\n\n 连接），否则正常 push。
+// 修复点：编排注入/freshList 注入/create 推进令/复读推进令四处裸 push user 造成 user→user 连续。
+function pushUserGuidance(messages: import('../lib/llm').ChatMessage[], content: string): void {
+  const last = messages.at(-1) as any
+  if (last && last.role === 'user' && typeof last.content === 'string') {
+    last.content = `${last.content}\n\n${content}`
+  } else {
+    messages.push({ role: 'user', content })
+  }
+}
+
 // #331.34（P4 上下文压缩，对照 Hermes trajectory_compressor 护头护尾/不拆对/摘要替换语义）：
 // 预算尽不再 break（#331.26/27 的绞死根源）——压缩后 continue。
 // 护头=messages[0]（system 常量）；护尾=最近 KEEP_TAIL 条（当前工作集）；
@@ -699,6 +712,10 @@ function compressMiddleMessages(messages: import('../lib/llm').ChatMessage[]): b
     } else if (m.role === 'assistant' && content.length > 240) {
       saved += content.length - 200
       m.content = content.slice(0, 200) + '…（已压缩）'
+    } else if (m.role === 'user' && content.length > 400) {
+      // #331.35 复核修正②：系统注入的长指令行（freshList 清单/推进令）也是膨胀主力——保留前 400 字
+      saved += content.length - 400
+      m.content = content.slice(0, 400) + '\n…（系统注入行已压缩，最新清单以下一条注入为准）'
     }
   }
   return saved > 1000
@@ -818,7 +835,9 @@ async function runItemsPlan(
 ): Promise<string | { __rejected: true; freshList: string[]; isDesc: boolean }> {
   try {
     // #331.16：登记兜底——模型跳过 create 直接执行时系统自动补登记（任务页可见性硬保证）
-    try { await ensureCloudOrganizeJob(plan) } catch { /* 登记失败不阻塞执行 */ }
+    // #331.35 复核修正⑦：登记移到校验剔除**之后**（混合批次剔除失效条目后再登记——
+    // 「落库含名可核对」=任务详情必须=实际执行清单，登记含失效条目=详情与执行错位）
+    // （原位置在 try 块外首行，校验在同 try 内——挪入即天然后置）
     // #331：标签收敛轮已移入分批循环（#331.21：逐批快照叠加——每批执行前对齐最新既有标签）
     // #331.13：目标集合校验（机制层，补描述缺陷根治）——模型会从对话上文抄旧 items（id 属于旧批次），
     // 对已处理条目重复写入、真目标一条不碰。执行前实时查目标集合（cloud:#N 任务最近 job 的 kind
@@ -860,9 +879,22 @@ async function runItemsPlan(
             const fresh = targetRows.map((b: any) => `${b.id} | ${String(b.title ?? '').slice(0, 40)}`)
             return { __rejected: true, freshList: fresh, isDesc }
           }
-          say(`（目标校验：剔除 ${invalid.length} 条已失效条目（不在当前待整理集合），其余 ${valid.length} 条照常执行）`)
+          // #331.35 复核修正⑥：剔除清单回执给模型（Hermes：invalid calls get error results——
+          // 模型不知道哪些被剔=下轮重提同批）
+          say(`（目标校验：剔除 ${invalid.length} 条已失效条目（${invalid.map((x) => x.id.slice(0, 8)).join(',')}），其余 ${valid.length} 条照常执行）`)
+          // #331.35 复核修正⑦b：已登记任务的剔除条置 skipped（账本保真——详情显示跳过而非残留 pending）
+          try {
+            const { allJobs: aJ3, updateItem: uI3 } = await import('./tasks')
+            const j3 = aJ3().filter((j) => j.type === 'cloud_organize' && j.status !== 'completed' && j.status !== 'cancelled')
+              .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')))[0]
+            if (j3) for (const iv of invalid) {
+              const row = j3.items.find((it) => it.path === iv.id)
+              if (row && row.status === 'pending') uI3(j3.id, iv.id, { status: 'skipped', error: '不在当前待整理集合（已失效）' })
+            }
+          } catch { /* 账本标记失败不阻塞执行 */ }
           plan = valid
         }
+        try { await ensureCloudOrganizeJob(plan) } catch { /* 登记失败不阻塞执行 */ }
       }
     } catch { /* 校验失败不阻塞执行 */ }
     // #331.6/#331.9：快照兜底（文本化路径）——与工具调用路径共用 snapshotJobTitlesFromPlan
