@@ -273,6 +273,7 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
   let createRescued = false // #331.26：本次调用已系统代为登记（幂等锚）
   let rejectCount = 0 // #331.28：校验拒绝计数（≥2 次放行降级——防 kind 推断错导致死循环到 MAX）
   let nudges = 0 // #331.31：nudge 计数（对照 Hermes invalid_tool_retries——3 strikes 停为 partial）
+  let compressCount = 0 // #331.34：压缩次数（预算尽时压缩重走，上限 2）
 
   // #331.26：预算下限自适应——整理链 system（16k+ 字符）本身就超默认预算 6000，首轮即「预算将尽」
   // break→工具循环/文本化拦截全被绞死（真机：create 文本化上屏复现，沙箱 repro 8039/6000 实锤）。
@@ -289,6 +290,12 @@ export async function agentLoop(deps: AgentLoopDeps): Promise<AgentLoopResult> {
     const CTX_BUDGET = budgetFloor
     const tk = ctxTokens(messages)
     if (tk >= CTX_BUDGET) {
+      // #331.34：预算尽→压缩重走（Hermes 语义：压缩后继续，不终止）；压缩无效 2 次才 break
+      if (compressCount < 2 && compressMiddleMessages(messages)) {
+        compressCount++
+        say(`（上下文预算将尽：${tk}/${CTX_BUDGET} token——已压缩中段历史（第 ${compressCount}/2 次），继续执行）`)
+        continue
+      }
       say(`（上下文预算将尽：${tk}/${CTX_BUDGET} token——汇总已有结果作答）`)
       break
     }
@@ -666,6 +673,35 @@ async function formatOrganizeJobForInjection(): Promise<string | null> {
       .map((it) => `${it.path} | ${String(it.title ?? '').slice(0, 30)}`).join('\n')
     return `【当前整理任务状态（以此为准，禁止复用对话上文中的旧清单/旧方案/旧 ID）】${job.title}（${kind}）：已写入 ${done}、失败 ${failed}、待处理 ${pending}。待处理清单：\n${pendingList}`
   } catch { return null }
+}
+
+// #331.34（P4 上下文压缩，对照 Hermes trajectory_compressor 护头护尾/不拆对/摘要替换语义）：
+// 预算尽不再 break（#331.26/27 的绞死根源）——压缩后 continue。
+// 护头=messages[0]（system 常量）；护尾=最近 KEEP_TAIL 条（当前工作集）；
+// 可压缩区=中间段；边界永不落在 tool 结果行上（不拆 assistant(tool_calls)→tool 对）；
+// 中段确定性压缩（小月中段主要是工具结果大块 JSON——不调 LLM 摘要，截断+首行保留更稳）。
+const COMPRESS_KEEP_TAIL = 6
+function compressMiddleMessages(messages: import('../lib/llm').ChatMessage[]): boolean {
+  const n = messages.length
+  if (n <= COMPRESS_KEEP_TAIL + 2) return false
+  // 可压缩区=[1, n-KEEP_TAIL)；边界滑到非 tool 行（不拆对——tool 行必属前一个 assistant(tool_calls)）
+  let end = n - COMPRESS_KEEP_TAIL
+  while (end > 1 && (messages[end] as any)?.role === 'tool') end--
+  if (end <= 1) return false
+  let saved = 0
+  for (let i = 1; i < end; i++) {
+    const m = messages[i] as any
+    const content = String(m.content ?? '')
+    // 工具结果大块：保留首行（状态/计数）+截断；assistant 行：保留前 200 字
+    if (m.role === 'tool') {
+      const head = content.split('\n').slice(0, 2).join('\\n').slice(0, 200)
+      if (content.length > 260) { m.content = `${head}…（已压缩 ${content.length} 字符）`; saved += content.length - 260 }
+    } else if (m.role === 'assistant' && content.length > 240) {
+      saved += content.length - 200
+      m.content = content.slice(0, 200) + '…（已压缩）'
+    }
+  }
+  return saved > 1000
 }
 
 function parseItemsPlan(text: string): Array<{ id: string; tagsAdd?: string[]; tagsRemove?: string[]; description?: string }> | null {
