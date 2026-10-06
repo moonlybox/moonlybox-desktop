@@ -205,8 +205,10 @@ export async function byokChatMessages(
     // #310.15：耗时/token 速度（usage 为端点可选返回——Ollama/主流平台都有；缺失则只报耗时）
     const ms = Date.now() - t0
     const ct = body.usage?.completion_tokens
-    if (ct) dbgParts.push(`耗时=${(ms / 1000).toFixed(1)}s`, `tokens=${ct}`, `速度=${(ct / (ms / 1000)).toFixed(1)} tok/s`)
-    else dbgParts.push(`耗时=${(ms / 1000).toFixed(1)}s`)
+    // #331.42：诊断行统一英文——elapsed=墙钟总耗时；gen speed=生成速度（completion_tokens/elapsed，
+    // 不含 prompt 填充，避免与 prefill 速度混淆）
+    if (ct) dbgParts.push(`elapsed=${(ms / 1000).toFixed(1)}s`, `completion_tokens=${ct}`, `gen=${(ct / (ms / 1000)).toFixed(1)} tok/s`)
+    else dbgParts.push(`elapsed=${(ms / 1000).toFixed(1)}s`)
     console.log(`（LLM 响应：${dbgParts.join(' ')}）`)
     const text = msg.content?.trim() || undefined
     // #280.3：空内容+无工具调用=端点异常静默源（思考型模型 reasoning 吃掉 max_tokens/端点 tools 协议不兼容）

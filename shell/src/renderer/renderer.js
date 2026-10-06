@@ -4261,6 +4261,9 @@ function bindChat(chatInfo) {
   const showThinking = (phase) => {
     // #317.MDI：占位页（无 #log）时行无处挂——静默跳过（kernel 行继续，进对话后自然恢复）
     if (!logEl()) return
+    // #331.42：切会话/重渲染会 innerHTML 重建 #log——旧 thinkingEl 成游离节点（appendChild 挂不上可见 DOM
+    // →「历史对话继续对话动画不出现」）。引用已不在文档时先弃用重建。
+    if (thinkingEl && !thinkingEl.isConnected) thinkingEl = null
     if (!thinkingEl) {
       const el = document.createElement('div')
       el.className = 'chat-act-line xy-thinking'
@@ -4273,7 +4276,7 @@ function bindChat(chatInfo) {
     thinkingEl.querySelector('.xy-thinking-text').textContent = phase ?? t('xy.thinking')
     scroll()
   }
-  const hideThinking = () => { if (thinkingEl) { thinkingEl.remove(); thinkingEl = null } }
+  const hideThinking = () => { if (thinkingEl) { thinkingEl.remove(); thinkingEl = null } } // isConnected 已在 showThinking 侧清理
   // #317.F16/P3p：思考档位有效值（与 xiaoyue 侧同源逻辑）——显式设置优先；未设置时本地默认模型=开（用户拍板）
   const xyThinkEffective = () => {
     const ex = APP_SETTINGS?.chat?.thinking
