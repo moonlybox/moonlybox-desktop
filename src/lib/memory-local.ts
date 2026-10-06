@@ -109,7 +109,8 @@ export function localMemoryStats(vaultRoot: string): { memoryEntries: number; pr
 // ==================== #317.④ 记忆检索化（轻量评分，D7 零依赖） ====================
 
 /** 简易分词： latin 词元（≥2 字符）+ CJK 2-gram——检索锚足够，无分词库依赖 */
-function tokenize(q: string): string[] {
+/** 分词（#317.④ 口径单源）：CJK 2-gram + latin 词元——本地记忆与月忆检索共用同一套 */
+export function tokenize(q: string): string[] {
   const out: string[] = []
   for (const w of q.toLowerCase().match(/[a-z0-9][a-z0-9-_.]*/g) ?? []) if (w.length >= 2) out.push(w)
   const cjk = q.match(/[\u4e00-\u9fff]/g) ?? []

@@ -24,6 +24,10 @@ export interface Config {
     /** 平台 API 基址（默认 https://moonlybox.cn） */
     baseUrl?: string
   }
+  moonRecall?: {
+    /** 月忆下行检索（XY-C5 形态 4）：默认开；关=客户端小月只用本机记忆 */
+    enabled?: boolean
+  }
 }
 
 export function configDir(): string {

@@ -500,6 +500,26 @@ ${skillIdx}`
     : ''
   // #317.④ 记忆检索化：画像（USER.md）常驻+长期记忆（MEMORY.md）按问题检索 top-N——替代全文灌窗+截断
   const memQuery = [question, ...built.messages.filter((m) => m.role === 'user').slice(-2).map((m) => String(m.content))].join(' ')
+  // XY-C5 形态 4：月忆下行副本同步（游标增量，失败静默降级纯本机）——在检索前触发，保证本会话副本尽量新
+  let moonBlock = ''
+  if (memOn && memLocal) {
+    try {
+      const { syncMoonMemory, moonMemoryRetrieve, moonRecallEnabled } = await import('../lib/memory-moon')
+      if (moonRecallEnabled()) {
+        const t0 = Date.now()
+        const sync = await syncMoonMemory(defaultVaultRoot())
+        if (sync.ok) {
+          const moonHits = moonMemoryRetrieve(defaultVaultRoot(), memQuery, { topN: 5, maxChars: 600 })
+          if (moonHits.length) {
+            moonBlock = moonHits.map((h) => `- ${h.text}`).join('\n')
+            console.log(`（月忆同步 ${sync.mode} ${sync.changed} 行 ${Date.now() - t0}ms；命中 ${moonHits.length} 条）`)
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`（月忆下行同步失败，本次仅用本机记忆：${e instanceof Error ? e.message : String(e)}）`)
+    }
+  }
   const memBlock = memOn && memLocal ? localMemoryRetrieveBlock(defaultVaultRoot(), memQuery, { topN: 9, maxChars: Math.min(1200, memCfg.injectLimit ?? 5000) }) : ''
   // #317.P4：云端模型优化缓存命中（cacheOptimize 默认开，仅云端 API 模型生效）——
   // prompt cache 是前缀匹配：memBlock 每轮随问题变，留在 system 会打碎整个前缀。云端=动态块挪到本轮问题尾部（前缀全静态）；
@@ -520,22 +540,26 @@ ${skillIdx}`
 以下是已知的用户画像（本机记忆层，常驻），回答时自然运用，不要逐条复述：
 ${localMemoryContext(defaultVaultRoot(), 1200)}`
     : ''
+  const moonTail = memOn && memLocal && moonBlock
+    ? `
+
+[月忆·云端记忆检索命中（用户长期记忆，与当前问题相关，按需引用）]
+${moonBlock}`
+    : ''
   const memTail = memOn && memLocal && memBlock
     ? `
 
 [本机长期记忆·检索命中（与当前问题相关，按需引用）]
 ${memBlock}`
     : ''
+  const memTailAll = memTail + moonTail
   const systemWithMemory = cacheOptimizeOn
     ? system + profileBlock + skillBlock
     : (memOn && memLocal
-        ? `${system}${profileBlock}${memBlock ? `
-
-以下是与你当前问题相关的长期记忆（检索命中，按需引用）：
-${memBlock}` : ''}${skillBlock}`
+        ? `${system}${profileBlock}${memTailAll ? memTailAll : ''}${skillBlock}`
         : system + skillBlock)
   // 云端优化开：memTail 注入本轮问题尾部（agentLoop deps.question）；关：空
-  const questionFinal = cacheOptimizeOn ? `${built.messages.filter((m) => m.role === 'user').at(-1)?.content ?? question}${memTail}` : (built.messages.filter((m) => m.role === 'user').at(-1)?.content ?? question)
+  const questionFinal = cacheOptimizeOn ? `${built.messages.filter((m) => m.role === 'user').at(-1)?.content ?? question}${memTailAll}` : (built.messages.filter((m) => m.role === 'user').at(-1)?.content ?? question)
   for (const f of customCat.failures) console.log(`（自定义 MCP ${f.name} 连接失败：${f.error}）`)
   // #317.F15：本地 Ollama 运行时上下文探测（进程内 memo 一次）——默认 4096 会静默截断工具表（4.2k token 必超），
   // /v1 又不接受 num_ctx。模型已加载时 /api/ps.context 唯一可信；过小即提示（救济=环境变量或客户端拉起）。
