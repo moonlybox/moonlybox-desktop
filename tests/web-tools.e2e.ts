@@ -43,9 +43,9 @@ afterAll(() => {
 })
 
 describe('web-tools 工具面', () => {
-  test('未配置搜索服务商时 fetch_url+download_file 恒装配（#333）', () => {
+  test('#334 未配置服务商：web_search（内置源）+fetch_url+download_file 恒装配', () => {
     const defs = webToolDefs()
-    expect(defs.map((d) => d.name)).toEqual(['fetch_url', 'download_file'])
+    expect(defs.map((d) => d.name)).toEqual(['web_search', 'fetch_url', 'download_file'])
   })
 
   test('配置 provider 后 web_search+fetch_url+download_file 都装配（#333）', () => {
@@ -55,8 +55,27 @@ describe('web-tools 工具面', () => {
     expect(defs[0]!.inputSchema).toBeTruthy()
   })
 
-  test('runWebTool：web_search 缺 key 优雅报错（不抛异常）', async () => {
+  test('#334 bingcn：未配置时 webSearch 回落内置必应源（mock RSS 解析）', async () => {
+    saveSettings({ websearch: { provider: '', config: {} } })
+    const rss = `<?xml version="1.0"?><rss><channel>` +
+      `<item><title>考研政治大纲 2026 变化解读</title><link>https://example.com/a</link><description><![CDATA[2026 考研政治大纲变化要点摘要]]></description></item>` +
+      `<item><title>无效项无链接</title><description>缺 link 应被过滤</description></item>` +
+      `</channel></rss>`
+    const savedFetch = (globalThis as any).fetch
+  ;(globalThis as any).fetch = async () => new Response(rss, { status: 200 })
+    const out = JSON.parse(await runWebTool('web_search', { query: '考研政治 2026' }))
+    ;(globalThis as any).fetch = savedFetch
+    expect(out.ok).toBe(true)
+    expect(out.provider).toContain('必应')
+    expect(out.results.length).toBe(1)
+    expect(out.results[0].url).toBe('https://example.com/a')
+    expect(out.results[0].title).toContain('2026')
+  })
+
+  test('runWebTool：需 key 的服务商缺 key 优雅报错（不抛异常）', async () => {
+    saveSettings({ websearch: { provider: 'bocha', config: {} } })
     const out = JSON.parse(await runWebTool('web_search', { query: '测试' }))
+    saveSettings({ websearch: { provider: '', config: {} } })
     expect(out.ok).toBe(false)
     expect(String(out.error)).toContain('Key')
   })

@@ -92,20 +92,43 @@ function normalizeSearchHit(item: any): WebSearchHit | null {
   if (!item) return null
   const url = item.url || item.link || ''
   if (!url) return null
-  return { title: item.title || item.name || url, url, snippet: (item.summary || item.snippet || item.description || item.content || '').slice(0, 400) }
+  return { title: item.title || item.name || url, url, snippet: (item.summary || item.snippet || item.description || item.content || item.text || '').slice(0, 400) }
 }
 
 export async function webSearch(query: string, count = 8): Promise<WebSearchResult> {
   const cfg = loadSettings().websearch ?? { provider: '', config: {} }
-  const providerId = cfg.provider || ''
+  // #334 开箱即搜：未配置服务商时回落内置必应源（免 key 免配置）
+  const providerId = cfg.provider || 'bingcn'
   const conf = cfg.config ?? {}
   const apiKey = loadProviderKey('websearch')
   const provider = WEBSEARCH_PROVIDERS.find((p) => p.id === providerId)
-  if (!providerId || !provider) return { ok: false, query, hits: [], error: '未配置搜索服务商：设置→搜索 选择服务商并填 Key' }
+  if (!provider) return { ok: false, query, hits: [], error: '搜索服务商无效：设置→搜索 重新选择' }
   if (provider.needs.includes('apiKey') && !apiKey) return { ok: false, query, hits: [], error: `搜索服务商 ${provider.label} 缺 API Key：设置→搜索 保存后重试` }
   try {
     let hits: WebSearchHit[] = []
-    if (providerId === 'bocha') {
+    if (providerId === 'bingcn') {
+      // 内置必应 RSS（#334）：cn.bing.com 官方对外输出格式，免 key、国内可达；解析 <item> 三件套
+      const res = await fetch(`${provider.baseUrl}?q=${encodeURIComponent(query)}&format=rss&count=${Math.min(count, 20)}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MoonlyBox/0.5' },
+        signal: AbortSignal.timeout(20_000),
+      })
+      if (!res.ok) throw new Error(`必应源 HTTP ${res.status}`)
+      const xml = await res.text()
+      const items = xml.match(/<item>[\s\S]*?<\/item>/g) ?? []
+      hits = items.map((it) => {
+        const pick = (tag: string) => {
+          const m = it.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
+          if (!m) return ''
+          return m[1].replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, '').trim()
+        }
+        return normalizeSearchHit({ title: pick('title'), url: pick('link'), snippet: pick('description') })
+      }).filter((h): h is WebSearchHit => h !== null)
+    } else if (providerId === 'exa') {
+      // Exa 官方 API（key 制）：POST x-api-key → {results:[{title,url,text}]}
+      const r = await postJson(provider.baseUrl, { query, numResults: count }, { 'x-api-key': apiKey ?? '' })
+      if (r.status >= 400) throw new Error(`Exa HTTP ${r.status}${r.json?.error?.message ? `: ${r.json.error.message}` : ''}`)
+      hits = ((r.json?.results ?? []) as any[]).map(normalizeSearchHit).filter((h): h is WebSearchHit => h !== null)
+    } else if (providerId === 'bocha') {
       const r = await postJson(provider.baseUrl, { query, count, freshness: 'noLimit', summary: true }, { Authorization: `Bearer ${apiKey}` })
       hits = (r.json?.data?.webPages?.value ?? []).map(normalizeSearchHit).filter(Boolean)
     } else if (providerId === 'tavily') {
@@ -130,7 +153,9 @@ export async function webSearch(query: string, count = 8): Promise<WebSearchResu
     }
     return { ok: hits.length > 0, query, hits, provider: provider.label }
   } catch (e: any) {
-    return { ok: false, query, hits: [], error: `搜索失败：${String(e?.message ?? e).slice(0, 200)}` }
+    const msg = String(e?.message ?? e).slice(0, 200)
+    const hint = providerId === 'bingcn' ? '（内置搜索不可达，可在 设置→搜索 配置其他服务商）' : ''
+    return { ok: false, query, hits: [], error: `搜索失败：${msg}${hint}` }
   }
 }
 
@@ -216,12 +241,12 @@ export async function fetchUrl(url: string): Promise<FetchUrlResult> {
 /** 小月内置网络工具定义（OpenAI tools 协议形态）——settings 未配置 provider 时 web_search 不装配（fetch_url 恒装配） */
 export function webToolDefs(): Array<{ name: string; title: string; description: string; inputSchema: Record<string, unknown> }> {
   const defs: Array<{ name: string; title: string; description: string; inputSchema: Record<string, unknown> }> = []
-  const ws = loadSettings().websearch ?? { provider: '', config: {} }
-  if (ws.provider) {
+  // #334 开箱即搜：web_search 恒装配（未配置服务商时自动用内置必应源；配置后走所选服务商）
+  {
     defs.push({
       name: 'web_search',
       title: '网络搜索',
-      description: '联网搜索公开网页，返回标题/链接/摘要列表。用户问到时事、新知识、书房外信息时使用。',
+      description: '联网搜索公开网页，返回标题/链接/摘要列表。用户问到时事、新知识、书房外信息时使用。默认使用内置搜索（免配置），可在设置-网络搜索切换更强的服务商。',
       inputSchema: {
         type: 'object',
         properties: {

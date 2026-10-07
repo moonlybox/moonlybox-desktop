@@ -525,7 +525,8 @@ const I18N_DICT = {
   'msg.notStarted': { zh: '未启动', en: 'Not started' },
   'ws.title': { zh: '搜索服务商', en: 'Search Provider' },
   'ws.pvLabel': { zh: '服务商', en: 'Provider' },
-  'ws.none': { zh: '— 未启用 —', en: '— Disabled —' },
+  'ws.freeTip': { zh: '免配置直接可用；搜索结果来自必应公开源，无需任何账号。', en: 'Works with no setup; results come from the Bing public source, no account needed.' },
+  'ws.none': { zh: '内置搜索（默认，免配置）', en: 'Built-in search (default, no setup)' },
   'ue.title': { zh: 'URL 提取（收藏网页正文）', en: 'URL Extraction (web page content)' },
   'ue.modeLabel': { zh: '提取方式', en: 'Extraction Mode' },
   'ue.local': { zh: '本地提取（内置 Readability，零成本）', en: 'Local (built-in Readability, free)' },
@@ -2576,9 +2577,15 @@ async function renderWork(nav, arg, label2) {
         const pv = provs.find((x) => x.id === $('sp-ws-prov').value)
         const box = $('sp-ws-cfg')
         if (!pv) { box.innerHTML = ''; return }
-        if (pv.baseUrl) box.innerHTML = `<div class="set-field" style="max-width:340px"><label>${t('mp.baseUrlAuto')}</label><input id="sp-ws-baseUrl" value="${pv.baseUrl}" readonly /></div>`
-        else box.innerHTML = `<div class="set-field" style="max-width:340px"><label>API 地址</label><input id="sp-ws-baseUrl" value="${ws.config?.baseUrl ?? ''}" placeholder="https://…" /></div>`
-        box.innerHTML += `<div class="set-field" style="max-width:340px"><label>${t('mp.keyKept')}</label><input type="password" id="sp-ws-apiKey" placeholder="${ws.config?.apiKey ? '已配置，不回显' : ''}" /></div>`
+        // #334：needs 不含 apiKey 的免配置源（内置搜索）不渲染 Key/URL 配置框
+        const needsKey = (pv.needs ?? ['apiKey']).includes('apiKey')
+        if (needsKey) {
+          if (pv.baseUrl) box.innerHTML = `<div class="set-field" style="max-width:340px"><label>${t('mp.baseUrlAuto')}</label><input id="sp-ws-baseUrl" value="${pv.baseUrl}" readonly /></div>`
+          else box.innerHTML = `<div class="set-field" style="max-width:340px"><label>API 地址</label><input id="sp-ws-baseUrl" value="${ws.config?.baseUrl ?? ''}" placeholder="https://…" /></div>`
+          box.innerHTML += `<div class="set-field" style="max-width:340px"><label>${t('mp.keyKept')}</label><input type="password" id="sp-ws-apiKey" placeholder="${ws.config?.apiKey ? '已配置，不回显' : ''}" /></div>`
+        } else {
+          box.innerHTML = `<div class="set-desc">${t('ws.freeTip')}</div>`
+        }
       }
       $('sp-ws-prov').onchange = renderWsCfg
       renderWsCfg()

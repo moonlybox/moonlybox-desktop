@@ -172,7 +172,9 @@ export const PLATFORM_PROVIDERS: Array<{ id: string; label: string; baseUrl: str
 
 /** 网络搜索服务商（#256.8：本质=服务商 MCP 暴露给 Agent——先配层，能力接续迭代） */
 export const WEBSEARCH_PROVIDERS: Array<{ id: string; label: string; baseUrl: string; needs: string[] }> = [
+  { id: 'bingcn', label: '内置搜索（必应，免配置）', baseUrl: 'https://cn.bing.com/search', needs: [] },
   { id: 'bocha', label: '博查 Bocha', baseUrl: 'https://api.bochaai.com/v1/web-search', needs: ['apiKey'] },
+  { id: 'exa', label: 'Exa', baseUrl: 'https://api.exa.ai/search', needs: ['apiKey'] },
   { id: 'tavily', label: 'Tavily', baseUrl: 'https://api.tavily.com/search', needs: ['apiKey'] },
   { id: 'bing', label: 'Bing Search（Azure）', baseUrl: 'https://api.bing.microsoft.com/v7.0/search', needs: ['apiKey'] },
   { id: 'serpapi', label: 'Serper', baseUrl: 'https://google.serper.dev/search', needs: ['apiKey'] },
