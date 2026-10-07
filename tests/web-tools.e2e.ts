@@ -43,15 +43,15 @@ afterAll(() => {
 })
 
 describe('web-tools 工具面', () => {
-  test('未配置搜索服务商时只有 fetch_url 装配', () => {
+  test('未配置搜索服务商时 fetch_url+download_file 恒装配（#333）', () => {
     const defs = webToolDefs()
-    expect(defs.map((d) => d.name)).toEqual(['fetch_url'])
+    expect(defs.map((d) => d.name)).toEqual(['fetch_url', 'download_file'])
   })
 
-  test('配置 provider 后 web_search+fetch_url 都装配（只读注解）', () => {
+  test('配置 provider 后 web_search+fetch_url+download_file 都装配（#333）', () => {
     saveSettings({ websearch: { provider: 'bocha', config: {} } })
     const defs = webToolDefs()
-    expect(defs.map((d) => d.name)).toEqual(['web_search', 'fetch_url'])
+    expect(defs.map((d) => d.name)).toEqual(['web_search', 'fetch_url', 'download_file'])
     expect(defs[0]!.inputSchema).toBeTruthy()
   })
 

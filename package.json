@@ -19,6 +19,7 @@
   "dependencies": {
     "@huggingface/transformers": "3",
     "@larksuiteoapi/node-sdk": "^1.74.0",
+    "@napi-rs/canvas": "^1.0.10",
     "@napi-rs/keyring": "^2.1.0",
     "imapflow": "^2.1.0",
     "mailparser": "^3.9.29",

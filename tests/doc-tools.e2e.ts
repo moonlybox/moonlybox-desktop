@@ -94,7 +94,7 @@ test('错误路径：文件不存在/不支持格式/目录', async () => {
   const p = write('img.png', Buffer.from([0x89, 0x50, 0x4e, 0x47]))
   const r = await docRead(p)
   expect(r.ok).toBe(false)
-  expect(String(r.error)).toContain('暂不支持')
+  expect(String(r.error)).toContain('OCR') // #332：png 走 OCR 档（非 Windows 回落说明）
   expect((await docRead(tmpData)).ok).toBe(false)
 })
 
@@ -125,4 +125,28 @@ test('provider 档：无 key 报错引导（设置分发生效）', async () => 
   const r = await docRead(p)
   expect(r.ok).toBe(false)
   expect(String(r.error)).toContain('API Key')
+})
+
+
+test('#332 winocr：图片 kind 判定+非 Windows 回落文案', async () => {
+  // 先恢复 local 档（前一 provider 用例残留 settings.json 会劫持分发）
+  const cfgPath = path.join(tmpCfg, 'moonlybox', 'settings.json')
+  fs.mkdirSync(path.dirname(cfgPath), { recursive: true })
+  fs.writeFileSync(cfgPath, JSON.stringify({}))
+  const p = write('photo2.png', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  const r = await docRead(p)
+  expect(r.engine).toBe('builtin')
+  expect(String(r.error)).toContain('OCR')
+})
+
+test('#332 winocr：winocrDetect 在非 Windows= false', async () => {
+  const { winocrDetect } = await import('../src/lib/winocr')
+  const ok = await winocrDetect()
+  expect(ok).toBe(process.platform === 'win32')
+})
+
+test('#332 doc_read 描述含图片/扫描件能力（工具面收口）', () => {
+  const defs = docToolDefs()
+  expect(defs[0].description).toContain('图片')
+  expect(defs[0].description).toContain('扫描版 PDF')
 })

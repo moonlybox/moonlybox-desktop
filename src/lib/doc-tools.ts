@@ -9,6 +9,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { loadSettings } from './settings'
+import { WINOCR_IMAGE_EXTS, winocrDetect, winocrRecognize } from './winocr'
 
 /** docproc API key 钥匙串（service=moonlybox/account=docproc-key，daemon settings save 剥离落） */
 function loadDocProcKey(): string | null {
@@ -38,6 +39,7 @@ function detectKind(ext: string): string {
   if (TEXT_EXTS.has(ext)) return ext === '.html' || ext === '.htm' ? 'html' : 'txt'
   if (ext === '.pdf') return 'pdf'
   if (ext === '.docx') return 'docx'
+  if (WINOCR_IMAGE_EXTS.has(ext)) return 'image'
   return 'other'
 }
 
@@ -57,9 +59,12 @@ function stripHtml(html: string): string {
     .trim()
 }
 
-/** 本地解析：纯文本直读 / PDF 文本层（pdfjs）/ docx（mammoth）/ html 剥标签 */
+/** 本地解析：纯文本直读 / PDF 文本层（pdfjs）/ 图片与扫描 PDF（winocr OCR，#332）/ docx（mammoth）/ html 剥标签 */
 async function parseLocal(filePath: string, kind: string): Promise<DocReadResult> {
   const buf = fs.readFileSync(filePath)
+  if (kind === 'image') {
+    return ocrImage(filePath)
+  }
   if (kind === 'txt') {
     const text = buf.toString('utf8')
     const truncated = text.length > MAX_TEXT_CHARS
@@ -78,7 +83,10 @@ async function parseLocal(filePath: string, kind: string): Promise<DocReadResult
     let text = parts.filter(Boolean).join('\n\n').trim()
     const pages = doc.numPages
     if (!text) {
-      return { ok: false, path: filePath, kind: 'pdf', error: `PDF 无文本层（${pages} 页，扫描件需 OCR——当前档位不支持，可换第三方服务商）`, engine: 'pdfjs' }
+      // #332：无文本层→winocr 扫描件 OCR（Windows 检测到即用；检测不到保持原说明文案）
+      const ocr = await ocrPdfScan(filePath, pages)
+      if (ocr.ok) return ocr
+      return { ok: false, path: filePath, kind: 'pdf', error: `PDF 无文本层（${pages} 页，扫描件）——本机 OCR 不可用或未识别出内容，可配置第三方服务商（如 Doc2X）`, engine: 'pdfjs' }
     }
     const truncated = text.length > MAX_TEXT_CHARS || pages > maxPages
     if (truncated) text = text.slice(0, MAX_TEXT_CHARS)
@@ -100,7 +108,70 @@ async function parseLocal(filePath: string, kind: string): Promise<DocReadResult
   return { ok: false, path: filePath, kind, error: `暂不支持该格式（.${kind === 'other' ? path.extname(filePath).slice(1) || '未知' : kind}）——支持 txt/md/code/PDF（文本层）/docx/html，或配置第三方服务商` }
 }
 
-/** 第三方服务商解析：上传文件→markdown/文本（各商 API 形态不同，v1 按 baseUrl 通用直返形态+每商适配） */
+/** PDF 扫描件 OCR：pdfjs 逐页光栅化→winocr 识别（#332；A2 裁决=页数不限制；单页失败跳过并在尾部标注） */
+async function ocrPdfScan(filePath: string, numPages: number): Promise<DocReadResult> {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const doc = await (pdfjs as any).getDocument({ data: new Uint8Array(fs.readFileSync(filePath)), useSystemFonts: false }).promise
+  const parts: string[] = []
+  const failedPages: number[] = []
+  for (let i = 1; i <= numPages; i++) {
+    try {
+      const page = await doc.getPage(i)
+      // 光栅化 scale=2（约 144dpi——OCR 精度与内存的平衡点；A3 语言=系统引擎默认）
+      const viewport = page.getViewport({ scale: 2 })
+      const canvas = document?.createElement?.('canvas')
+      let dataUrl: string | null = null
+      if (canvas) {
+        // DOM canvas（旧路径，bun 无 DOM 不会走）
+        const ctx = canvas.getContext('2d')
+        await page.render({ canvasContext: ctx, viewport }).promise
+        dataUrl = canvas.toDataURL('image/png')
+      } else {
+        // 无 DOM 环境：@napi-rs/canvas（可用则用）
+        let mod: any = null
+        try { mod = await import('@napi-rs/canvas') } catch { mod = null }
+        if (!mod) throw new Error('NO_CANVAS')
+        const cv = mod.createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
+        const ctx = cv.getContext('2d')
+        await page.render({ canvasContext: ctx, viewport }).promise
+        dataUrl = cv.toDataURL('image/png')
+      }
+      const b64Raw = dataUrl ?? ''
+      const b64 = b64Raw.slice(b64Raw.indexOf(',') + 1)
+      if (!b64) throw new Error('CANVAS_EMPTY')
+      const tmp = path.join(path.dirname(filePath), `.__ocr_p${i}__.png`)
+      fs.writeFileSync(tmp, Buffer.from(b64, 'base64'))
+      try {
+        const line = await winocrRecognize(tmp)
+        if (line) parts.push(line)
+        else failedPages.push(i)
+      } finally {
+        try { fs.unlinkSync(tmp) } catch { /* 临时页图清理失败忽略 */ }
+      }
+    } catch {
+      failedPages.push(i)
+    }
+  }
+  const text = parts.join('\n\n').trim()
+  const truncated = text.length > MAX_TEXT_CHARS
+  if (!text) {
+    return { ok: false, path: filePath, kind: 'pdf', error: `PDF 无文本层且 OCR 未能识别出内容（${numPages} 页${failedPages.length ? `，失败页：${failedPages.join('、')}` : ''}）——可配置第三方服务商（Doc2X）`, engine: 'winocr' }
+  }
+  return { ok: true, path: filePath, kind: 'pdf', text: truncated ? text.slice(0, MAX_TEXT_CHARS) : text, pages: numPages, truncated, engine: 'winocr' }
+}
+
+/** 图片 OCR（#332 A1：Windows 检测到 winocr 即启用，无需设置；检测不到回落说明文案） */
+async function ocrImage(filePath: string): Promise<DocReadResult> {
+  const ok = await winocrDetect()
+  if (!ok) {
+    return { ok: false, path: filePath, kind: 'txt', error: '图片识别需 Windows 本机 OCR（当前环境不可用）——可配置第三方服务商或改用包含文本的格式', engine: 'builtin' }
+  }
+  const text = await winocrRecognize(filePath)
+  if (!text) return { ok: false, path: filePath, kind: 'txt', error: 'OCR 未能识别出文本内容（可能是空白图片或无文字图形）', engine: 'winocr' }
+  const truncated = text.length > MAX_TEXT_CHARS
+  return { ok: true, path: filePath, kind: 'txt', text: truncated ? text.slice(0, MAX_TEXT_CHARS) : text, truncated, engine: 'winocr' }
+}
+
 async function parseProvider(filePath: string, provider: string, baseUrl: string, key: string | null): Promise<DocReadResult> {
   if (!key) return { ok: false, path: filePath, error: `该服务商（${provider}）需要 API Key——设置-文档处理里填写` }
   const buf = fs.readFileSync(filePath)
@@ -154,7 +225,7 @@ export async function docRead(filePath: string): Promise<DocReadResult> {
   }
   const s = loadSettings().docproc ?? { mode: 'local', provider: '', config: {} }
   const kind = detectKind(path.extname(p).toLowerCase())
-  if (s.mode === 'provider' && s.provider) {
+  if (s.mode === 'provider' && s.provider && s.provider !== 'winocr') { // winocr=#332 已变自动引擎，存量档位值兜底归本地
     const baseUrl = String(s.config?.baseUrl ?? '')
     const key = loadDocProcKey()
     return parseProvider(p, s.provider, baseUrl, key)
@@ -169,7 +240,7 @@ export function docToolDefs(): Array<{ name: string; title: string; description:
     {
       name: 'doc_read',
       title: '读取文档',
-      description: '读取本地文件内容并解析为文本。支持纯文本/Markdown/代码文件、PDF（文本层）、Word docx、HTML；扫描件 PDF（无文本层）需在设置-文档处理配置第三方服务商（如 Doc2X）。返回文件文本内容。',
+      description: '读取本地文件内容并解析为文本。支持纯文本/Markdown/代码文件、PDF（文本层）、Word docx、HTML、图片与扫描版 PDF（Windows 本机 OCR 自动启用）；扫描件 PDF 也可在设置-文档处理配置第三方服务商（如 Doc2X）获得更强解析。返回文件文本内容。',
       inputSchema: {
         type: 'object',
         properties: {

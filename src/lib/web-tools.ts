@@ -242,6 +242,19 @@ export function webToolDefs(): Array<{ name: string; title: string; description:
       required: ['url'],
     },
   })
+  defs.push({
+    name: 'download_file',
+    title: '下载文件',
+    description: '下载文件到主工作目录的 .download 子目录（不进书房收集箱）。适合课件/真题/压缩包/安装包等文件类链接（网页正文请用 fetch_url）。上限 100MB，超时不支持。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: '完整 http(s) 文件链接' },
+        filename: { type: 'string', description: '可选，保存文件名（缺省从 URL 推导；同名自动加序号不覆盖）' },
+      },
+      required: ['url'],
+    },
+  })
   return defs
 }
 
@@ -255,5 +268,109 @@ export async function runWebTool(name: string, args: Record<string, unknown>): P
     const r = await fetchUrl(String(args.url ?? ''))
     return JSON.stringify({ ok: r.ok, url: r.url, title: r.title, mode: r.mode, error: r.error, content: r.content })
   }
+  if (name === 'download_file') {
+    const dest = String(args.__destDir ?? '')
+    if (!dest) return JSON.stringify({ ok: false, error: '下载目录未提供（需工作空间对话）' })
+    const url = String(args.url ?? '')
+    const filename = typeof args.filename === 'string' && args.filename.trim() ? args.filename.trim() : undefined
+    const r = await downloadFile(url, dest, filename)
+    return JSON.stringify(r.ok ? { ok: true, url: r.url, path: r.path, bytes: r.bytes } : { ok: false, url, error: r.error })
+  }
   return JSON.stringify({ ok: false, error: `未知内置工具：${name}` })
+}
+
+/* ============================== download_file（#333） ============================== */
+
+export interface DownloadResult {
+  ok: boolean
+  url?: string
+  path?: string
+  bytes?: number
+  error?: string
+}
+
+const DOWNLOAD_MAX_BYTES = 100 * 1024 * 1024 // B1：100MB 上限
+const DOWNLOAD_TIMEOUT_MS = 600_000          // B4：600 秒
+const DOWNLOAD_MAX_REDIRECTS = 5
+
+/** 同名不覆盖（B5）：name.ext → name-1.ext → name-2.ext… */
+function dedupeFilename(dir: string, name: string): string {
+  const ext = path.extname(name)
+  const base = name.slice(0, name.length - ext.length) || 'file'
+  let candidate = path.join(dir, name)
+  let i = 1
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(dir, `${base}-${i}${ext}`)
+    i++
+    if (i > 999) throw new Error('同名文件过多（>999），请清理下载目录')
+  }
+  return candidate
+}
+
+/** 从 URL 推导文件名（basename；查询串剔除；空名兜底 download） */
+function filenameFromUrl(u: string): string {
+  try {
+    const clean = u.split('?')[0].split('#')[0]
+    const base = decodeURIComponent(clean.split('/').filter(Boolean).pop() ?? '')
+    return (base.replace(/[\\/:*?"<>|]/g, '_').trim() || 'download').slice(0, 120)
+  } catch {
+    return 'download'
+  }
+}
+
+/** 流式下载到 destDir（B3：目录不存在自动创建；100MB 硬顶；600s 超时；filename 可选自定义名） */
+export async function downloadFile(url: string, destDir: string, filename?: string): Promise<DownloadResult> {
+  if (!/^https?:\/\//i.test(url)) return { ok: false, error: '仅支持 http(s) 链接' }
+  try {
+    fs.mkdirSync(destDir, { recursive: true })
+  } catch (e: any) {
+    return { ok: false, error: `下载目录不可创建：${String(e?.message ?? e)}` }
+  }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS)
+  try {
+    let target = url
+    let redirects = 0
+    for (;;) {
+      const res = await fetch(target, { redirect: 'manual', signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MoonlyBox/0.5' } })
+      if (res.status >= 300 && res.status < 400) {
+        const loc = res.headers.get('location')
+        if (!loc) return { ok: false, error: `重定向无 Location（HTTP ${res.status}）` }
+        if (++redirects > DOWNLOAD_MAX_REDIRECTS) return { ok: false, error: `重定向超过 ${DOWNLOAD_MAX_REDIRECTS} 次` }
+        target = new URL(loc, target).toString()
+        continue
+      }
+      if (!res.ok) return { ok: false, url, error: `HTTP ${res.status}` }
+      const declared = Number(res.headers.get('content-length') ?? 0)
+      if (declared > DOWNLOAD_MAX_BYTES) return { ok: false, url, error: `文件超过 100MB 上限（${Math.round(declared / 1024 / 1024)}MB）` }
+      const finalName = (filename && filename.replace(/[\\/:*?"<>|]/g, '_').trim()) || filenameFromUrl(new URL(target).toString())
+      const outPath = dedupeFilename(destDir, finalName)
+      const tmpPath = outPath + '.part'
+      const writer = fs.createWriteStream(tmpPath)
+      let received = 0
+      const reader = res.body?.getReader()
+      if (!reader) return { ok: false, url, error: '响应无内容体' }
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        received += value.byteLength
+        if (received > DOWNLOAD_MAX_BYTES) {
+          reader.cancel()
+          writer.end()
+          try { fs.unlinkSync(tmpPath) } catch { /* 清理失败忽略 */ }
+          return { ok: false, url, error: '文件超过 100MB 上限（下载中止，临时文件已清理）' }
+        }
+        if (!writer.write(Buffer.from(value))) {
+          await new Promise<void>((resolve) => writer.once('drain', resolve))
+        }
+      }
+      await new Promise<void>((resolve, reject) => { writer.end(() => resolve()); writer.on('error', reject) })
+      fs.renameSync(tmpPath, outPath)
+      return { ok: true, url: target, path: outPath, bytes: received }
+    }
+  } catch (e: any) {
+    return { ok: false, url, error: e?.name === 'AbortError' ? '下载超时（600 秒）' : String(e?.message ?? e) }
+  } finally {
+    clearTimeout(timer)
+  }
 }

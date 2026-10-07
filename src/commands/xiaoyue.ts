@@ -269,7 +269,12 @@ export async function runAgentTools(
   const skillsOn = (loadSettings().skills ?? { enabled: true }).enabled !== false
   const skillDefs = skillsOn ? skillToolDefs() : []
   // #279 内置网络工具定义（web_search 仅在配置了搜索服务商时装配；fetch_url 恒装配）
-  const wDefs = webToolDefs()
+  // #333 download_file：仅工作空间对话装配（落点=主目录 .download；无工作空间对话不装配，system 提醒用户）
+  const allWebDefs = webToolDefs()
+  const dlDef = allWebDefs.find((d) => d.name === 'download_file')
+  const dlDestDir = wsMain ? path.join(wsMain, '.download') : undefined
+  const dlDefs = wsMain && dlDef ? [{ ...dlDef, annotations: { readOnlyHint: true } }] : [] // 免确认（落 .download 全新文件+同名不覆盖，用户裁决）
+  const wDefs = allWebDefs.filter((d) => d.name !== 'download_file')
   // #287 文档处理：doc_read 恒装配（本地档零网络可用；provider 档按设置分发）
   const dDefs = docToolDefs()
   // #280 自定义 MCP：启用中的服务器工具并列装配（失败隔离——失败服务器只报告不阻塞）
@@ -292,8 +297,10 @@ export async function runAgentTools(
     (memOn && memLocal ? `3.5. 用户陈述的不可推导的稳定信息会由记忆层静默沉淀（无需口头确认）：长期事实/偏好/约束、技术决策与变更方向、bug 根因结论、项目约定；能重新推导的或一次性的不要存记忆；\n` : ``) +
     `4. 语气亲切简洁，中文回答。\n` +
     `5. 查询类工具返回空结果（0 条/空列表）时，如实回答「没有找到」即可——不要自作主张转为创建/修改等写操作；用户没要求新建就不要新建。\n` +
-    (skillsOn ? `\n6. 用户书房有自定义技能（skill_list 可列出）；任务命中技能描述时先 skill_view 读取全文、按其中的流程与规范执行。` : ``) +
-    (wsDirs.length ? `\n5. 当前工作空间「${wsRec!.name}」已挂载目录：${wsDirs.join('、')}（主目录：${wsMain}）。fs_list/fs_read/fs_write 工具仅可操作这些目录内的文件（相对路径基于主目录 ${wsMain}，其余目录传绝对路径）；超出范围的路径会被拒绝或需用户批准，不要尝试绕过。` : ``)
+    (skillsOn ? `\n7. 用户书房有自定义技能（skill_list 可列出）；任务命中技能描述时先 skill_view 读取全文、按其中的流程与规范执行。` : ``) +
+    (wsDirs.length
+      ? `\n5. 当前工作空间「${wsRec!.name}」已挂载目录：${wsDirs.join('、')}（主目录：${wsMain}，可读写；其余为附加目录，只读——向附加目录写入必须先经用户确认）。fs_list/fs_read/fs_write/fs_delete 仅可操作这些目录内的文件（相对路径基于主目录 ${wsMain}，其余目录传绝对路径）；超出范围的路径会被拒绝或需用户批准，不要尝试绕过。任何删除（fs_delete）都必须先向用户确认具体文件再执行。\n6. 下载文件用 download_file，落点固定为主目录 .download 子目录（不进书房收集箱）；用户要求「下载并整理进书房/文档库」时按任务链执行：download_file → doc_read/转换 → 将成果写入收集箱或书房镜像目录，每步如实回报。`
+      : `\n5. 当前对话没有可访问的工作目录：文件类操作（fs_*/download_file）不可用。用户想下载或处理本地文件时，提示「当前对话没有可访问的工作目录，请创建/选择工作空间后再进行」。`)
   // #256.3：上下文管理（设置可关）——buildMessages 组装历史/压缩，appendTurn 落账
   const sessionId = opts.sessionId ?? 'default'
   const built = buildMessages(sessionId, system, question)
@@ -319,6 +326,7 @@ export async function runAgentTools(
   // moonrecall 档=现远程 MoonLink 工具（云端 memory_entities 单源+确认制）
   const localToolsW: Record<string, (args: Record<string, unknown>) => Promise<string>> = {}
   for (const d of wDefs) localToolsW[d.name] = (args) => runWebTool(d.name, args)
+  if (dlDef && dlDestDir) localToolsW['download_file'] = (args) => runWebTool('download_file', { ...args, __destDir: dlDestDir })
   for (const d of dDefs) localToolsW[d.name] = (args) => runDocTool(d.name, args)
   // #285 技能工具执行器（只读：索引/全文/关联文件；vault 内数据不出本机）
   if (skillsOn) {
@@ -367,9 +375,16 @@ export async function runAgentTools(
       {
         name: 'fs_write',
         title: '写入工作文件',
-        description: `写入/创建工作空间挂载目录内的文本文件（覆盖须谨慎）。相对路径基于主目录解析。写操作需用户确认。`,
+        description: `写入/创建工作空间挂载目录内的文本文件（覆盖须谨慎）。相对路径基于主目录解析。写操作需用户确认；主目录为读写区，附加目录为只读区（写入会弹确认卡并注明）。`,
         annotations: { readOnlyHint: false, destructiveHint: true },
         inputSchema: { type: 'object', properties: { path: { type: 'string', description: '文件相对路径或绝对路径（须在挂载目录内）' }, content: { type: 'string', description: '完整文件内容' } }, required: ['path', 'content'] },
+      },
+      {
+        name: 'fs_delete',
+        title: '删除工作文件',
+        description: `删除工作空间挂载目录内的文件或空目录。任何删除都需要用户在对话卡片中确认后才会执行。`,
+        annotations: { readOnlyHint: false, destructiveHint: true },
+        inputSchema: { type: 'object', properties: { path: { type: 'string', description: '要删除的文件/空目录相对路径或绝对路径（须在挂载目录内）' } }, required: ['path'] },
       },
     )
     const resolveIn = (p: string): string => (path.isAbsolute(p) ? path.resolve(p) : path.resolve(wsMain ?? wsDirs[0]!, p))
@@ -399,7 +414,27 @@ export async function runAgentTools(
       try {
         fs.mkdirSync(path.dirname(f), { recursive: true })
         fs.writeFileSync(f, String(args.content ?? ''), 'utf8')
-        return JSON.stringify({ ok: true, path: f, bytes: Buffer.byteLength(String(args.content ?? '')) })
+        // #333 附加目录语义：写入目标在附加（非主）目录时返回注记（确认卡已由 destructiveHint 保证）
+        const inAdditional = !isUnderDirs(f, [wsMain ?? wsDirs[0]!])
+        return JSON.stringify({ ok: true, path: f, bytes: Buffer.byteLength(String(args.content ?? '')), scope: inAdditional ? 'additional(只读区，已确认写入)' : 'primary' })
+      } catch (e: any) {
+        return JSON.stringify({ ok: false, error: String(e?.message ?? e) })
+      }
+    }
+    // #333 删除：恒确认（destructiveHint→confirm 链）；仅限挂载目录内；目录仅空目录可删
+    localToolsW.fs_delete = async (args) => {
+      const f = resolveIn(String(args.path ?? ''))
+      if (!guard(f)) return JSON.stringify({ ok: false, needsApproval: true, error: '路径超出工作空间挂载目录范围——需用户批准' })
+      try {
+        const st = fs.statSync(f)
+        if (st.isDirectory()) {
+          const rest = fs.readdirSync(f)
+          if (rest.length) return JSON.stringify({ ok: false, error: `目录非空（${rest.length} 项）——仅可删除空目录，文件请逐个删除` })
+          fs.rmdirSync(f)
+        } else {
+          fs.unlinkSync(f)
+        }
+        return JSON.stringify({ ok: true, path: f, deleted: true })
       } catch (e: any) {
         return JSON.stringify({ ok: false, error: String(e?.message ?? e) })
       }
@@ -629,6 +664,7 @@ ${memBlock}`
   // ⑥ 子任务工具装配单源：与主会话同款减 sub_agent 自身（D1 禁套娃由「子装配天然不含 sub_agent」保证）
   const subAgentBuiltinTools = () => [
     ...wDefs.map((d) => ({ ...d, annotations: { readOnlyHint: true } })),
+    ...dlDefs,
     ...customDefs.map((d) => ({ ...d })),
     ...fsTools,
     ...skillDefs,
@@ -649,6 +685,7 @@ ${memBlock}`
     localTools,
     builtinTools: [
       ...wDefs.map((d) => ({ ...d, annotations: { readOnlyHint: true } })),
+      ...dlDefs,
       ...customDefs.map((d) => ({ ...d })),
       ...fsTools,
       ...skillDefs,

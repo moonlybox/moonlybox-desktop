@@ -480,6 +480,7 @@ const I18N_DICT = {
   'xy.addDirBtn': { zh: '＋ 添加目录', en: '＋ Add Folder' },
   'xy.create': { zh: '创建', en: 'Create' },
   'xy.primary': { zh: '主', en: 'Main' },
+  'xy.readonly': { zh: '只读', en: 'Read-only' },
   'chat.ctxDesc': { zh: '小月记住本次会话中的对话', en: 'What Moonie remembers within this session' },
   'chat.compactDesc': { zh: '历史过长时自动摘要，节省 token', en: 'Auto-summarize long history to save tokens' },
   'chat.ctLabel': { zh: '压缩阈值（历史达到容量的比例时触发）：', en: 'Compact threshold (trigger at this share of capacity): ' },
@@ -534,8 +535,7 @@ const I18N_DICT = {
   'dp.pvLabel': { zh: '处理方式与服务商', en: 'Processing & Provider' },
   'dp.localGroup': { zh: '本地处理', en: 'Local' },
   'dp.cloudGroup': { zh: '第三方服务', en: 'Third-party Services' },
-  'dp.prov.builtin': { zh: '内置解析（纯文本/PDF 文本层，无需网络）', en: 'Built-in parser (plain text / PDF text layer, offline)' },
-  'dp.prov.winocr': { zh: 'Windows OCR（系统自带，离线）', en: 'Windows OCR (system, offline)' },
+  'dp.prov.builtin': { zh: '内置解析（纯文本/PDF 文本层/图片与扫描件 OCR，无需网络）', en: 'Built-in parser (text / PDF layer / image & scanned-PDF OCR, offline)' },
   'dp.prov.paddle': { zh: 'PaddleOCR（本地服务）', en: 'PaddleOCR (local service)' },
   'dp.baseUrlAuto': { zh: 'API 地址（选商自动填）', en: 'API URL (auto-filled per provider)' },
   'mm.enable': { zh: '启用持久记忆', en: 'Persistent Memory' },
@@ -2640,7 +2640,6 @@ async function renderWork(nav, arg, label2) {
       const dp = g.docproc ?? {}
       const DP_PROVIDERS = [
         { id: 'builtin', label: 'dp.prov.builtin', baseUrl: '', local: true, needsKey: false },
-        { id: 'winocr', label: 'dp.prov.winocr', baseUrl: '', local: true, needsKey: false, disabled: true },
         { id: 'paddle', label: 'dp.prov.paddle', baseUrl: 'http://127.0.0.1:8866', local: true, needsKey: false, disabled: true },
         { id: 'doc2x', label: 'Doc2X', baseUrl: 'https://v2.doc2x.noedgeai.com', local: false, needsKey: true },
         { id: 'mineru', label: 'MinerU', baseUrl: 'https://mineru.net/api/v4', local: false, needsKey: true },
@@ -4073,7 +4072,7 @@ function showWorkspaceDialog(ws) { // #331.45：ws 缺省=新建形态；传 {id
     dirs.forEach((d, i) => {
       const row = document.createElement('div')
       row.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px'
-      const tag = i === primaryIdx ? `<span style="color:var(--accent);font-weight:600;flex-shrink:0">${t('xy.primary')}</span>` : ''
+      const tag = i === primaryIdx ? `<span style="color:var(--accent);font-weight:600;flex-shrink:0">${t('xy.primary')}</span>` : `<span style="color:var(--muted);font-size:11px;flex-shrink:0">${t('xy.readonly')}</span>`
       row.innerHTML = `${tag}<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d}">${d}</span>`
       if (i !== primaryIdx) {
         const setMain = document.createElement('span')
