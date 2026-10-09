@@ -64,11 +64,9 @@ function initUpdater(getMainWindow) {
   })
   ipcMain.handle('shell:updateState', () => updateState)
   ipcMain.handle('shell:updateInstall', () => { autoUpdater.quitAndInstall() })
-  // #310.7：自动更新开关（关=不自动查/下载；手动检查仍可用）
+  // #310.7：自动检查开关（关=不自动查；下载由 autoDownload 独立控，手动检查仍可用）
   ipcMain.handle('shell:setAutoUpdate', (_e, on) => {
     autoUpdateEnabled = !!on
-    autoUpdater.autoDownload = !!on
-    autoUpdater.autoInstallOnAppQuit = !!on
     return true
   })
   // 「有新版本时自动下载」独立开关（只控 autoDownload，不影响检查）
@@ -132,4 +130,8 @@ function setAutoDownloadEnabled(on) {
   try { autoUpdater.autoDownload = !!on } catch {}
 }
 
-module.exports = { initUpdater, updateState, setAutoDownloadEnabled, get autoUpdateEnabled() { return autoUpdateEnabled } }
+function setAutoUpdateEnabled(on) {
+  autoUpdateEnabled = !!on
+}
+
+module.exports = { initUpdater, updateState, setAutoDownloadEnabled, setAutoUpdateEnabled, get autoUpdateEnabled() { return autoUpdateEnabled } }

@@ -235,8 +235,7 @@ const I18N_DICT = {
   'gen.awake.desc': { zh: '小月执行任务期间阻止系统休眠', en: 'Prevent system sleep while Moonie runs tasks' },
   'gen.clip': { zh: '剪贴板自动采集', en: 'Clipboard Auto Capture' },
   'gen.clip.desc': { zh: '监听复制的文本/链接，存入收集箱；快捷键 Alt+Shift+C 可随时手动采集（不受此开关限制）', en: 'Watch copied text/links into Inbox; Alt+Shift+C always works manually' },
-  'gen.autoDl': { zh: '有新版本时自动下载', en: 'Auto-download updates' },
-  'gen.autoDl.desc': { zh: '发现新版本后在后台自动下载；关闭后仅在「帮助-关于」手动检查时下载', en: 'Download new versions in background; off = download only via Help-About check' },
+
   'ap.theme': { zh: '色彩风格', en: 'Theme' },
   'ap.theme.sys': { zh: '跟随系统', en: 'System' },
   'ap.theme.light': { zh: '浅色', en: 'Light' },
@@ -393,8 +392,10 @@ const I18N_DICT = {
   'help.vaultNone': { zh: '未选择', en: 'Not selected' },
   'about.name': { zh: '魔力宝盒', en: 'MoonlyBox' },
   'about.slogan': { zh: '你的智能信息管家 · 收藏、便签、待办、书房与小月，一盒皆收', en: 'Your smart info butler · bookmarks, notes, todos, study and Moonie in one box' },
-  'about.autoUpdate': { zh: '自动更新', en: 'Auto Update' },
-  'about.autoUpdate.desc': { zh: '关闭后仅在打开本页点击「立即更新」时检查', en: 'When off, checks only when you click "Update Now" on this page' },
+  'about.autoUpdate': { zh: '自动检测新版本', en: 'Check for updates automatically' },
+  'about.autoUpdate.desc': { zh: '打开客户端时及运行期间定时检查新版本；关闭后仅点击「立即更新」时检查', en: 'Check on startup and periodically; off = only when you click "Update Now"' },
+  'about.autoDl': { zh: '有新版本时自动下载', en: 'Auto-download updates' },
+  'about.autoDl.desc': { zh: '发现新版本后在后台自动下载；关闭后仅在检查后手动下载', en: 'Download new versions in background; off = download manually after a check' },
   'about.notes': { zh: '当前版本说明', en: 'Release Notes' },
   'about.notesDefault': { zh: '稳定性修复与细节优化。', en: 'Stability fixes and polish.' },
   'about.env': { zh: '环境：', en: 'Environment: ' },
@@ -1650,36 +1651,13 @@ async function renderWork(nav, arg, label2) {
       const card = (id, label, desc, on) => `
         <div class="set-card"><div class="sc-main"><div class="sc-title">${label}</div><div class="sc-desc">${desc}</div></div>
           <button type="button" class="toggle ${on ? 'on' : ''}" id="${id}" aria-label="${label}"></button></div>`
-      const autoDl = (g.updater ?? { enabled: true, autoDownload: true }).autoDownload !== false
       panel(t('panel.general'), t('panel.sub.general'), `
         ${card('sp-launch', t('gen.launch'), t('gen.launch.desc'), !!gv.launchAtLogin)}
         ${card('sp-min', t('gen.minLaunch'), t('gen.minLaunch.desc'), !!gv.launchMinimized)}
         ${card('sp-tray', t('gen.minClose'), t('gen.minClose.desc'), !!gv.closeToTray)}
         ${card('sp-awake', t('gen.awake'), t('gen.awake.desc'), !!gv.keepAwake)}
         ${card('sp-watch', t('gen.clip'), t('gen.clip.desc'), clipboardWatch)}
-        ${card('sp-autodl', t('gen.autoDl'), t('gen.autoDl.desc'), autoDl)}
-        <div class="set-card" id="sp-updcache" style="display:none"><div class="sc-main"><div class="sc-title" id="sp-updcache-info" style="font-weight:400;font-size:12px;color:var(--tx2)"></div></div>
-          <div style="display:flex;gap:6px"><button type="button" class="btn ghost" id="sp-updcache-open" style="font-size:12px;padding:2px 8px">${esc(t('up.openDir'))}</button><button type="button" class="btn ghost" id="sp-updcache-clean" style="font-size:12px;padding:2px 8px">${esc(t('up.cleanCache'))}</button></div></div>
       `)
-      // 更新缓存行（有缓存文件才显示：目录+打开+清理）
-      ;(async () => {
-        try {
-          const ci = await window.moonlybox.updateCacheInfo()
-          const row = $('sp-updcache')
-          if (row && ci && ci.files > 0) {
-            row.style.display = 'flex'
-            const mb = ci.bytes / 1024 / 1024
-            $('sp-updcache-info').textContent = t('up.cacheInfo').replace('{mb}', mb >= 1 ? mb.toFixed(1) + ' MB' : Math.round(ci.bytes / 1024) + ' KB')
-            $('sp-updcache-open').onclick = () => window.moonlybox.openPath(ci.dir)
-            $('sp-updcache-clean').onclick = async () => {
-              const ok = await mbConfirm(t('up.cleanCacheAsk'), t('up.cleanCache'))
-              if (!ok) return
-              const rr = await window.moonlybox.cleanUpdateCache()
-              if (rr?.ok) { row.style.display = 'none'; toast(t('common.done')) }
-            }
-          }
-        } catch {}
-      })()
       const saveGeneral = async () => {
         const patch = {
           general: {
@@ -1688,17 +1666,15 @@ async function renderWork(nav, arg, label2) {
             closeToTray: $('sp-tray').classList.contains('on'),
             keepAwake: $('sp-awake').classList.contains('on'),
           },
-          updater: { enabled: true, autoDownload: $('sp-autodl').classList.contains('on') },
         }
         const r = await saveAppSettings(patch)
         clipboardWatch = $('sp-watch').classList.contains('on')
         window.moonlybox.setClipboardWatch(clipboardWatch)
         // main 侧行为同步（托盘/唤醒/开机启动/自动下载）
         try { await window.moonlybox.applyGeneral(patch.general) } catch {}
-        try { await window.moonlybox.setAutoDownload(patch.updater.autoDownload) } catch {}
         return r
       }
-      for (const id of ['sp-launch', 'sp-min', 'sp-tray', 'sp-awake', 'sp-watch', 'sp-autodl']) {
+      for (const id of ['sp-launch', 'sp-min', 'sp-tray', 'sp-awake', 'sp-watch']) {
         $(id).onclick = (e) => { e.currentTarget.classList.toggle('on'); saveGeneral() }
       }
     } else if (cat.id === 'appearance') {
@@ -3524,6 +3500,7 @@ async function renderWork(nav, arg, label2) {
     const env = await window.moonlybox.envInfo().catch(() => null)
     const gs = await loadAppSettings()
     const autoOn = (gs.updater ?? { enabled: true }).enabled !== false
+    const autoDlOn = (gs.updater ?? { enabled: true, autoDownload: true }).autoDownload !== false
     const st = await window.moonlybox.updateState().catch(() => ({}))
     const LOGO_SVG = document.querySelector('#titlebar svg')?.outerHTML ?? ''
     // 版本说明（本地常量——发版时随版本更新；键=版本号）
@@ -3562,6 +3539,20 @@ async function renderWork(nav, arg, label2) {
           <button type="button" class="toggle ${autoOn ? 'on' : ''}" id="abt-auto"></button>
           <button class="btn" id="btn-check2">${st?.checking ? t('ui.checking') : t('ui.updateNow')}</button>
         </div>
+        <div class="set-card" style="margin-top:8px;display:flex;align-items:center;gap:12px;padding:14px 20px">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">${t('about.autoDl')}</div>
+            <div class="set-desc" style="margin-top:2px">${t('about.autoDl.desc')}</div>
+          </div>
+          <button type="button" class="toggle ${autoDlOn ? 'on' : ''}" id="abt-autoDl"></button>
+        </div>
+        <div class="set-card" id="abt-updcache" style="display:none;margin-top:8px;align-items:center;gap:12px;padding:14px 20px">
+          <div class="set-desc" id="abt-updcache-info" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+          <div style="display:flex;gap:6px;flex:none">
+            <button type="button" class="btn ghost" id="abt-updcache-open" style="font-size:12px;padding:2px 8px">${t('up.openDir')}</button>
+            <button type="button" class="btn ghost" id="abt-updcache-clean" style="font-size:12px;padding:2px 8px">${t('up.cleanCache')}</button>
+          </div>
+        </div>
         ${updateSection}
 
         <div class="set-card" style="margin-top:12px;padding:14px 20px">
@@ -3574,9 +3565,34 @@ async function renderWork(nav, arg, label2) {
     $('abt-auto').onclick = async (e) => {
       e.currentTarget.classList.toggle('on')
       const on = e.currentTarget.classList.contains('on')
-      await saveAppSettings({ updater: { enabled: on } })
+      await saveAppSettings({ updater: { enabled: on, autoDownload: (gs.updater ?? { autoDownload: true }).autoDownload !== false } })
       await window.moonlybox.setAutoUpdate(on)
     }
+    $('abt-autoDl').onclick = async (e) => {
+      e.currentTarget.classList.toggle('on')
+      const on = e.currentTarget.classList.contains('on')
+      await saveAppSettings({ updater: { enabled: (gs.updater ?? { enabled: true }).enabled !== false, autoDownload: on } })
+      await window.moonlybox.setAutoDownload(on)
+    }
+    // 更新缓存行（有缓存文件才显示：大小+打开目录+清理）
+    ;(async () => {
+      try {
+        const ci = await window.moonlybox.updateCacheInfo()
+        const row = $('abt-updcache')
+        if (row && ci && ci.files > 0) {
+          row.style.display = 'flex'
+          const mb = ci.bytes / 1024 / 1024
+          $('abt-updcache-info').textContent = t('up.cacheInfo').replace('{mb}', mb >= 1 ? mb.toFixed(1) + ' MB' : Math.round(ci.bytes / 1024) + ' KB')
+          $('abt-updcache-open').onclick = () => window.moonlybox.openPath(ci.dir)
+          $('abt-updcache-clean').onclick = async () => {
+            const ok = await mbConfirm(t('up.cleanCacheAsk'), t('up.cleanCache'))
+            if (!ok) return
+            const rr = await window.moonlybox.cleanUpdateCache()
+            if (rr?.ok) { row.style.display = 'none'; toast(t('common.done')) }
+          }
+        }
+      } catch {}
+    })()
     $('btn-check2').onclick = async (e) => {
       // #319.1：e.currentTarget 在 await 让出事件循环后已被事件派发重置为 null——先存引用再用
       // （分支1/2 走 renderWork 重建整个关于页，按钮无需再改文字；仅「已是最新」分支用存引用改文字）

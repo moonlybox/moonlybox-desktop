@@ -780,7 +780,9 @@ app.whenReady().then(() => {
   })
 
   initUpdater(() => win)
-  // 「有新版本时自动下载」设置恢复（默认开；设置-通用可关）
+  // 「自动检测新版本」设置恢复（默认开；帮助-关于可关——只控启动/定时自动检查）
+  try { require('./updater').setAutoUpdateEnabled(readSettings().updater?.enabled !== false) } catch {}
+  // 「有新版本时自动下载」设置恢复（默认开；帮助-关于可关——只控发现新版后是否后台下载）
   try { require('./updater').setAutoDownloadEnabled(readSettings().updater?.autoDownload !== false) } catch {}
 
   registerShortcuts()
