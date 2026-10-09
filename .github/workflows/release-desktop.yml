@@ -72,6 +72,7 @@ jobs:
             dist-shell/*.tar.gz
             dist-shell/*.AppImage
             dist-shell/*.exe
+            dist-shell/*.blockmap
             dist-shell/*.dmg
             dist-shell/latest*.yml
           if-no-files-found: error
@@ -86,6 +87,7 @@ jobs:
             dist-shell/*.tar.gz
             dist-shell/*.AppImage
             dist-shell/*.exe
+            dist-shell/*.blockmap
             dist-shell/*.dmg
             dist-shell/latest*.yml
         env:
