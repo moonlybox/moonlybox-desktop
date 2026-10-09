@@ -44,7 +44,17 @@ function initUpdater(getMainWindow) {
 
   // IPC：关于页手动检查/取状态/重启安装
   ipcMain.handle('shell:updateCheck', async () => {
-    try { await autoUpdater.checkForUpdates() } catch { /* 静默 */ }
+    try {
+      const result = await autoUpdater.checkForUpdates()
+      // autoDownload=true 时 result.downloadPromise 是 floating promise——显式接住下载失败（否则主进程 unhandledRejection，
+      // 渲染层关于页在 available 分支渲染进度条期间可能观察到未处理 rejection 报错）
+      const dp = result?.downloadPromise
+      if (dp && typeof dp.catch === 'function') {
+        dp.catch(() => {
+          updateState = { ...updateState, checking: false, available: true, error: 'download-failed' }
+        })
+      }
+    } catch { /* 静默：网络抖动等，updateState.error 由 error 事件写入 */ }
     return updateState
   })
   ipcMain.handle('shell:updateState', () => updateState)

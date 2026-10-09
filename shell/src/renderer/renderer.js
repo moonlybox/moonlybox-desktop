@@ -3547,9 +3547,10 @@ async function renderWork(nav, arg, label2) {
       // （分支1/2 走 renderWork 重建整个关于页，按钮无需再改文字；仅「已是最新」分支用存引用改文字）
       const btn = e.currentTarget
       btn.textContent = t('ui.checking')
-      const st2 = await window.moonlybox.updateCheck()
+      const st2 = await window.moonlybox.updateCheck().catch(() => null)
       if (st2?.downloaded) renderWork('help', 'about')
       else if (st2?.available) renderWork('help', 'about')
+      else if (st2 == null) btn.textContent = t('about.checkFailed') || t('ui.latest')
       else btn.textContent = t('ui.latest')
     }
     const inst = $('abt-install')
