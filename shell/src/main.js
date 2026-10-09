@@ -780,6 +780,8 @@ app.whenReady().then(() => {
   })
 
   initUpdater(() => win)
+  // 「有新版本时自动下载」设置恢复（默认开；设置-通用可关）
+  try { require('./updater').setAutoDownloadEnabled(readSettings().updater?.autoDownload !== false) } catch {}
 
   registerShortcuts()
   if (!app.isDefaultProtocolClient('moonlybox')) {

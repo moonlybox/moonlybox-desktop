@@ -235,6 +235,8 @@ const I18N_DICT = {
   'gen.awake.desc': { zh: '小月执行任务期间阻止系统休眠', en: 'Prevent system sleep while Moonie runs tasks' },
   'gen.clip': { zh: '剪贴板自动采集', en: 'Clipboard Auto Capture' },
   'gen.clip.desc': { zh: '监听复制的文本/链接，存入收集箱；快捷键 Alt+Shift+C 可随时手动采集（不受此开关限制）', en: 'Watch copied text/links into Inbox; Alt+Shift+C always works manually' },
+  'gen.autoDl': { zh: '有新版本时自动下载', en: 'Auto-download updates' },
+  'gen.autoDl.desc': { zh: '发现新版本后在后台自动下载；关闭后仅在「帮助-关于」手动检查时下载', en: 'Download new versions in background; off = download only via Help-About check' },
   'ap.theme': { zh: '色彩风格', en: 'Theme' },
   'ap.theme.sys': { zh: '跟随系统', en: 'System' },
   'ap.theme.light': { zh: '浅色', en: 'Light' },
@@ -348,6 +350,14 @@ const I18N_DICT = {
   'ui.confirm': { zh: '确认', en: 'OK' },
   'ui.install': { zh: '安装', en: 'Install' },
   'ui.latest': { zh: '已是最新版本', en: 'Up to date' },
+  'about.checkFailed': { zh: '检查失败，请稍后重试', en: 'Check failed — try again later' },
+  'up.busyTasks': { zh: '当前有 {n} 个任务正在执行', en: '{n} task(s) are running' },
+  'up.busyChat': { zh: '当前有小月对话正在进行', en: 'A Xiaoyue conversation is in progress' },
+  'up.busyAsk': { zh: '重启更新会中断它，确定继续吗？', en: 'Restarting to update will interrupt it. Continue?' },
+  'up.openDir': { zh: '打开目录', en: 'Open folder' },
+  'up.cleanCache': { zh: '清理下载文件', en: 'Clean downloads' },
+  'up.cleanCacheAsk': { zh: '清理已下载的更新文件？下次更新会重新下载', en: 'Delete downloaded update files? They will be re-downloaded next time' },
+  'up.cacheInfo': { zh: '更新下载缓存：{mb}（安装包下载后暂存于此，安装完成即无用）', en: 'Update download cache: {mb} (staged installers; useless once installed)' },
   'ui.checkUpdate': { zh: '检查更新', en: 'Check for Updates' },
   'ui.updating': { zh: '更新中', en: 'Updating' },
   'ui.restartUpdate': { zh: '重启更新', en: 'Restart to Update' },
@@ -1640,13 +1650,36 @@ async function renderWork(nav, arg, label2) {
       const card = (id, label, desc, on) => `
         <div class="set-card"><div class="sc-main"><div class="sc-title">${label}</div><div class="sc-desc">${desc}</div></div>
           <button type="button" class="toggle ${on ? 'on' : ''}" id="${id}" aria-label="${label}"></button></div>`
+      const autoDl = (g.updater ?? { enabled: true, autoDownload: true }).autoDownload !== false
       panel(t('panel.general'), t('panel.sub.general'), `
         ${card('sp-launch', t('gen.launch'), t('gen.launch.desc'), !!gv.launchAtLogin)}
         ${card('sp-min', t('gen.minLaunch'), t('gen.minLaunch.desc'), !!gv.launchMinimized)}
         ${card('sp-tray', t('gen.minClose'), t('gen.minClose.desc'), !!gv.closeToTray)}
         ${card('sp-awake', t('gen.awake'), t('gen.awake.desc'), !!gv.keepAwake)}
         ${card('sp-watch', t('gen.clip'), t('gen.clip.desc'), clipboardWatch)}
+        ${card('sp-autodl', t('gen.autoDl'), t('gen.autoDl.desc'), autoDl)}
+        <div class="set-card" id="sp-updcache" style="display:none"><div class="sc-main"><div class="sc-title" id="sp-updcache-info" style="font-weight:400;font-size:12px;color:var(--tx2)"></div></div>
+          <div style="display:flex;gap:6px"><button type="button" class="btn ghost" id="sp-updcache-open" style="font-size:12px;padding:2px 8px">${esc(t('up.openDir'))}</button><button type="button" class="btn ghost" id="sp-updcache-clean" style="font-size:12px;padding:2px 8px">${esc(t('up.cleanCache'))}</button></div></div>
       `)
+      // 更新缓存行（有缓存文件才显示：目录+打开+清理）
+      ;(async () => {
+        try {
+          const ci = await window.moonlybox.updateCacheInfo()
+          const row = $('sp-updcache')
+          if (row && ci && ci.files > 0) {
+            row.style.display = 'flex'
+            const mb = ci.bytes / 1024 / 1024
+            $('sp-updcache-info').textContent = t('up.cacheInfo').replace('{mb}', mb >= 1 ? mb.toFixed(1) + ' MB' : Math.round(ci.bytes / 1024) + ' KB')
+            $('sp-updcache-open').onclick = () => window.moonlybox.openPath(ci.dir)
+            $('sp-updcache-clean').onclick = async () => {
+              const ok = await mbConfirm(t('up.cleanCacheAsk'), t('up.cleanCache'))
+              if (!ok) return
+              const rr = await window.moonlybox.cleanUpdateCache()
+              if (rr?.ok) { row.style.display = 'none'; toast(t('common.done')) }
+            }
+          }
+        } catch {}
+      })()
       const saveGeneral = async () => {
         const patch = {
           general: {
@@ -1655,15 +1688,17 @@ async function renderWork(nav, arg, label2) {
             closeToTray: $('sp-tray').classList.contains('on'),
             keepAwake: $('sp-awake').classList.contains('on'),
           },
+          updater: { enabled: true, autoDownload: $('sp-autodl').classList.contains('on') },
         }
         const r = await saveAppSettings(patch)
         clipboardWatch = $('sp-watch').classList.contains('on')
         window.moonlybox.setClipboardWatch(clipboardWatch)
-        // main 侧行为同步（托盘/唤醒/开机启动）
+        // main 侧行为同步（托盘/唤醒/开机启动/自动下载）
         try { await window.moonlybox.applyGeneral(patch.general) } catch {}
+        try { await window.moonlybox.setAutoDownload(patch.updater.autoDownload) } catch {}
         return r
       }
-      for (const id of ['sp-launch', 'sp-min', 'sp-tray', 'sp-awake', 'sp-watch']) {
+      for (const id of ['sp-launch', 'sp-min', 'sp-tray', 'sp-awake', 'sp-watch', 'sp-autodl']) {
         $(id).onclick = (e) => { e.currentTarget.classList.toggle('on'); saveGeneral() }
       }
     } else if (cat.id === 'appearance') {
@@ -4743,49 +4778,56 @@ $('btn-avatar').onclick = async () => {
 // （#253.48：设置已迁 3 列 UI——rail settings 按钮走全局 switchNav 委托，旧弹窗逻辑移除）
 
 // ---------- 升级灯（需求 4：有更新=黄点；就绪=绿点闪烁；点击确认安装） ----------
-function setUpgradeState(state, version) {
+function setUpgradeState(state, version, percent) {
   const btn = $('btn-upgrade')
-  const dot = btn.querySelector('.dot')
-  const text = $('upgrade-text')
-  if (state === 'available') {
-    dot.style.display = 'block'; btn.classList.remove('ready'); btn.classList.add('active')
-    text.textContent = t('ui.updating')
-    btn.dataset.tip = t('up.downloading').replace('{v}', version)
+  if (!btn) return
+  const donut = btn.querySelector('.donut')
+  const icon = $('upgrade-icon')
+  if (state === 'downloading') {
+    btn.style.display = 'flex'; btn.classList.remove('ready'); btn.classList.add('active')
+    icon.textContent = '⟳'
+    donut.style.setProperty('--p', String(percent ?? 0))
+    donut.style.display = 'block'
+    btn.dataset.tip = t('up.downloading').replace('{v}', version) + ` ${percent ?? 0}%`
   } else if (state === 'ready') {
-    dot.style.display = 'block'; btn.classList.add('ready', 'active')
-    text.textContent = t('ui.restartUpdate')
+    btn.style.display = 'flex'; btn.classList.add('ready', 'active'); btn.classList.remove('active')
+    btn.classList.add('ready')
+    icon.textContent = '⬆'
+    donut.style.display = 'none'
     btn.dataset.tip = t('up.ready').replace('{v}', version)
   } else {
-    dot.style.display = 'none'; btn.classList.remove('ready', 'active')
-    text.textContent = ''
-    btn.dataset.tip = t('ui.checkUpdate')
+    // idle：完全隐藏（检查更新入口收敛到 帮助-关于）
+    btn.style.display = 'none'; btn.classList.remove('ready', 'active')
   }
 }
+window.moonlybox.onUpdateProgress((msg) => setUpgradeState('downloading', window.__upVer ?? '', msg?.percent ?? 0))
 window.moonlybox.onUpdateReady((msg) => setUpgradeState('ready', msg.version))
 // 首屏恢复状态（重启后 downloaded/available 不丢）
 ;(async () => {
   try {
     const st = await window.moonlybox.updateState()
+    window.__upVer = st?.version ?? ''
     if (st?.downloaded) setUpgradeState('ready', st.version)
-    else if (st?.available) setUpgradeState('available', st.version)
+    else if (st?.available && (st?.progress ?? 0) > 0) setUpgradeState('downloading', st.version, st?.progress ?? 0)
   } catch {}
 })()
 $('btn-upgrade').onclick = async () => {
-  const st = await window.moonlybox.updateState()
-  if (st?.downloaded) {
-    mbConfirm(`v${st.version} ${t('about.installAsk')}`, t('ui.install')).then((ok) => { if (ok) window.moonlybox.updateInstall() })
-    return
+  const st = await window.moonlybox.updateState().catch(() => null)
+  if (!st?.downloaded) return // 只有「已就绪」可点；下载中/空闲不响应（手动检查入口在 帮助-关于）
+  // 守卫：任务/对话进行中→先提醒询问，确认后中断并更新重启（任务经 daemon 断点保留，重启后 queued 待续）
+  let busyMsg = ''
+  try {
+    const tr = await window.moonlybox.rpc('tasks', { op: 'list' }, 10_000)
+    const items = Array.isArray(tr) ? tr : (tr?.items ?? [])
+    const running = items.filter((j) => j && (j.status === 'running' || j.status === 'queued'))
+    if (running.length) busyMsg = t('up.busyTasks').replace('{n}', String(running.length))
+  } catch {}
+  if (!busyMsg && xyRunning.size > 0) busyMsg = t('up.busyChat')
+  if (busyMsg) {
+    const ok = await mbConfirm(busyMsg + ' ' + t('up.busyAsk'), t('ui.restartUpdate'))
+    if (!ok) return
   }
-  setUpgradeState('available', st?.version ?? '')
-  $('upgrade-text').textContent = t('ui.checking')
-  const after = await window.moonlybox.updateCheck()
-  if (after?.downloaded) setUpgradeState('ready', after.version)
-  else if (after?.available) setUpgradeState('available', after.version)
-  else {
-    setUpgradeState('none', '')
-    $('upgrade-text').textContent = t('up.latest')
-    setTimeout(() => { if (!$('btn-upgrade').classList.contains('active')) $('upgrade-text').textContent = '' }, 3000)
-  }
+  window.moonlybox.updateInstall()
 }
 
 // ---------- 账号（头像点击=登录/账号面板） ----------

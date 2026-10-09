@@ -61,17 +61,21 @@
       font-size: 12px; cursor: pointer; border-radius: 6px;
     }
     #titlebar .win-controls button:hover { background: var(--hover); }
-    #btn-upgrade { position: relative; display: flex; align-items: center; gap: 5px; padding: 0 10px; opacity: .55; }
+    #btn-upgrade { position: relative; display: none; align-items: center; justify-content: center; width: 30px; height: 26px; padding: 0; opacity: .55; }
     #btn-upgrade:hover { opacity: 1; }
-    #btn-upgrade.active { opacity: 1; color: var(--warn); font-weight: 600; }
-    #btn-upgrade.ready { color: var(--ok); }
-    #btn-upgrade .dot {
-      position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%;
-      background: var(--warn); display: none;
+    #btn-upgrade.active { display: flex; opacity: 1; color: var(--warn); }
+    #btn-upgrade.ready { display: flex; color: var(--ok); opacity: 1; }
+    #btn-upgrade .wrap { position: relative; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
+    #btn-upgrade .donut {
+      position: absolute; inset: 0; border-radius: 50%; display: none;
+      background: conic-gradient(var(--accent) calc(var(--p, 0) * 1%), transparent 0);
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+      mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
     }
-    #btn-upgrade.ready .dot { background: var(--ok); animation: pulse 1.2s infinite; }
-    #upgrade-text { font-size: 12px; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+    #btn-upgrade.ready .donut { display: none; }
+    #btn-upgrade .uicon { font-size: 13px; line-height: 1; }
+    #btn-upgrade.ready .uicon { color: var(--ok); font-weight: 700; }
+    #upgrade-text { font-size: 12px; display: none; }
     @keyframes cloudspin { to { transform: rotate(360deg); } }
 
     /* ===== 主体 3 列 ===== */
@@ -316,7 +320,7 @@
     <div class="tabs" id="frame-tabs"></div>
     <span class="spacer"></span>
     <div class="win-controls">
-      <button id="btn-upgrade" data-tip="检查更新"><span id="upgrade-icon">⟳</span><span id="upgrade-text"></span><span class="dot"></span></button>
+      <button id="btn-upgrade" data-tip="" style="display:none"><span class="wrap"><span class="donut" id="up-donut"></span><span class="uicon" id="upgrade-icon">⟳</span></span><span id="upgrade-text"></span></button>
       <button id="win-min" data-tip="最小化"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
       <button id="win-max" data-tip="最大化"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></button>
       <button id="win-close" data-tip="关闭"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>

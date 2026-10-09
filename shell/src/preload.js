@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('moonlybox', {
   updateState: () => ipcRenderer.invoke('shell:updateState'),
   updateInstall: () => ipcRenderer.invoke('shell:updateInstall'),
   onUpdateReady: (cb) => ipcRenderer.on('shell:updateReady', (_e, msg) => cb(msg)),
+  onUpdateProgress: (cb) => ipcRenderer.on('shell:updateProgress', (_e, msg) => cb(msg)),
   // P2：UI 确认制——renderer 对挂起的 confirm_request 回传结果
   confirmResponse: (rpcId, value) => ipcRenderer.invoke('kernel:confirmResponse', { rpcId, value }),
   // #253：自绘标题栏窗口控制 + vault 选择/读取 + vault 文件树（沙箱）
@@ -55,4 +56,7 @@ contextBridge.exposeInMainWorld('moonlybox', {
   notify: (title, body) => ipcRenderer.invoke('shell:notify', { title, body }),
   envInfo: () => ipcRenderer.invoke('shell:envInfo'),
   setAutoUpdate: (on) => ipcRenderer.invoke('shell:setAutoUpdate', on),
+  setAutoDownload: (on) => ipcRenderer.invoke('shell:setAutoDownload', on),
+  updateCacheInfo: () => ipcRenderer.invoke('shell:updateCacheInfo'),
+  cleanUpdateCache: () => ipcRenderer.invoke('shell:cleanUpdateCache'),
 })
