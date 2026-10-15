@@ -296,25 +296,26 @@
 <body>
   <!-- 标题栏：MDI 页帧 + 升级灯 + 窗口控制 -->
   <div id="titlebar">
-    <!-- 涌月漩裸图形（无徽章底，与 web 站点 LOGO 同款；描边走 CSS 变量随主题换色） -->
-    <svg viewBox="132 72 236 343" style="width:18px;height:18px;flex:none" aria-hidden="true">
+    <!-- 涌月漩裸图形（无徽章底，与 web 站点 LOGO 同款；D8 正中构图 v2 品牌包 2026-10-16；描边走 CSS 变量随主题换色） -->
+    <svg viewBox="40 38 461 414" style="width:18px;height:18px;flex:none" aria-hidden="true">
       <defs>
         <linearGradient id="tbSwirl" x1="0" y1="1" x2="0" y2="0">
           <stop offset="0" stop-color="var(--logo-swirl-a)"/>
           <stop offset="1" stop-color="var(--logo-swirl-b)"/>
         </linearGradient>
         <mask id="tbMoon">
-          <rect x="132" y="72" width="236" height="343" fill="#fff"/>
-          <circle cx="271" cy="185" r="36" fill="#000"/>
+          <rect x="40" y="38" width="461" height="414" fill="#fff"/>
+          <circle cx="310" cy="220" r="72" fill="#000"/>
         </mask>
         <path id="tbStar" d="M0 -22 C3.5 -7 7 -3.5 22 0 C7 3.5 3.5 7 0 22 C-3.5 7 -7 3.5 -22 0 C-7 -3.5 -3.5 -7 0 -22 Z"/>
       </defs>
-      <path d="M163 308 L163 368 Q163 389 184 389 L328 389 Q349 389 349 368 L349 308" fill="none" stroke="var(--logo-box)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M256 288 C205 288 166 246 166 196 C166 146 213 118 256 118 C299 118 322 159 322 196 C322 233 288 254 256 254 C224 254 198 228 198 196" fill="none" stroke="url(#tbSwirl)" stroke-width="14" stroke-linecap="round"/>
-      <circle cx="256" cy="196" r="40" fill="var(--logo-moon)" mask="url(#tbMoon)"/>
-      <use href="#tbStar" transform="translate(168 106)" fill="var(--logo-star)"/>
-      <use href="#tbStar" transform="translate(338 116) scale(0.68)" fill="var(--logo-star2)"/>
-      <circle cx="150" cy="240" r="6" fill="var(--logo-dot)"/>
+      <g transform="translate(-232 -150) scale(2)">
+        <path d="M256 288 C205 288 166 246 166 196 C166 146 213 118 256 118 C299 118 322 159 322 196 C322 233 288 254 256 254 C224 254 198 228 198 196" fill="none" stroke="url(#tbSwirl)" stroke-width="14" stroke-linecap="round"/>
+        <circle cx="256" cy="196" r="40" fill="var(--logo-moon)" mask="url(#tbMoon)"/>
+      </g>
+      <use href="#tbStar" transform="translate(94 92) scale(1.91)" fill="var(--logo-star)"/>
+      <use href="#tbStar" transform="translate(459 176) scale(1.36)" fill="var(--logo-star2)"/>
+      <circle cx="66" cy="316" r="12" fill="var(--logo-dot)"/>
     </svg>
     <span class="brand">魔力宝盒</span>
     <div class="tabs" id="frame-tabs"></div>

@@ -1,8 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MoonlyBox 钉选图标（Safari mask-icon 剪影版）">
-  <!-- 单色剪影：HTML 中以 <link rel="mask-icon" href="mask-icon.svg" color="#9A78FF"> 引用，color 值由浏览器注入 -->
   <g fill="none" stroke="#000000" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M163 308 L163 368 Q163 389 184 389 L328 389 Q349 389 349 368 L349 308"/>
-    <path d="M256 288 C205 288 166 246 166 196 C166 146 213 118 256 118 C299 118 322 159 322 196"/>
+    <path d="M256 288 C205 288 166 246 166 196 C166 146 213 118 256 118 C299 118 322 159 322 196 C322 233 288 254 256 254 C224 254 198 228 198 196"/>
   </g>
-  <path fill="#000000" fill-rule="evenodd" d="M216 196 a40 40 0 1 0 80 0 a40 40 0 1 0 -80 0 Z M235 185 a36 36 0 1 0 72 0 a36 36 0 1 0 -72 0 Z"/>
+  <path fill="#000000" d="M248.81 156.65 A40 40 0 1 1 291.37 214.68 A36 36 0 0 0 248.81 156.65 Z"/>
 </svg>

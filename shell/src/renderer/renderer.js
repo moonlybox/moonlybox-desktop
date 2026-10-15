@@ -3519,7 +3519,7 @@ async function renderWork(nav, arg, label2) {
     w.innerHTML = `
       <div style="padding:24px 28px;overflow-y:auto;height:100%;box-sizing:border-box">
         <div class="set-card" style="display:flex;align-items:center;gap:16px;padding:18px 20px">
-          <div style="width:52px;height:52px;border-radius:14px;background:var(--hover);display:flex;align-items:center;justify-content:center;flex:none">${LOGO_SVG.replace('viewBox="132 72 236 343" style="width:18px;height:18px;flex:none"', 'viewBox="132 72 236 343" style="width:34px;height:34px"')}</div>
+          <div style="width:52px;height:52px;border-radius:14px;background:var(--hover);display:flex;align-items:center;justify-content:center;flex:none">${LOGO_SVG.replace(/style="width:18px;height:18px;flex:none"/, 'style="width:34px;height:34px"')}</div>
           <div style="flex:1;min-width:0">
             <div style="font-size:17px;font-weight:700">${t('about.name')}</div>
             <div class="set-desc" style="margin-top:2px">${t('about.slogan')}</div>
