@@ -836,80 +836,14 @@ async function dispatch(req: Request, emit: (text: string) => void): Promise<{ c
       }
       break
     }
-    case 'diagram': {
-      // 图示（#252 §8）：list|save|activate|get——壳工作台 ↔ 服务端图示 API（草稿两级制）
+    case 'nav': {
+      // #254：云端功能导航 manifest（服务端下发——功能升级/新增零客户端发版）；token 过期自动续
+      // #372.110：图示功能三端移除，本 case 由原 diagram case 收窄而来（nav 通道为云端/帮助/反馈共用）
       try {
-        const op = String(args.op ?? 'list')
-        if (op === 'list') {
-          const res = await apiGet<any>('/library/diagrams')
-          text = JSON.stringify(res)
-        } else if (op === 'save') {
-          const res = await apiPost<any>('/library/diagrams', {
-            id: args.id ?? null,
-            title: String(args.title ?? '未命名图示'),
-            content: String(args.content ?? ''),
-            diagramType: args.diagramType ?? null,
-          })
-          text = JSON.stringify(res)
-        } else if (op === 'activate') {
-          const res = await apiPost<any>(`/library/diagrams/${encodeURIComponent(String(args.id ?? ''))}/activate`)
-          text = JSON.stringify(res)
-        } else if (op === 'delete') {
-          // #300：删除图示=复用书房文档删除（DELETE /library/{id}，软删进回收站 30 天可恢复）
-          const res = await apiDelete<any>(`/library/${encodeURIComponent(String(args.id ?? ''))}`)
-          text = JSON.stringify(res)
-        } else if (op === 'get') {
-          const res = await apiGet<any>(`/library/diagrams/${encodeURIComponent(String(args.id ?? ''))}`)
-          text = JSON.stringify(res)
-        } else if (op === 'nav') {
-          // #254：云端功能导航 manifest（服务端下发——功能升级/新增零客户端发版）；token 过期自动续
-          try {
-            const res = await apiGet<any>('/client/nav')
-            let token: string | null = null
-            try { token = (await ensureFreshToken()).accessToken } catch { token = null }
-            text = JSON.stringify({ ok: true, data: res.data, token })
-          } catch (e: any) {
-            code = 1
-            text = String(e?.message ?? e)
-          }
-        } else if (op === 'ai' || op === 'fix') {
-          // T4：AI 生成/修复图示（§8.2 AI 生成=小月 BYOK 通道，错误回喂重试闭环）
-          if (!byokReady()) {
-            code = 1
-            text = 'AI 生成需要 BYOK：在 设置 → 模型 → 平台 API 配置'
-            break
-          }
-          const prompt = String(args.prompt ?? '').trim()
-          if (!prompt) {
-            code = 2
-            text = '描述为空'
-            break
-          }
-          const sys = op === 'ai'
-            ? '你是 Mermaid 图表专家。根据用户描述生成一个 Mermaid 图。只输出单个 ```mermaid 代码块，不要任何解释。支持 flowchart/sequence/class/ER/state/甘特/思维导图等。节点文字用中文。'
-            : '你是 Mermaid 图表专家。用户的 Mermaid 图渲染报错了。修复语法错误，保持原图意图。只输出修复后的单个 ```mermaid 代码块，不要任何解释。'
-          const question = op === 'ai'
-            ? prompt
-            : `渲染错误信息：\n${String(args.error ?? '')}\n\n当前源码：\n${prompt}`
-          const parts: string[] = []
-          let aiErr = ''
-          await withCapturedConsole(async () => {
-            const { resolveActiveModel } = await import('../lib/model-registry')
-            const active = resolveActiveModel()
-            const r = await byokChat(sys, question, 120_000, active ? { baseUrl: active.baseUrl, model: active.model, apiKey: active.apiKey } : undefined)
-            if (r.ok) parts.push(r.text ?? '')
-            else aiErr = r.error ?? '未知错误'
-          }, (t) => { parts.push(t) })
-          if (!parts.length) {
-            code = 1
-            text = aiErr || 'AI 无回复'
-            break
-          }
-          text = JSON.stringify({ ok: true, source: parts.join('\n') })
-        } else {
-          code = 2
-          text = `未知 diagram op：${op}`
-        }
+        const res = await apiGet<any>('/client/nav')
+        let token: string | null = null
+        try { token = (await ensureFreshToken()).accessToken } catch { token = null }
+        text = JSON.stringify({ ok: true, data: res.data, token })
       } catch (e: any) {
         code = 1
         text = String(e?.message ?? e)

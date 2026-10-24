@@ -48,7 +48,6 @@ const ICON_PATHS = {
   vault: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
   backup: '<path d="M4 16.2A4.5 4.5 0 0 1 6.6 8a6 6 0 0 1 11.6 1.6A4 4 0 0 1 18 17.5"/><path d="M12 12v9"/><path d="m8 16 4-4 4 4"/>',
   cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
-  diagram: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
   tasks: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
   xiaoyue: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
   help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
@@ -57,7 +56,6 @@ const ICON_PATHS = {
 const navIconSvg = (nav, size = 18) => `<svg viewBox="0 0 24 24" style="width:${size}px;height:${size}px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round">${ICON_PATHS[nav] ?? ''}</svg>`
 const NAVS = {
   vault: { label: 'nav.vault' },
-  diagram: { label: 'nav.diagram' },
   cloud: { label: 'nav.cloud' },
   backup: { label: 'nav.backup' },
   tasks: { label: 'nav.tasks' },
@@ -147,7 +145,6 @@ let APP_PROVIDERS = null // 提供商清单 {platform,websearch,messaging,memory
 // 键控字典：UI 高频标签全走 t()；t 读 APP_SETTINGS.appearance.lang（zh-CN→zh/en），未加载时按 navigator 回落。
 const I18N_DICT = {
   'nav.vault': { zh: '书房（本地）', en: 'Study (Local)' },
-  'nav.diagram': { zh: '图示', en: 'Diagrams' },
   'nav.cloud': { zh: '云端', en: 'Cloud' },
   'nav.backup': { zh: '备份', en: 'Backup' },
   'nav.tasks': { zh: '任务', en: 'Tasks' },
@@ -189,6 +186,8 @@ const I18N_DICT = {
   'tree.syncDone': { zh: '同步完成（补传/下行/索引已跑一轮）。', en: 'Sync complete (backfill / download / index refreshed).' },
   'tree.syncFail': { zh: '同步失败：', en: 'Sync failed: ' },
   'ui.saveFail': { zh: '保存失败', en: 'Save failed' },
+  'ui.noModel': { zh: '未设模型', en: 'No model set' },
+  'ui.more': { zh: '更多', en: 'More' },
   'ui.saving': { zh: '保存中…', en: 'Saving…' },
   'ui.saved': { zh: '✓ 已保存', en: '✓ Saved' },
   'ui.stop': { zh: '停用', en: 'Disable' },
@@ -245,7 +244,7 @@ const I18N_DICT = {
   'ap.zoom': { zh: '缩放：', en: 'Zoom: ' },
   'chat.ctx': { zh: '启用上下文管理', en: 'Context Management' },
   'chat.compact': { zh: '上下文自动压缩', en: 'Auto Context Compaction' },
-  'chat.defaultModel': { zh: '默认模型（小月对话/图示 AI 使用）', en: 'Default model (used by Moonie chat / diagram AI)' },
+  'chat.defaultModel': { zh: '默认模型（小月对话使用）', en: 'Default model (used by Moonie chat)' },
   'chat.unset': { zh: '— 未指定（回落已配置模型）—', en: '— Unset (fall back to configured model) —' },
   'chat.unsetHint': { zh: '未指定——按已配置模型回落', en: 'Unset — falls back to configured model' },
   'chat.setDefault': { zh: '✓ 已设为默认模型', en: '✓ Set as default model' },
@@ -279,44 +278,8 @@ const I18N_DICT = {
   'ol.pickFirst': { zh: '请先勾选模型', en: 'Select at least one model' },
   'ol.starting': { zh: '启动中…', en: 'Starting…' },
   'ol.startRetry': { zh: '启动失败，重试', en: 'Start failed, retry' },
-  'dg.noModel': { zh: '未设模型', en: 'No model set' },
   'lib.notChosenParen': { zh: '（未选择）', en: '(not chosen)' },
   'ui.appliesInstant': { zh: '（即刻生效）', en: ' (applies instantly)' },
-  'dg.tpl.flowchart': { zh: '流程图', en: 'Flowchart' },
-  'dg.tpld.flowchart': { zh: '步骤流转 / 判断分支', en: 'Steps & branches' },
-  'dg.tpl.sequence': { zh: '时序图', en: 'Sequence' },
-  'dg.tpld.sequence': { zh: '模块间调用时序', en: 'Calls between modules' },
-  'dg.tpl.mindmap': { zh: '思维导图', en: 'Mind Map' },
-  'dg.tpld.mindmap': { zh: '主题发散 / 知识梳理', en: 'Topic branches / knowledge' },
-  'dg.tpl.pie': { zh: '饼图', en: 'Pie Chart' },
-  'dg.tpld.pie': { zh: '占比分布', en: 'Proportions' },
-  'dg.tpl.gantt': { zh: '甘特图', en: 'Gantt' },
-  'dg.tpld.gantt': { zh: '项目排期', en: 'Project schedule' },
-  'dg.tpl.er': { zh: 'ER 图', en: 'ER Diagram' },
-  'dg.tpld.er': { zh: '数据模型 / 实体关系', en: 'Data model / relations' },
-  'dg.tpl.state': { zh: '状态图', en: 'State Diagram' },
-  'dg.tpld.state': { zh: '状态机流转', en: 'State machine' },
-  'dg.tpl.journey': { zh: '用户旅程', en: 'User Journey' },
-  'dg.tpld.journey': { zh: '体验流程 / 满意度', en: 'Experience / satisfaction' },
-  'dg.tpl.timeline': { zh: '时间线', en: 'Timeline' },
-  'dg.tpld.timeline': { zh: '事件脉络', en: 'Event timeline' },
-  'dg.tpl.quadrant': { zh: '象限图', en: 'Quadrant' },
-  'dg.tpld.quadrant': { zh: '四象限分析', en: 'Quadrant analysis' },
-  'dg.tpl.gitgraph': { zh: 'Git 图', en: 'Git Graph' },
-  'dg.tpld.gitgraph': { zh: '分支策略', en: 'Branch strategy' },
-  'dg.tpl.class': { zh: '类图', en: 'Class Diagram' },
-  'dg.tpld.class': { zh: '类结构 / 继承关系', en: 'Class structure' },
-  'dg.tpl.empty': { zh: '空图示', en: 'Blank' },
-  'dg.tpld.empty': { zh: '从空白开始', en: 'Start from scratch' },  'dg.nameRequired': { zh: '请先填写图示名称（必填）', en: 'Diagram name is required' },
-  'dg.pickedTpl': { zh: '已选模板', en: 'Selected template' },
-  'dg.tplFilled': { zh: '示例已填充，可编辑后保存', en: 'Sample filled — edit and save' },
-  'dg.draft': { zh: '📝 云端草稿', en: '📝 Cloud draft' },
-  'dg.inStudy': { zh: '📚 已存书房', en: '📚 In Study' },
-  'dg.newDraft': { zh: '新草稿', en: 'New draft' },
-  'dg.quickTitle': { zh: '图示名称（必填）', en: 'Diagram name (required)' },
-  'dg.quickOk': { zh: '创建并编辑', en: 'Create & Edit' },
-  'dg.quickDesc': { zh: '选择图示类型，创建后自动填充该类型的示例代码，稍后可修改。', en: 'Pick a type — sample code is filled on create, editable later.' },
-  'dg.untitled': { zh: '未命名图示', en: 'Untitled diagram' },
   'xy.prompts': { zh: '常用指令', en: 'Quick prompts' },
   'xy.p1': { zh: '整理我的收藏，对未打标签的收藏打上合适的标签', en: 'Organize my bookmarks: add suitable tags to untagged ones' },
   'xy.p2': { zh: '给没有描述的收藏补充描述', en: 'Fill in descriptions for bookmarks that have none' },
@@ -401,12 +364,6 @@ const I18N_DICT = {
   'about.env': { zh: '环境：', en: 'Environment: ' },
   'about.newVer': { zh: '发现新版本', en: 'New Version Available' },
   'about.installAsk': { zh: '已就绪，安装并重启？', en: 'is ready. Install and restart?' },
-  'dg.saveFirst': { zh: '先保存草稿', en: 'Save draft first' },
-  'dg.admitFail': { zh: '准入失败：', en: 'Admission failed: ' },
-  'dg.aiPrompt': { zh: '描述你要画的图', en: 'Describe the diagram to draw' },
-  'dg.aiDone': { zh: '✓ AI 已生成', en: '✓ AI generated' },
-  'dg.aiFail': { zh: 'AI 生成失败：', en: 'AI generation failed: ' },
-  'dg.saveFail': { zh: '保存失败：', en: 'Save failed: ' },
   'xy.pickFirst': { zh: '先在左侧选择或新建对话', en: 'Pick or create a chat on the left first' },
   'xy.qPlaceholder': { zh: '问小月（工作空间内可读写文件）…', en: 'Ask Moonie (can read/write files in workspaces)…' },
   'xy.docOnly': { zh: '问小月（文档库/MCP，无本地目录访问）…', en: 'Ask Moonie (library/MCP, no local file access)…' },  'list.settings': { zh: '设置', en: 'Settings' },
@@ -463,12 +420,6 @@ const I18N_DICT = {
   'list.loadFail': { zh: '加载失败', en: 'Load failed' },
   'list.navLoadFail': { zh: '导航加载失败：', en: 'Failed to load navigation: ' },
   'list.navParseFail': { zh: '导航解析失败（登录后可用）', en: 'Failed to parse navigation (sign in first)' },
-  'dg.newBtn': { zh: '＋ 新建图示', en: '＋ New Diagram' },
-  'dg.more': { zh: '更多', en: 'More' },
-  'dg.delItem': { zh: '删除', en: 'Delete' },
-  'dg.delConfirm': { zh: '删除图示「{t}」？将移入回收站（30 天内可在云端书房恢复）。', en: 'Delete diagram "{t}"? It moves to trash (restorable in cloud study for 30 days).' },
-  'dg.none': { zh: '暂无图示', en: 'No diagrams' },
-  'dg.listFail': { zh: '列表加载失败（登录后可用）', en: 'Failed to load list (sign in first)' },
   'xy.newWs': { zh: '＋ 工作空间', en: '＋ Workspace' },
   'xy.newChat': { zh: '＋ 对话', en: '＋ Chat' },
   'xy.delMenu': { zh: '删除', en: 'Delete' },
@@ -681,11 +632,6 @@ const I18N_DICT = {
   'bk.dupNote': { zh: '同名文档上传为「笔记 2」，双方并存；重装/换机需接管云端同名文档时，新建时会先出现「同名认领」确认。', en: 'Same-name docs upload as "Note 2" side by side; to take over cloud same-name docs after reinstall/new machine, the one-time "same-name claim" prompt appears at creation.' },
   'bk.saveBtn': { zh: '注册并立即同步', en: 'Register && Sync Now' },
   'about.kernel': { zh: '内核 v', en: 'Kernel v' },
-  'dg.saveDraft': { zh: '保存草稿', en: 'Save Draft' },
-  'dg.admit': { zh: '存进书房', en: 'Save to Study' },
-  'dg.aiBtn': { zh: '✨ AI 生成', en: '✨ AI Generate' },
-  'dg.quickNew': { zh: '新建图示', en: 'New Diagram' },
-  'dg.quickHint': { zh: '打开左侧已有图示继续编辑。', en: 'Open an existing diagram on the left to keep editing.' },
   'xy.send': { zh: '发送', en: 'Send' },
   'xy.model': { zh: '模型', en: 'Model' },
   'xy.thinking': { zh: '思考', en: 'Thinking' },
@@ -1126,7 +1072,7 @@ async function renderList(nav) {
     return
   } else if (nav === 'cloud') {
     // #254：云端功能=服务端下发 manifest（功能升级/新增零客户端发版）
-    const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
+    const r = await window.moonlybox.rpc('nav', {}, 30_000)
     if (r.event !== 'done' || r.code !== 0) {
       body.innerHTML = `<div class="muted" style="padding:10px">${t('list.navLoadFail')}` + (r.text || r.message) + '</div>'
       return
@@ -1151,89 +1097,6 @@ async function renderList(nav) {
       }
     } catch {
       body.innerHTML = `<div class="muted" style="padding:10px">${t('list.navParseFail')}</div>`
-    }
-  } else if (nav === 'diagram') {
-    // #290：顶部「＋ 新建」→ renderWork('diagram', { __new: true }) 进空态（编辑器按钮隐藏，工作台内点「＋ 新建」走模板弹窗）
-    const newBtn = document.createElement('div')
-    newBtn.className = 'tree-item'
-    newBtn.style.color = 'var(--accent)'
-    newBtn.textContent = t('dg.newBtn')
-    newBtn.onclick = () => {
-      body.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active')) // #302：新建=离开编辑态，清选中高亮
-      renderWork('diagram', {})
-    }
-    body.appendChild(newBtn)
-    const r = await window.moonlybox.rpc('diagram', { op: 'list' }, 30_000)
-    try {
-      const items = JSON.parse(r.text).data.diagrams || []
-      for (const it of items) {
-        const el = document.createElement('div')
-        // #302：选中态=正在编辑的草稿（dgCurrentId 对齐）——打开行时 DOM 级切换高亮（不重渲列表）
-        el.className = 'tree-item' + (it.id && it.id === dgCurrentId ? ' active' : '')
-        el.style.position = 'relative'
-        // #292：图标=图示类型（存档标签优先，内容嗅探兜底）——草稿半透明+title 标状态，废除 📝/📚（风格与小月/文档统一）
-        // #300：悬停显示最后修改时间（居右）+「⋯」更多菜单（行级：删除）
-        const fmtTime = (() => { try { const d = new Date(it.updatedAt); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` } catch { return '' } })()
-        el.innerHTML = `<span style="opacity:${it.state === 'draft' ? '.55' : '1'}">${dgTypeIcon(it)}</span> <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${String(it.title).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</span><span class="dg-time" style="display:none;font-size:10.5px;color:var(--muted);flex:none">${fmtTime}</span><span class="dg-more" style="display:none;cursor:pointer;padding:0 4px;color:var(--muted);flex:none" title="${t('dg.more')}">⋯</span>`
-        el.title = `${it.state === 'draft' ? t('lib.draft') : t('lib.inStudy')} · ${it.diagramType ?? sniffDiagramType(it.content) ?? t('lib.unknownType')}`
-        el.onmouseenter = () => {
-          el.querySelector('.dg-time').style.display = ''
-          el.querySelector('.dg-more').style.display = ''
-        }
-        el.onmouseleave = () => {
-          el.querySelector('.dg-time').style.display = 'none'
-          el.querySelector('.dg-more').style.display = 'none'
-          // #301：菜单挂 body——移出行不关菜单（移向菜单必经行外），关闭靠 document click / 再点 ⋯ / 行滚出视口
-        }
-        el.onclick = () => {
-          body.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active'))
-          el.classList.add('active')
-          renderWork('diagram', it)
-        }
-        // ⋯ 更多菜单：#301 改挂 body+fixed 定位——行内 absolute 会被 .list-body overflow-y:auto 裁剪（菜单只能显示半截）
-        el.querySelector('.dg-more').onclick = (e) => {
-          e.stopPropagation()
-          const existed = document.querySelector('.dg-menu')
-          if (existed) { existed.remove(); existed._row?.classList.remove('menu-open'); return }
-          const menu = document.createElement('div')
-          menu.className = 'dg-menu'
-          menu._row = el // #304：菜单打开期间锚定行保持 hover 背景（归属感）——关闭时移除
-          el.classList.add('menu-open')
-          const rect = el.getBoundingClientRect()
-          menu.style.cssText = 'position:fixed;z-index:1000;background:var(--bg2,#1e293b);border:1px solid var(--border);border-radius:8px;padding:4px;min-width:112px;box-shadow:0 8px 24px rgba(0,0,0,.35)'
-          // 默认锚在行下方右对齐；底部放不下则翻转到行上方
-          menu.style.visibility = 'hidden'
-          document.body.appendChild(menu)
-          const mh = menu.offsetHeight
-          const below = rect.bottom + 2 + mh <= window.innerHeight - 8
-          menu.style.left = `${Math.min(rect.right - 118, window.innerWidth - 126)}px`
-          menu.style.top = `${below ? rect.bottom + 2 : rect.top - mh - 2}px`
-          menu.style.visibility = ''
-          menu.innerHTML = `<div class="dg-del" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--err,#f87171)">${t('dg.delItem')}</div>`
-          menu.querySelector('.dg-del').onclick = async (e2) => {
-            e2.stopPropagation()
-            closeCtxMenu(menu)
-            if (!(await mbConfirm(t('dg.delConfirm').replace('{t}', it.title)))) return
-            const rr = await window.moonlybox.rpc('diagram', { op: 'delete', id: it.id }, 30_000)
-            if (rr.event === 'done' && rr.code === 0 && JSON.parse(rr.text).ok !== false) {
-              void renderList('diagram')
-              if (typeof dgCurrentId === 'string' && dgCurrentId === it.id) renderWork('diagram', {})
-            } else {
-              const st = $('dg-state')
-              if (st) st.textContent = t('lib.delFail') + (rr.text || rr.message)
-            }
-          }
-          // 点外部/列表滚动关闭（menu 已挂 document.body）
-          const close = (e3) => { if (!menu.contains(e3.target)) { closeCtxMenu(menu); document.removeEventListener('click', close); lb?.removeEventListener('scroll', close) } }
-          const lb = el.closest('.list-body')
-          lb?.addEventListener('scroll', close, { once: true })
-          setTimeout(() => document.addEventListener('click', close), 0)
-        }
-        body.appendChild(el)
-      }
-      if (!items.length) body.insertAdjacentHTML('beforeend', `<div class="muted" style="padding:10px">${t('dg.none')}</div>`)
-    } catch {
-      body.insertAdjacentHTML('beforeend', `<div class="muted" style="padding:10px">${t('dg.listFail')}</div>`)
     }
   } else if (nav === 'xiaoyue') {
     // #282 会话列表：工作空间分组 + 对话（无工作空间）分类
@@ -1595,7 +1458,7 @@ async function renderWork(nav, arg, label2) {
     btnToggle.onclick = () => { mode = mode === 'read' ? 'edit' : 'read'; applyMode() }
     btnSave.onclick = async () => {
       const wr = await window.moonlybox.fsWrite(arg.rel, edit.value)
-      if (!wr.ok) { state.textContent = t('dg.saveFail') + wr.message; return }
+      if (!wr.ok) { state.textContent = t('ui.saveFail') + wr.message; return }
       state.textContent = '✓ 已保存 · 回传云端中…'
       // 保存即回传（#253.49）：镜像区文件直接走 /library/import/files 版本管道；本地文档提示走收集箱
       try {
@@ -1958,7 +1821,7 @@ async function renderWork(nav, arg, label2) {
           const card = document.createElement('div')
           card.className = 'set-card'
           card.innerHTML = `<div class="sc-main"><div class="sc-title">${pv?.label ?? inst.providerId}${isDefault(inst.id) ? ` <span style=\"color:var(--accent);font-size:11px\">${t('mp.default')}</span>` : ''}</div>
-            <div class="sc-desc">${inst.model || t('dg.noModel')}${inst.hasKey || inst.enabled ? '' : t('mp.noKey')}</div></div>
+            <div class="sc-desc">${inst.model || t('ui.noModel')}${inst.hasKey || inst.enabled ? '' : t('mp.noKey')}</div></div>
             <div style="display:flex;align-items:center;gap:8px">
               ${isDefault(inst.id) ? '' : `<button type="button" class="btn ghost" data-act="default" style="padding:2px 8px;font-size:11px">${t('mp.setDefault')}</button>`}
               <button type="button" class="btn ghost" data-act="del" style="padding:2px 8px;font-size:11px">${t('mp.del')}</button>
@@ -3197,7 +3060,7 @@ async function renderWork(nav, arg, label2) {
   if (nav === 'cloud' && !arg && currentCloudId) {
     // 切走再切回：恢复上次浏览的云端功能（高亮已恢复，工作台同步恢复——#253.47）
     try {
-      const r0 = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
+      const r0 = await window.moonlybox.rpc('nav', {}, 30_000)
       if (r0.event === 'done' && r0.code === 0) {
         const items = (JSON.parse(r0.text).data?.nav ?? []).filter((x) => !CLOUD_HIDDEN.has(x.id))
         const it = items.find((x) => x.id === currentCloudId)
@@ -3219,7 +3082,7 @@ async function renderWork(nav, arg, label2) {
         <div style="width:34px;height:34px;border:3px solid color-mix(in srgb, var(--accent) 25%, transparent);border-top-color:var(--accent);border-radius:50%;animation:cloudspin .8s linear infinite"></div>
       </div>
     </div>`
-    const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
+    const r = await window.moonlybox.rpc('nav', {}, 30_000)
     if (!genValid()) return // #299：await 期间用户切走——本协程作废（防 null addEventListener 与覆盖新页面）
     if (r.event !== 'done' || r.code !== 0) { w.innerHTML = `<div style="padding:16px" class="muted">加载失败：${r.text ?? ''}</div>`; return }
     const parsed = JSON.parse(r.text)
@@ -3266,76 +3129,6 @@ async function renderWork(nav, arg, label2) {
       await wv.loadURL(`${webBase}${path}${sep}mb_theme=${resolveThemeDark()}`)
     })
     wv.src = webBase + '/login' // 先加载域（localStorage 注入需同源），dom-ready 后跳目标路由
-    return
-  }
-  if (nav === 'diagram') {
-    // 图示工作台（沿用 #252 三区）
-    // #290 创建返工：新建走「＋ 新建→模板弹窗→填名称→自动填充示例」流程；未创建前不出现保存/存书房/AI 按钮
-    w.innerHTML = `
-      <div class="row" style="padding:10px 16px;border-bottom:1px solid var(--border)">
-        <input id="dg-title" placeholder="图示标题" style="width:180px" />
-        <button class="btn" id="dg-save" style="font-size:12px;padding:5px 10px">${t('dg.saveDraft')}</button>
-        <button class="btn" id="dg-activate" style="background:var(--ok);font-size:12px;padding:5px 10px">${t('dg.admit')}</button>
-        <button class="btn" id="dg-ai" style="background:#7c3aed;font-size:12px;padding:5px 10px">${t('dg.aiBtn')}</button>
-        <span id="dg-state" class="muted" style="font-size:11px;margin-left:auto"></span>
-      </div>
-      <div id="dg-empty" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px">
-        <div style="font-size:15px;font-weight:600">${t('dg.quickNew')}</div>
-        <div class="set-desc">${t('dg.quickDesc')}</div>
-        <div id="dg-quick-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:640px"></div>
-        <div style="display:flex;gap:8px;width:100%;max-width:640px;margin-top:6px">
-          <input id="dg-quick-title" placeholder="${t('dg.quickTitle')}" style="flex:1" maxlength="60" />
-          <button class="btn" id="dg-quick-ok" style="background:var(--accent)">${t('dg.quickOk')}</button>
-        </div>
-        <div class="set-desc" id="dg-quick-hint" style="margin-top:4px">${t('dg.quickHint')}</div>
-      </div>
-      <div id="dg-editor" style="display:none;flex:1;min-height:0">
-        <div style="flex:1;display:flex;min-height:0;height:100%">
-          <textarea id="dg-code" spellcheck="false" style="flex:1;border:0;border-right:1px solid var(--border);padding:14px;font:12px/1.6 ui-monospace,monospace;resize:none;background:transparent;color:inherit;outline:none" placeholder="mermaid 代码（例：graph TD; A[开始] --> B[结束]）"></textarea>
-          <div id="dg-preview" style="flex:1;overflow:auto;padding:16px"></div>
-        </div>
-        <div id="dg-err" style="display:none;padding:8px 16px;font-size:12px;color:var(--err);border-top:1px solid var(--border)"></div>
-      </div>`
-    const openEditor = (existing, pick) => {
-      $('dg-empty').style.display = 'none'
-      $('dg-editor').style.display = 'flex'
-      $('dg-editor').style.flexDirection = 'column'
-      bindDiagramWorkbench(existing, pick)
-    }
-    // #294：空态页=快捷新建页——模板网格+名称就地填，砍掉弹窗（#290/#293 两轮形态定稿）
-    const grid = $('dg-quick-grid')
-    let picked = DG_TEMPLATES[0].key // 默认选「流程图」
-    const tplCard = (tpl) => `
-      <div data-tpl="${tpl.key}" style="border:1px solid ${tpl.key === picked ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:10px 6px;cursor:pointer;text-align:center">
-        <div style="font-size:20px">${tpl.icon}</div>
-        <div style="font-size:12.5px;margin-top:4px">${t(tpl.name)}</div>
-      </div>`
-    const renderGrid = () => { grid.innerHTML = DG_TEMPLATES.map(tplCard).join('') }
-    renderGrid()
-    // #310：事件委托——原实现重建 innerHTML 后不重绑，第二次点击落在无 onclick 的新元素上完全失效
-    grid.addEventListener('click', (e) => {
-      const cell = e.target.closest('[data-tpl]')
-      if (!cell) return
-      picked = cell.dataset.tpl
-      renderGrid()
-    })
-    const quickCreate = () => {
-      const title = $('dg-quick-title').value.trim()
-      if (!title) { const inp = $('dg-quick-title'); inp.focus(); inp.placeholder = t('dg.nameRequired'); return }
-      const tpl = DG_TEMPLATES.find((t) => t.key === picked)
-      openEditor(null, { key: tpl.key, name: tpl.name, title, code: tpl.code })
-    }
-    $('dg-quick-ok').onclick = quickCreate
-    $('dg-quick-title').addEventListener('keydown', (e) => { if (e.key === 'Enter') quickCreate() })
-    // arg.id=打开已有图示；无 arg=快捷新建页
-    if (arg?.id) {
-      openEditor(arg)
-    } else {
-      const hide = ['dg-save', 'dg-activate', 'dg-ai']
-      for (const id of hide) { const el = $(id); if (el) el.style.display = 'none' }
-      const ti = $('dg-title'); if (ti) ti.style.display = 'none'
-      $('dg-state').textContent = ''
-    }
     return
   }
   // #317.MDI：小月分支迁出→renderXiaoyuePane（持久容器）
@@ -3386,7 +3179,7 @@ async function renderWork(nav, arg, label2) {
     // #310.7：云端地址（只读展示+复制）
     let webBase = 'https://moonlybox.cn'
     try {
-      const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
+      const r = await window.moonlybox.rpc('nav', {}, 30_000)
       if (r.event === 'done' && r.code === 0) {
         const parsed = JSON.parse(r.text)
         webBase = parsed.data?.webBase ?? parsed.webBase ?? webBase
@@ -3449,7 +3242,7 @@ async function renderWork(nav, arg, label2) {
     let webBase = 'https://moonlybox.cn'
     let token = null
     try {
-      const r = await window.moonlybox.rpc('diagram', { op: 'nav' }, 30_000)
+      const r = await window.moonlybox.rpc('nav', {}, 30_000)
       if (!genValid()) return
       if (r.event === 'done' && r.code === 0) {
         const parsed = JSON.parse(r.text)
@@ -3733,215 +3526,6 @@ function forceFocus(el) {
   } catch {}
 }
 
-// ---------- 图示类型嗅探（#292）：代码首关键词 → DG_TEMPLATES key（存书房标签同源） ----------
-function sniffDiagramType(code) {
-  const head = String(code ?? '').replace(/^\s*```(?:mermaid)?/, '').trimStart().split(/\s/)[0] ?? ''
-  const table = [
-    ['flowchart', /^(flowchart|graph)\b/i], ['sequence', /^sequenceDiagram\b/i],
-    ['mindmap', /^mindmap\b/i], ['pie', /^pie\b/i], ['gantt', /^gantt\b/i],
-    ['er', /^erDiagram\b/i], ['state', /^stateDiagram/i], ['journey', /^journey\b/i],
-    ['timeline', /^timeline\b/i], ['quadrant', /^quadrantChart\b/i],
-    ['gitgraph', /^gitGraph\b/i], ['class', /^classDiagram\b/i],
-  ]
-  for (const [key, re] of table) if (re.test(head)) return key
-  return null
-}
-function dgTypeIcon(item) {
-  const key = item.diagramType ?? sniffDiagramType(item.content)
-  const tpl = DG_TEMPLATES.find((t) => t.key === key)
-  return (tpl && key !== 'empty' ? tpl.icon : '') || '📊'
-}
-
-// ---------- 图示模板（#290 创建返工：新建→模板弹窗→名称→自动填充示例） ----------
-const DG_TEMPLATES = [
-  { key: 'flowchart', name: 'dg.tpl.flowchart', icon: '🔀', desc: 'dg.tpld.flowchart', common: true,
-    code: `flowchart TD
-    A[开始] --> B{是否已登录?}
-    B -- 是 --> C[进入首页]
-    B -- 否 --> D[跳转登录页]
-    D --> E[输入账密]
-    E --> F{验证通过?}
-    F -- 通过 --> C
-    F -- 失败 --> D
-    C --> G[结束]` },
-  { key: 'sequence', name: 'dg.tpl.sequence', icon: '🔗', desc: 'dg.tpld.sequence', common: true,
-    code: `sequenceDiagram
-    participant U as 用户
-    participant C as 客户端
-    participant S as 服务端
-    U->>C: 点击登录
-    C->>S: 提交账密
-    S-->>C: 返回 token
-    C-->>U: 进入首页` },
-  { key: 'mindmap', name: 'dg.tpl.mindmap', icon: '🧠', desc: 'dg.tpld.mindmap', common: true,
-    code: `mindmap
-  root((产品规划))
-    核心功能
-      对话
-      图示
-    增长
-      渠道合作
-      内容营销
-    商业化
-      订阅制` },
-  { key: 'pie', name: 'dg.tpl.pie', icon: '🥧', desc: 'dg.tpld.pie', common: true,
-    code: `pie title 时间分配
-    "开发" : 45
-    "设计" : 20
-    "会议" : 15
-    "其他" : 20` },
-  { key: 'gantt', name: 'dg.tpl.gantt', icon: '📅', desc: 'dg.tpld.gantt', common: true,
-    code: `gantt
-    title 项目排期
-    dateFormat YYYY-MM-DD
-    section 设计
-    原型设计 :a1, 2026-10-01, 7d
-    视觉稿 :a2, after a1, 5d
-    section 开发
-    前端开发 :b1, after a2, 10d
-    联调测试 :b2, after b1, 5d` },
-  { key: 'er', name: 'dg.tpl.er', icon: '🗄️', desc: 'dg.tpld.er', common: true,
-    code: `erDiagram
-    USER ||--o{ ORDER : places
-    ORDER ||--|{ LINE_ITEM : contains
-    USER {
-        string id PK
-        string name
-    }
-    ORDER {
-        string id PK
-        datetime created_at
-    }` },
-  { key: 'state', name: 'dg.tpl.state', icon: '🚦', desc: 'dg.tpld.state', common: false,
-    code: `stateDiagram-v2
-    [*] --> 草稿
-    草稿 --> 待审核 : 提交
-    待审核 --> 已发布 : 通过
-    待审核 --> 草稿 : 驳回
-    已发布 --> [*]` },
-  { key: 'journey', name: 'dg.tpl.journey', icon: '🛤️', desc: 'dg.tpld.journey', common: false,
-    code: `journey
-    title 用户注册旅程
-    section 发现
-      访问官网: 5: 用户
-      了解产品: 4: 用户
-    section 转化
-      注册账号: 3: 用户
-      首次使用: 4: 用户` },
-  { key: 'timeline', name: 'dg.tpl.timeline', icon: '🗓️', desc: 'dg.tpld.timeline', common: false,
-    code: `timeline
-    title 产品里程碑
-    2026-01 : 立项
-    2026-04 : 内测上线
-    2026-09 : 正式发布` },
-  { key: 'quadrant', name: 'dg.tpl.quadrant', icon: '🎯', desc: 'dg.tpld.quadrant', common: false,
-    code: `quadrantChart
-    title 需求优先级
-    x-axis "低紧迫 --> 高紧迫"
-    y-axis "低重要 --> 高重要"
-    "需求A": [0.8, 0.9]
-    "需求B": [0.3, 0.7]
-    "需求C": [0.6, 0.2]` },
-  { key: 'gitgraph', name: 'dg.tpl.gitgraph', icon: '🌿', desc: 'dg.tpld.gitgraph', common: false,
-    code: `gitGraph
-    commit id: "init"
-    branch dev
-    commit
-    commit
-    merge main
-    commit id: "v1.0" tag: "v1.0"` },
-  { key: 'class', name: 'dg.tpl.class', icon: '📦', desc: 'dg.tpld.class', common: false,
-    code: `classDiagram
-    class Animal {
-        +String name
-        +eat()
-    }
-    class Dog {
-        +bark()
-    }
-    Animal <|-- Dog` },
-  { key: 'empty', name: 'dg.tpl.empty', icon: '📄', desc: 'dg.tpld.empty', common: false, code: '' },
-]
-
-
-// ---------- 图示工作台绑定（从旧 renderer 迁移，#252 逻辑保留） ----------
-let dgCurrentId = null
-let dgRenderTimer = null
-let dgLastError = null
-
-function bindDiagramWorkbench(existing, pick) {
-  dgCurrentId = existing?.id ?? null
-  mmApplyTheme()
-  // #290：pick=模板弹窗选择结果——填充名称+示例代码，新草稿从这一刻开始
-  $('dg-code').value = pick ? (pick.code ?? '') : (existing?.content ?? '')
-  $('dg-title').value = pick ? pick.title : (existing?.title ?? '')
-  setFrameTabCtx('diagram', $('dg-title').value || '')
-  // 从空态新建：显示标题框与保存/存书房/AI 按钮（打开已有图示时本就显示）
-  const show = ['dg-save', 'dg-activate', 'dg-ai', 'dg-title']
-  for (const id of show) { const el = $(id); if (el) el.style.display = '' }
-  $('dg-state').textContent = pick ? `${t('dg.pickedTpl')}：${t(pick.name)}——${t('dg.tplFilled')}` : existing?.state === 'draft' ? t('dg.draft') : existing?.state ? t('dg.inStudy') : t('dg.newDraft')
-
-  const render = async () => {
-    const err = $('dg-err')
-    const box = $('dg-preview')
-    const src = $('dg-code').value
-    const m = src.match(/```mermaid\n([\s\S]*?)```/)
-    const code = (m ? m[1] : src).trim()
-    if (!code) { box.innerHTML = '<span class="muted" style="font-size:12px">输入 mermaid 代码即时预览</span>'; return }
-    try {
-      mmApplyTheme()
-      const { svg } = await mermaid.render('dg-' + Date.now(), code)
-      box.innerHTML = svg
-      err.style.display = 'none'
-      dgLastError = null
-    } catch (e) {
-      dgLastError = String(e?.message ?? e)
-      err.textContent = '⚠ ' + dgLastError.slice(0, 300)
-      err.style.display = 'block'
-    }
-  }
-  $('dg-code').addEventListener('input', () => { clearTimeout(dgRenderTimer); dgRenderTimer = setTimeout(render, 400) })
-  render()
-
-  $('dg-save').onclick = async () => {
-    const title = $('dg-title').value.trim() || t('dg.untitled')
-    const r = await window.moonlybox.rpc('diagram', { op: 'save', id: dgCurrentId, title, content: $('dg-code').value, diagramType: sniffDiagramType($('dg-code').value) }, 60_000)
-    if (r.event === 'done' && r.code === 0) {
-      const d = JSON.parse(r.text).data
-      const isNew = !dgCurrentId
-      dgCurrentId = d.id
-      $('dg-state').textContent = `✓ 已保存草稿 v${d.version}`
-      setFrameTabCtx('diagram', title)
-      // #291：保存后立刻刷新侧栏列表（新建首存/改名都不用再切功能回来）
-      void renderList('diagram')
-      if (isNew) $('dg-state').textContent += t('lib.addedTip')
-    } else $('dg-state').textContent = t('dg.saveFail') + (r.text || r.message)
-  }
-  $('dg-activate').onclick = async () => {
-    if (!dgCurrentId) { $('dg-state').textContent = t('dg.saveFirst'); return }
-    const r = await window.moonlybox.rpc('diagram', { op: 'activate', id: dgCurrentId }, 60_000)
-    if (r.event === 'done' && r.code === 0) {
-      $('dg-state').textContent = '📚 已存进书房'
-      void renderList('diagram') // #291：📝→📚 徽标即时更新
-    } else $('dg-state').textContent = t('dg.admitFail') + (r.text || r.message)
-  }
-  $('dg-ai').onclick = async () => {
-    const prompt = window.prompt(t('dg.aiPrompt'))
-    if (!prompt?.trim()) return
-    const aiBtn = $('dg-ai') // #283.11：await 期间面板可能重渲——持有引用而非事后 querySelector（重渲后为 null）
-    aiBtn.disabled = true
-    $('dg-state').textContent = '✨ AI 生成中…'
-    const r = await window.moonlybox.rpc('diagram', { op: 'ai', prompt }, 150_000)
-    aiBtn.disabled = false
-    if (r.event === 'done' && r.code === 0) {
-      $('dg-code').value = JSON.parse(r.text).source
-      dgCurrentId = null
-      $('dg-state').textContent = t('dg.aiDone')
-      document.querySelectorAll('.tree-item.active').forEach((x) => x.classList.remove('active')) // #302：AI 新内容未保存，清列表选中高亮
-      render()
-    } else $('dg-state').textContent = t('dg.aiFail') + (r.text || r.message)
-  }
-}
 
 // ---------- 小月会话列表与工作空间（#282） ----------
 let xyActiveChat = null      // 当前打开的对话 id
@@ -3974,7 +3558,7 @@ async function renderXiaoyueList() {
     el.style.paddingLeft = '26px'
     el.dataset.chat = c.id
     // #303：删除收敛进 ⋯ 更多菜单（挂 body+fixed，#301 范式）
-    el.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💬 ${c.title}${running ? ' <span style="color:var(--muted);font-size:10px">⟳ 执行中</span>' : ''}${unread ? ' <span style="background:var(--err,#ef4444);color:#fff;border-radius:99px;font-size:10px;padding:0 6px">NEW</span>' : ''}</span><span data-more="1" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('dg.more')}">⋯</span>`
+    el.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💬 ${c.title}${running ? ' <span style="color:var(--muted);font-size:10px">⟳ 执行中</span>' : ''}${unread ? ' <span style="background:var(--err,#ef4444);color:#fff;border-radius:99px;font-size:10px;padding:0 6px">NEW</span>' : ''}</span><span data-more="1" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('ui.more')}">⋯</span>`
     el.onclick = (e) => { if (!e.target.dataset.more) { xyUnread.delete(c.id); openChat(c.id, wsId) } }
     el.querySelector('[data-more]').onclick = (e) => {
       e.stopPropagation()
@@ -4046,7 +3630,7 @@ async function renderXiaoyueList() {
     const group = document.createElement('div')
     group.className = 'xy-ws-group'
     // #303：组头收敛——保留「💬 在此工作空间新建对话」（单图标），「增加工作目录/删除」收进 ⋯ 更多菜单（参照图示 #300/#301：挂 body+fixed）
-    group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.map((d, i) => (i === (ws.primaryIndex ?? 0) ? `【主】${d}` : d)).join('\n')}">📁 ${ws.name}</span><span class="xy-ws-chat" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('xy.wsAddTip')}">💬</span><span class="xy-ws-more" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('dg.more')}">⋯</span></div>`
+    group.innerHTML = `<div class="tree-item" style="font-weight:600"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${ws.dirs.map((d, i) => (i === (ws.primaryIndex ?? 0) ? `【主】${d}` : d)).join('\n')}">📁 ${ws.name}</span><span class="xy-ws-chat" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('xy.wsAddTip')}">💬</span><span class="xy-ws-more" style="color:var(--muted);cursor:pointer;padding:0 4px" title="${t('ui.more')}">⋯</span></div>`
     group.querySelector('.xy-ws-chat').onclick = async () => {
       if (xyCreating) return // #305 防重入
       xyCreating = true

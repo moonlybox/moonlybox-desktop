@@ -97,21 +97,12 @@ await proc.stdin.flush()
 const pingAfter = await rpc('ping', {})
 assert('孤儿 confirm_response 后 daemon 存活', pingAfter.at(-1)?.text === 'pong')
 
-// #252 图示 RPC：未登录环境 diagram list 优雅报错（code=1，不崩 daemon），坏 op 拒绝
-const dgBad = await rpc('diagram', { op: 'nope' })
-assert('diagram 未知 op 拒绝', dgBad.at(-1)?.event === 'done' && dgBad.at(-1)?.code === 2)
-const dgList = await rpc('diagram', { op: 'list' }, 15_000)
-const dgDone = dgList.at(-1)
-assert('diagram list 终止（done，未登录则为 code=1 引导）', dgDone?.event === 'done', JSON.stringify(dgDone)?.slice(0, 100))
-const pingDg = await rpc('ping', {})
-assert('diagram 调用后 daemon 存活', pingDg.at(-1)?.text === 'pong')
-
-// #252 T4：AI 生成未配 BYOK → 引导文案（与 xiaoyue tools 同款语义）
-const dgAi = await rpc('diagram', { op: 'ai', prompt: '登录流程图' }, 30_000)
-const dgAiDone = dgAi.at(-1)
-assert('diagram ai BYOK 引导', dgAiDone?.event === 'done' && String(dgAiDone?.text ?? '').includes('BYOK'), JSON.stringify(dgAiDone)?.slice(0, 120))
-const pingAi = await rpc('ping', {})
-assert('diagram ai 调用后 daemon 存活', pingAi.at(-1)?.text === 'pong')
+// #254 nav RPC（#372.110：原 diagram case 收窄为 nav——云端 manifest 通用通道）：优雅终止+daemon 存活（nav 无子 op 分流，未登录=code 1 引导）
+const navList = await rpc('nav', {}, 15_000)
+const navDone = navList.at(-1)
+assert('nav 终止（done，未登录则为 code=1 引导）', navDone?.event === 'done', JSON.stringify(navDone)?.slice(0, 100))
+const pingNav = await rpc('ping', {})
+assert('nav 调用后 daemon 存活', pingNav.at(-1)?.text === 'pong')
 
 // #253：auth RPC——whoami 形态+坏 op 拒绝（沙箱环境无登录态/网络，断言优雅终止不崩）
 const auBad = await rpc('auth', { op: 'nope' })

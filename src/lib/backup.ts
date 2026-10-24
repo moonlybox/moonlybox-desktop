@@ -218,7 +218,6 @@ export async function checkTwin(localPath: string, directoryId: string | null): 
       (d) =>
         d.status === 'active' &&
         !d.isArchived &&
-        !(d.kind === 'diagram' && d.diagramState === 'draft') &&
         String(d.title ?? '') === title &&
         (d.directoryId ?? null) === dirId,
     )
@@ -258,7 +257,6 @@ async function fetchCloudDocs(): Promise<Map<string, CloudDoc>> {
   const map = new Map<string, CloudDoc>()
   for (const d of docs) {
     if (d.status !== 'active' || d.isArchived) continue
-    if (d.kind === 'diagram' && d.diagramState === 'draft') continue // 图示草稿不进书房（#252 §8.2）
     map.set(d.id, {
       id: d.id,
       title: String(d.title ?? ''),
